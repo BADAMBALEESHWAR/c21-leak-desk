@@ -3,7 +3,7 @@ services:
   mongo:
     image: mongo:7
     restart: unless-stopped
-    # t3.micro (1 GB): cap memory so api + mongo + the OS fit; user-data also adds 1 GB swap.
+    # Memory caps so api + mongo + the OS fit the instance; user-data also adds 1 GB swap.
     command: ["--wiredTigerCacheSizeGB", "0.25"]
     mem_limit: 400m
     volumes:
@@ -17,10 +17,15 @@ services:
   api:
     image: ${API_IMAGE}
     restart: unless-stopped
-    mem_limit: 300m
+    # A 1,00,000-order upload needs about 1 GB while it is analysed (t3.small has 2 GB plus swap).
+    mem_limit: 1400m
     env_file: /opt/leakdesk/.env
     environment:
       PORT: 8080
+      NODE_OPTIONS: --max-old-space-size=1200
+    # Local fallback for uploads and large records if S3 is ever unreachable; kept across deploys.
+    volumes:
+      - uploads:/app/data/uploads
     ports:
       - "8080:8080"
     depends_on:
@@ -35,3 +40,4 @@ services:
 
 volumes:
   mongo-data:
+  uploads:

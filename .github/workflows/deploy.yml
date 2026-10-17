@@ -45,6 +45,8 @@ jobs:
           docker push "$IMAGE:${GITHUB_SHA::7}" && docker push "$IMAGE:latest"
       - name: Deploy on EC2 via SSM
         run: |
+          # Ship the compose file too, so memory limits and settings in infra/docker-compose.aws.yml reach the instance.
+          COMPOSE_B64=$(base64 -w0 infra/docker-compose.aws.yml)
           CMD=$(aws ssm send-command --instance-ids "${{ secrets.INSTANCE_ID }}" --document-name AWS-RunShellScript \
-            --parameters "commands=[\"/opt/leakdesk/refresh.sh ${GITHUB_SHA::7}\"]" --query Command.CommandId --output text)
+            --parameters "commands=[\"echo $COMPOSE_B64 | base64 -d > /opt/leakdesk/docker-compose.aws.yml\",\"/opt/leakdesk/refresh.sh ${GITHUB_SHA::7}\"]" --query Command.CommandId --output text)
           aws ssm wait command-executed --command-id "$CMD" --instance-id "${{ secrets.INSTANCE_ID }}"
