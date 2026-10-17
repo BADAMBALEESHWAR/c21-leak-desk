@@ -8,8 +8,8 @@ import type { SampleSource } from './schema/orders.js';
 // One interface for files: local data/ in dev, S3 when S3_BUCKET is set (falls back to local if S3 fails).
 
 export const SAMPLES: Record<SampleSource, { file: string; label: string; description: string }> = {
-  fixture: { file: 'C21/fixture.json', label: 'C21 fixture', description: 'The 20 reference orders from the pack, untouched.' },
-  extended: { file: 'C21_extended.json', label: 'Fixture + labelled synthetic rows', description: 'Reference orders plus S01–S08: channels, products, ads, a duplicate (S05), a late refund (S06) and unknown refund facts (S04).' },
+  fixture: { file: 'C21/fixture.json', label: 'Sample orders', description: '20 reference orders from a small D2C store, unchanged.' },
+  extended: { file: 'C21_extended.json', label: 'Extended sample', description: 'The 20 sample orders plus S01–S08 (labelled synthetic): channels, products, ads, a duplicate (S05), a late refund (S06) and unknown refund facts (S04).' },
   duplicate_order: { file: 'negative_tests/duplicate_order.json', label: 'Duplicate order', description: 'O07 appears twice. Expect 20 orders and one duplicate flag.' },
   late_refund: { file: 'negative_tests/late_refund.json', label: 'Late refund', description: 'O10 refund dated 2026-10-05. Expect +420 in period, −180 if recognised.' },
   null_refund: { file: 'negative_tests/null_refund.json', label: 'Missing refund', description: 'O05 refund_inr is null. Expect unknown, never zero; ₹6,180 partial.' },
@@ -17,6 +17,7 @@ export const SAMPLES: Record<SampleSource, { file: string; label: string; descri
   refund_over_gross: { file: 'negative_tests/refund_over_gross.json', label: 'Refund over gross', description: 'O03 refund 1,500. Expect O03 invalid and excluded; ₹5,580.' },
   recovery_400: { file: 'negative_tests/recovery_400.json', label: 'Full recovery', description: 'Recovered cost 400 on returns. Expect returns at −130; ₹6,200.' },
   bad_schema: { file: 'negative_tests/bad_schema.csv', label: 'Bad schema (CSV)', description: 'No product_cost_inr column. Expect 422 with the field path.' },
+  demo_12m: { file: 'demo_12m.json', label: '12-month demo brand (synthetic)', description: '3,020 labelled synthetic orders, Oct 2025 – Sep 2026, with payment type, customer and units, for the Pulse owner analytics. Not used by the engine checks.' },
 };
 
 export async function readSample(source: SampleSource): Promise<{ name: string; text: string }> {
