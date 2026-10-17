@@ -64,6 +64,9 @@ export interface OrderResult {
   product_id: string;
   synthetic: boolean;
   returned: boolean;
+  payment_type: 'cod' | 'prepaid' | null;
+  customer_id: string | null;
+  units: number;
   status: OrderStatus;
   gross_inr: number;
   net_sales_inr: Inr;
@@ -284,6 +287,8 @@ export interface ValidationFlag {
   order_id: string | null;
   /** 1-based line in the file (CSV counts the header). */
   line: number;
+  /** The file the row came from, when several files were uploaded together. */
+  file?: string;
   reason: FlagReason;
   detail: string;
   field?: string;

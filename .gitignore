@@ -20,7 +20,9 @@ Thumbs.db
 
 # AWS state written by infra/aws-up.sh
 infra/.aws-state
+infra/.tmp-*
 docs/test-output.txt
 /Leak_Desk_*.docx
+/ProfitPulse_*.pdf
 /Starter_Data_and_Templates.zip
 ui-smoke-failure.png

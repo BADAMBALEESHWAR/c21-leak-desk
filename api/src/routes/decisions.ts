@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { workedOrder } from '../checks.js';
 import { INTERVENTIONS } from '../engine/scenario.js';
 import { ENGINE_VERSION, type InterventionKey } from '../engine/types.js';
+import { canSee, accountOf, type AuthSettings } from '../auth.js';
 import { ah, HttpError, notFound } from '../errors.js';
 import { decisionMarkdown } from '../export/markdown.js';
 import { decisions, newId, scenarios, type DecisionRecord } from '../repo.js';
@@ -15,7 +16,7 @@ decisionsRouter.post(
   '/analyses/:id/decisions',
   ah(async (req, res) => {
     const body = DecisionRequestSchema.parse(req.body ?? {});
-    const { analysis, dataset } = await loadAnalysis(req.params.id);
+    const { analysis, dataset } = await loadAnalysis(req.params.id, req.user);
     const scenario = body.scenario_id ? await scenarios.get(body.scenario_id) : null;
     if (body.scenario_id && !scenario) throw notFound('Scenario', body.scenario_id);
     if (scenario && scenario.analysis_id !== analysis._id) {
@@ -45,6 +46,7 @@ decisionsRouter.post(
     const w = await workedOrder();
     const record: DecisionRecord = {
       _id: newId(),
+      account: accountOf(req.user),
       analysis_id: analysis._id,
       ...(scenario ? { scenario_id: scenario._id } : {}),
       intervention: body.intervention,
@@ -74,10 +76,12 @@ decisionsRouter.post(
       },
       saved_at: new Date(),
     };
-    const persisted = await decisions.save(record);
+    // With sign-in on, a guest's decision lives in the demo workspace (memory) and is never written to the database.
+    const demoWorkspace = (req.app.locals.auth as AuthSettings).enabled && !req.user;
+    const persisted = await decisions.save(record, { memoryOnly: demoWorkspace });
     await put(`exports/decision-${record._id}.md`, decisionMarkdown(record), 'text/markdown').catch(() => undefined);
     req.log.info({ analysis_id: analysis._id, decision_id: record._id, persisted }, 'decision saved');
-    res.status(201).json({ decision_id: record._id, saved_at: record.saved_at, assumptions, engine_version: ENGINE_VERSION, persisted });
+    res.status(201).json({ decision_id: record._id, saved_at: record.saved_at, assumptions, engine_version: ENGINE_VERSION, persisted, workspace: demoWorkspace ? 'demo' : req.user ? 'account' : 'shared' });
   }),
 );
 
@@ -94,8 +98,8 @@ const summary = (d: DecisionRecord) => ({
 
 decisionsRouter.get(
   '/decisions',
-  ah(async (_req, res) => {
-    res.json((await decisions.list()).map(summary));
+  ah(async (req, res) => {
+    res.json((await decisions.list(accountOf(req.user))).map(summary));
   }),
 );
 
@@ -103,7 +107,7 @@ decisionsRouter.get(
   '/decisions/:id',
   ah(async (req, res) => {
     const d = await decisions.get(req.params.id);
-    if (!d) throw notFound('Decision', req.params.id);
+    if (!d || !canSee(d.account, req.user)) throw notFound('Decision', req.params.id);
     const { _id, ...rest } = d;
     res.json({ decision_id: _id, ...rest });
   }),
@@ -113,7 +117,7 @@ decisionsRouter.get(
   '/decisions/:id/export',
   ah(async (req, res) => {
     const d = await decisions.get(req.params.id);
-    if (!d) throw notFound('Decision', req.params.id);
+    if (!d || !canSee(d.account, req.user)) throw notFound('Decision', req.params.id);
     const format = req.query.format === 'json' ? 'json' : 'md';
     res.setHeader('Content-Disposition', `attachment; filename="decision-${d._id}.${format}"`);
     if (format === 'json') {

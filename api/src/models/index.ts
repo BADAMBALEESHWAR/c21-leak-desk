@@ -7,6 +7,7 @@ const Mixed = Schema.Types.Mixed;
 const DatasetSchema = new Schema(
   {
     _id: String,
+    account: { type: String, index: true },
     source: String,
     rows: [Mixed],
     flags: [Mixed],
@@ -15,6 +16,9 @@ const DatasetSchema = new Schema(
     schema_version: String,
     period_end: String,
     rows_in: Number,
+    rows_kept: Number,
+    files: Mixed,
+    supersedes: String,
     created_at: Date,
   },
   opts,
@@ -23,6 +27,7 @@ const DatasetSchema = new Schema(
 const AnalysisSchema = new Schema(
   {
     _id: String,
+    account: { type: String, index: true },
     dataset_id: { type: String, index: true },
     engine_version: String,
     attribution: String,
@@ -37,6 +42,7 @@ const AnalysisSchema = new Schema(
 const ScenarioSchema = new Schema(
   {
     _id: String,
+    account: { type: String, index: true },
     analysis_id: { type: String, index: true },
     overrides: Mixed,
     result: Mixed,
@@ -48,6 +54,7 @@ const ScenarioSchema = new Schema(
 const DecisionSchema = new Schema(
   {
     _id: String,
+    account: { type: String, index: true },
     analysis_id: { type: String, index: true },
     scenario_id: String,
     intervention: String,

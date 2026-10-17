@@ -7,7 +7,7 @@ export const SCHEMA_VERSION = 'v3.2';
 export const REQUIRED_FIELDS = ['order_id', 'date', 'gross_inr', 'discount_inr', 'product_cost_inr', 'shipping_inr', 'returned'] as const;
 export const NULLABLE_FIELDS = ['refund_inr', 'net_sales_inr', 'recovered_product_cost_inr', 'payment_fee_inr', 'return_cost_inr'] as const;
 export const FIXTURE_FIELDS = [...REQUIRED_FIELDS, ...NULLABLE_FIELDS] as const;
-export const EXTENSION_FIELDS = ['channel', 'product_id', 'ads_inr', 'handling_inr', 'refund_date', 'net_product_cost_inr', 'synthetic', 'note'] as const;
+export const EXTENSION_FIELDS = ['channel', 'product_id', 'ads_inr', 'handling_inr', 'refund_date', 'net_product_cost_inr', 'payment_type', 'customer_id', 'units', 'synthetic', 'note'] as const;
 export const MONEY_FIELDS = [
   'gross_inr',
   'discount_inr',
@@ -50,6 +50,11 @@ export const COLUMN_ALIASES: Record<string, string> = {
   ads: 'ads_inr',
   ad_spend: 'ads_inr',
   handling: 'handling_inr',
+  payment_method: 'payment_type',
+  payment_mode: 'payment_type',
+  customer: 'customer_id',
+  qty: 'units',
+  quantity: 'units',
 };
 
 export const IsoDate = z
@@ -83,6 +88,10 @@ export const OrderRowSchema = z
     handling_inr: Inr.nullable().optional(),
     refund_date: IsoDate.nullable().optional(),
     net_product_cost_inr: Inr.nullable().optional(),
+    // Optional owner-analytics columns (Pulse); they never change a contribution.
+    payment_type: z.preprocess((v) => (typeof v === 'string' ? v.trim().toLowerCase() : v), z.enum(['cod', 'prepaid'])).nullable().optional(),
+    customer_id: z.string().trim().min(1).nullable().optional(),
+    units: z.number().int('must be a whole number').positive('must be at least 1').nullable().optional(),
     synthetic: z.boolean().optional(),
     note: z.string().optional(),
   })
@@ -128,6 +137,7 @@ export const SAMPLE_SOURCES = [
   'refund_over_gross',
   'recovery_400',
   'bad_schema',
+  'demo_12m',
 ] as const;
 
 export type SampleSource = (typeof SAMPLE_SOURCES)[number];

@@ -1,7 +1,7 @@
 BASE_URL ?= http://localhost:8080
 REGION ?= ap-south-1
 
-.PHONY: setup up down logs test check build seed snapshot deploy-web deploy-api aws-up aws-down
+.PHONY: setup up down logs test check build seed snapshot deploy-web deploy-api aws-up aws-down aws-domain aws-cognito aws-ci
 
 setup:
 	npm run setup
@@ -45,3 +45,13 @@ aws-up:
 
 aws-down:
 	REGION=$(REGION) bash infra/aws-down.sh
+
+# Domain (run twice: before and after the registrar nameserver change), sign-in, push-to-main deploys.
+aws-domain:
+	REGION=$(REGION) bash infra/domain.sh
+
+aws-cognito:
+	REGION=$(REGION) bash infra/cognito.sh
+
+aws-ci:
+	REGION=$(REGION) bash infra/ci-oidc.sh
