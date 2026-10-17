@@ -23,7 +23,7 @@
           "HTTPPort": 8080,
           "HTTPSPort": 443,
           "OriginProtocolPolicy": "http-only",
-          "OriginReadTimeout": 30,
+          "OriginReadTimeout": 60,
           "OriginKeepaliveTimeout": 5
         }
       }

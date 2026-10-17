@@ -24,14 +24,15 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - run: npm ci && npm ci --prefix api && npm test
+      # The web packages too: the UI tests render the app's components.
+      - run: npm ci && npm ci --prefix api && npm ci --prefix web && npm test
       - uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION }}
       - name: Web to S3 and CloudFront
         run: |
-          npm ci --prefix web && npm run build --prefix web
+          npm run build --prefix web
           aws s3 sync web/dist "s3://${{ secrets.WEB_BUCKET }}/releases/${GITHUB_SHA::7}/" --delete
           aws s3 sync web/dist "s3://${{ secrets.WEB_BUCKET }}/" --delete --exclude "releases/*"
           aws s3 cp web/dist "s3://${{ secrets.WEB_BUCKET }}/" --recursive --exclude "*" --include "*.html" --cache-control "no-cache"
