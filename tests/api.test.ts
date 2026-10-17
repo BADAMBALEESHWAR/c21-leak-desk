@@ -138,6 +138,30 @@ describe('api contract (Blueprint §10, §16)', () => {
     expect(JSON.parse(json.text).decision_id).toBe(post.body.decision_id);
   });
 
+  it('GET /template.csv downloads a C21 template that imports back cleanly', async () => {
+    const tpl = await request(app).get(`${api}/template.csv`);
+    expect(tpl.headers['content-disposition']).toMatch(/c21-orders-template\.csv/);
+    const back = await request(app).post(`${api}/datasets`).set('Content-Type', 'text/csv').send(tpl.text);
+    expect(back.status).toBe(201);
+    expect(back.body.rows_kept).toBe(3);
+    expect(back.body.flags.every((f: { order_id: string; reason: string }) => f.order_id === 'O09' && f.reason === 'unknown')).toBe(true);
+  });
+
+  it('GET /analyses/:id/export?format=csv has one row per order and the reconciled total', async () => {
+    const csv = (await request(app).get(`${api}/analyses/${analysisId}/export?format=csv`)).text;
+    const lines = csv.trim().split(/\r\n/);
+    expect(lines[0]).toMatch(/^order_id,date,channel/);
+    expect(lines.filter((l) => /^[OS]\d\d,/.test(l))).toHaveLength(27);
+    expect(csv).toContain('contribution_inr,7053,partial (1 unknown)');
+  });
+
+  it('handling default is editable and labelled as an estimate', async () => {
+    const r = await request(app).post(`${api}/datasets/${datasetId}/analyses`).send({ config: { handling_default_inr: 15 } });
+    expect(r.body.config.handling_default_inr).toBe(15);
+    expect(r.body.totals.contribution_inr).toBe(7053 - 20 * 15);
+    expect(r.body.labels.join(' ')).toMatch(/Handling ₹ 15 per order where the row has none \(estimate\)/);
+  });
+
   it('decision without an owner is 422 on the owner field', async () => {
     const r = await request(app).post(`${api}/analyses/${analysisId}/decisions`).send({ intervention: 'x', expected_delta_inr: 0, test_30d: 't', stop_rule: 's', owner: '' });
     expect([r.status, r.body.error.path]).toEqual([422, 'owner']);
