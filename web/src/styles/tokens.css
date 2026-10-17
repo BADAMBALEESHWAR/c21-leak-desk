@@ -1,0 +1,117 @@
+/*
+ * Leak Desk design tokens, after Fynd's Nitrozen system.
+ * This is the only file that defines colour; everything else refers to these properties.
+ */
+:root {
+  color-scheme: light;
+
+  /* Surfaces */
+  --bg: #F4F5F7;
+  --surface: #FFFFFF;
+  --surface-2: #FAFAFB;
+  --border: #E6E7EB;
+  --border-strong: #D5D7DD;
+  /* Form-control edge: 3.4:1 against --surface so inputs stay visible. */
+  --border-input: #868B97;
+
+  /* Text (all >= 4.5:1 on --bg, --surface and --surface-2) */
+  --text: #141414;
+  --text-2: #4B4F58;
+  --text-3: #6B7080;
+
+  /* Brand */
+  --primary: #2E31BE;
+  --primary-strong: #000093;
+  --primary-bright: #3535F3;
+  --primary-50: #E8E8FC;
+  --primary-25: #F4F4FE;
+  --primary-dash: #C9CBF6;
+  --cta: #141414;
+  --cta-hover: #2B2D33;
+  --on-dark: #FFFFFF;
+
+  /* Status: text (>= 4.5:1 on its bg and on white), fill (marks, dots), bg (washes) */
+  --success: #1F7A1C;
+  --success-fill: #25AB21;
+  --success-bg: #E9F7E9;
+  --danger: #C8002A;
+  --danger-fill: #F50031;
+  --danger-bg: #FEE6EA;
+  --warning: #A8480A;
+  --warning-fill: #F06D0F;
+  --warning-bg: #FEF0E7;
+  --teal: #1E7B74;
+  --teal-fill: #1ECCB0;
+  --teal-bg: #E8FAF7;
+
+  /* Tinted borders for callouts and banners (decorative, beside text that carries the meaning) */
+  --success-border: #BFE5BE;
+  --danger-border: #FBC2CD;
+  --warning-border: #FBD3B8;
+  --primary-border: #D3D4F8;
+  --neutral-bg: #EEEFF2;
+
+  /* AI accent. The first is decorative; the second carries white text (>= 4.8:1). */
+  --ai-gradient: linear-gradient(135deg, #6464FF, #3535F3);
+  --ai-gradient-text: linear-gradient(135deg, #5A5AFB, #3535F3);
+  --hero-gradient: linear-gradient(135deg, #FFFFFF 0%, #FFFFFF 45%, #F4F4FE 100%);
+
+  /*
+   * Chart roles (validated with the data-viz palette checks, light surface #FFFFFF):
+   * series-1 + series-2 pass lightness, chroma, CVD (ΔE 34.9) and normal-vision floors;
+   * series-2 is below 3:1 on white, so every chart using it carries value labels and a table view.
+   */
+  --series-1: #3535F3;
+  --series-1-wash: rgba(53, 53, 243, 0.1);
+  --series-2: #1ECCB0;
+  --series-muted: #A9ABF7;
+  --loss-wash: rgba(245, 0, 49, 0.1);
+  --grid: #E6E7EB;
+
+  /* Elevation */
+  --shadow-s: 0 1px 2px rgba(16, 24, 40, 0.04), 0 4px 16px rgba(16, 24, 40, 0.06);
+  --shadow-m: 0 12px 32px rgba(16, 24, 40, 0.14);
+  --shadow-hover: 0 2px 4px rgba(16, 24, 40, 0.04), 0 10px 24px rgba(16, 24, 40, 0.1);
+  --shadow-xs: 0 1px 3px rgba(16, 24, 40, 0.12);
+  --shadow-ai: 0 6px 16px rgba(53, 53, 243, 0.24);
+  --shadow-ai-hover: 0 8px 22px rgba(53, 53, 243, 0.32);
+  --scrim: rgba(20, 20, 20, 0.28);
+  --row-hover: #F7F7FD;
+
+  /* Type */
+  --font: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --fs-xs: 12px;
+  --fs-sm: 13px;
+  --fs-body: 14px;
+  --fs-md: 15px;
+  --fs-section: 18px;
+  --fs-title: 28px;
+  --fs-kpi: 28px;
+
+  /* Space */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 24px;
+  --sp-6: 32px;
+
+  /* Radius */
+  --r-sm: 8px;
+  --r-card: 12px;
+  --r-hero: 16px;
+  --r-pill: 999px;
+
+  /* Shell */
+  --sidebar-w: 248px;
+  --sidebar-w-collapsed: 72px;
+  --topbar-h: 64px;
+  --content-max: 1280px;
+  --drawer-w: 440px;
+  --row-h: 52px;
+  --prose: 68ch;
+
+  /* Motion */
+  --t-fast: 150ms;
+  --t-med: 200ms;
+}
