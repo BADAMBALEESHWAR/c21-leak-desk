@@ -84,6 +84,15 @@ try {
     await page.getByText(/Decision saved/i).first().waitFor();
   });
 
+  await step('Public checks panel: 25 of 25 points, three PASS', async () => {
+    await page.goto(`${WEB}/#/ledger?load=fixture&checks=1`);
+    const panel = page.getByRole('dialog');
+    await panel.getByText(/25 of 25 points/).first().waitFor();
+    const passes = await panel.getByText(/^PASS$/).count();
+    if (passes < 3) throw new Error(`expected 3 PASS pills, saw ${passes}`);
+    await page.keyboard.press('Escape');
+  });
+
   if (errors.length) throw new Error(`console errors: ${errors.join(' | ')}`);
 } catch (err) {
   await page.screenshot({ path: 'ui-smoke-failure.png', fullPage: true }).catch(() => undefined);

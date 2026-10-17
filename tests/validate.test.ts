@@ -79,6 +79,12 @@ describe('validate (V1–V9)', () => {
     expect(analyze(v.rows, { attribution: 'allocate', period_end: '2026-10-31' }).totals.contribution_inr).toBe(6000);
   });
 
+  it('orders dated after a chosen period end are outside the period and labelled, not silently dropped', () => {
+    const a = analyze(validateRows(rawOrders(FIXTURE)).rows, { attribution: 'allocate', period_end: '2026-09-15' });
+    expect(a.totals.orders).toBe(14);
+    expect(a.labels.join(' ')).toMatch(/6 orders are dated after the period end \(2026-09-15\)/);
+  });
+
   it('V7: a missing nullable field is unknown, never zero', () => {
     const v = validateRows(rawOrders(NEG('missing_fee.json')));
     expect(v.rows_kept).toBe(20);
