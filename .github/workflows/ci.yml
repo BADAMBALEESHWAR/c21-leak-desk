@@ -1,0 +1,59 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci
+      - run: npm ci
+        working-directory: api
+      - run: npm ci
+        working-directory: web
+      - name: Audit (fails on high severity, Blueprint §17)
+        run: |
+          npm audit --omit=dev --audit-level=high
+          npm audit --omit=dev --audit-level=high --prefix api
+          npm audit --omit=dev --audit-level=high --prefix web
+      - run: npm run typecheck
+        working-directory: api
+      - run: npm test
+      - run: npm run build
+        working-directory: web
+
+  verify:
+    # Reproducibility (Blueprint §18.1): clean checkout → docker compose up → /health → make check prints PASS ×3.
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: docker compose up -d --build
+      - name: Wait for /health
+        run: |
+          for i in $(seq 1 60); do
+            curl -sf http://localhost:8080/api/v1/health | grep -q '"db":"ok"' && exit 0
+            sleep 2
+          done
+          docker compose logs api
+          exit 1
+      - run: make check
+      - name: Same checks through the web container's /api proxy
+        run: make check BASE_URL=http://localhost:3000
+      - name: UI smoke (load → worked order → drawer → mode → scenario → decision)
+        run: |
+          npm ci
+          npx playwright-core install --with-deps chromium
+          BROWSER_CHANNEL=chromium WEB_URL=http://localhost:3000 npm run ui:smoke
+      - if: always()
+        run: docker compose down -v
