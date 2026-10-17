@@ -18,6 +18,18 @@ export interface ValidateOptions {
   path_prefix?: string;
   /** Added to the 1-based row number to get a file line (1 for CSV headers). */
   line_offset?: number;
+  /** Several files merged into one dataset: where each file starts in the rows, so every flag names its file and line. */
+  files?: SourceFile[];
+  /** Order ids already saved (adding to an existing dataset): those rows are dropped as duplicates, never counted twice. */
+  existing_ids?: ReadonlySet<string>;
+}
+
+export interface SourceFile {
+  name: string;
+  /** Index in the merged rows of this file's first order. */
+  start: number;
+  path_prefix: string;
+  line_offset: number;
 }
 
 /** Period end: last calendar day of the month of the latest order (2026-09-30 for the fixture). */
@@ -66,6 +78,17 @@ export function validateRows(raw: unknown[], opts: ValidateOptions = {}): Valida
   const parsed: Array<{ row: OrderRow; index: number }> = [];
   let rejected = 0;
   const lineOf = (index: number) => index + 1 + offset;
+  const files = opts.files?.length ? opts.files : null;
+  const fileAt = (index: number) => (files ? files.reduce((hit, f) => (f.start <= index ? f : hit), files[0]) : null);
+  const localLine = (index: number) => {
+    const f = fileAt(index);
+    return f ? index - f.start + 1 + f.line_offset : lineOf(index);
+  };
+  /** "line 7", or "feb.csv line 7" when files are merged. */
+  const where = (index: number) => {
+    const f = fileAt(index);
+    return f ? `${f.name} line ${localLine(index)}` : `line ${lineOf(index)}`;
+  };
   const reject = (f: Omit<ValidationFlag, 'action'>) => {
     flags.push({ ...f, action: 'rejected' });
     rejected++;
@@ -73,14 +96,14 @@ export function validateRows(raw: unknown[], opts: ValidateOptions = {}): Valida
 
   raw.forEach((item, index) => {
     if (!item || typeof item !== 'object' || Array.isArray(item)) {
-      reject({ order_id: null, line: lineOf(index), reason: 'schema', path: `${prefix}[${index}]`, detail: `Line ${lineOf(index)} is not an order — row excluded.` });
+      reject({ order_id: null, line: lineOf(index), reason: 'schema', path: `${prefix}[${index}]`, detail: `${files ? where(index) : `Line ${lineOf(index)}`} is not an order — row excluded.` });
       return;
     }
     const obj: Record<string, unknown> = { ...(item as Record<string, unknown>) };
     for (const r of applyAliases(obj)) if (!warnings.has(r)) warnings.set(r, `Column ${r}.`);
     if (typeof obj.order_id === 'number') obj.order_id = String(obj.order_id);
     const id = idOf(obj);
-    const label = id ?? `line ${lineOf(index)}`;
+    const label = id ?? where(index);
 
     // V8: unknown keys are warned and ignored.
     for (const key of Object.keys(obj)) {
@@ -139,9 +162,13 @@ export function validateRows(raw: unknown[], opts: ValidateOptions = {}): Valida
   const seen = new Map<string, number>();
   const kept: Array<{ row: OrderRow; index: number }> = [];
   for (const p of parsed) {
+    if (opts.existing_ids?.has(p.row.order_id)) {
+      flags.push({ order_id: p.row.order_id, line: lineOf(p.index), reason: 'duplicate', path: `${prefix}[${p.index}].order_id`, detail: `${p.row.order_id} on ${where(p.index)} is already saved — ignored.`, action: 'dropped' });
+      continue;
+    }
     const first = seen.get(p.row.order_id);
     if (first !== undefined) {
-      flags.push({ order_id: p.row.order_id, line: lineOf(p.index), reason: 'duplicate', path: `${prefix}[${p.index}].order_id`, detail: `${p.row.order_id} appears again on line ${lineOf(p.index)} (first on line ${lineOf(first)}) — second occurrence dropped.`, action: 'dropped' });
+      flags.push({ order_id: p.row.order_id, line: lineOf(p.index), reason: 'duplicate', path: `${prefix}[${p.index}].order_id`, detail: `${p.row.order_id} appears again on ${where(p.index)} (first on ${where(first)}) — second occurrence dropped.`, action: 'dropped' });
       continue;
     }
     seen.set(p.row.order_id, p.index);
@@ -171,12 +198,23 @@ export function validateRows(raw: unknown[], opts: ValidateOptions = {}): Valida
     }
   }
 
+  // Flags are numbered over the merged rows; give each one its own file, line and path back.
+  const locate = (list: ValidationFlag[]): ValidationFlag[] =>
+    files
+      ? list.map((flag) => {
+          const index = flag.line - 1 - offset;
+          const file = fileAt(index)!;
+          const local = index - file.start;
+          return { ...flag, file: file.name, line: local + 1 + file.line_offset, path: flag.path?.replace(`${prefix}[${index}]`, `${file.path_prefix}[${local}]`) };
+        })
+      : list;
+
   return {
     rows: kept.map((k) => k.row),
     rows_in: raw.length,
     rows_kept: kept.length,
     rows_rejected: rejected,
-    flags: flags.sort((a, b) => a.line - b.line),
+    flags: locate(flags.sort((a, b) => a.line - b.line)),
     warnings: [...warnings.values()],
     period_end: periodEnd,
   };
