@@ -1,5 +1,6 @@
 import type { ErrorRequestHandler, NextFunction, Request, RequestHandler, Response } from 'express';
 import { ZodError } from 'zod';
+import { config } from './config.js';
 import { AttributionConflict, OverrideInvalid } from './engine/types.js';
 
 // Error catalogue (Blueprint §16.1). Body: {error:{code, message, path?, hint?, issues?}}.
@@ -71,7 +72,7 @@ export const errorHandler: ErrorRequestHandler = (err, req, res, _next) => {
   }
   const e = err as { type?: string; code?: string };
   if (e.type === 'entity.too.large' || e.code === 'LIMIT_FILE_SIZE') {
-    send(res, 413, 'file_too_large', 'File is larger than 5 MB. Export a smaller period.');
+    send(res, 413, 'file_too_large', `A file is larger than ${Math.round(config.maxBodyBytes / 1048576)} MB.`, { hint: 'Split it by month and upload the files together.' });
     return;
   }
   if (e.type === 'entity.parse.failed') {

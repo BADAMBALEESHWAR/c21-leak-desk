@@ -94,7 +94,7 @@ export function parseJsonText(text: string, name = 'The file'): Ingested {
 
 function checkSize(i: Ingested, name = 'The file'): Ingested {
   if (i.orders.length > config.maxRows) {
-    throw new HttpError(413, 'file_too_large', `${name} has ${i.orders.length.toLocaleString('en-IN')} rows; the limit is 10,000.`, { hint: 'Export a shorter period.' });
+    throw new HttpError(413, 'file_too_large', `${name} has ${i.orders.length.toLocaleString('en-IN')} rows; the limit is ${config.maxRows.toLocaleString('en-IN')}.`, { hint: 'Export a shorter period.' });
   }
   if (i.orders.length === 0) throw new HttpError(422, 'no_valid_rows', `${name} has no orders.`, { path: i.path_prefix });
   return i;
