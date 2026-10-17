@@ -67,6 +67,46 @@ describe('api contract (Blueprint §10, §16)', () => {
     expect(r.body.flags[0]).toMatchObject({ reason: 'unknown', field: 'refund_inr', line: 2 });
   });
 
+  it('merges several files (one per month) into one dataset; every flag names its file and line', async () => {
+    const head = 'order_id,date,gross_inr,discount_inr,refund_inr,net_sales_inr,product_cost_inr,recovered_product_cost_inr,shipping_inr,payment_fee_inr,return_cost_inr,returned\n';
+    const aug = head + 'A1,2026-08-02,1000,100,0,900,400,0,60,20,0,false\n';
+    const sep = head + 'S1,2026-09-02,1000,100,,0,400,350,60,20,50,true\nA1,2026-09-03,500,0,0,500,200,0,60,10,0,false\n';
+    const r = await request(app).post(`${api}/datasets`).attach('file', Buffer.from(aug), 'aug.csv').attach('file', Buffer.from(sep), 'sep.csv');
+    expect(r.status).toBe(201);
+    expect(r.body.files).toEqual([{ name: 'aug.csv', rows: 1 }, { name: 'sep.csv', rows: 2 }]);
+    expect([r.body.rows_in, r.body.rows_kept, r.body.period_end, r.body.source]).toEqual([3, 2, '2026-09-30', 'upload:aug.csv + sep.csv']);
+    expect(r.body.flags).toContainEqual(expect.objectContaining({ reason: 'unknown', field: 'refund_inr', file: 'sep.csv', line: 2 }));
+    const dup = r.body.flags.find((f: { reason: string }) => f.reason === 'duplicate');
+    expect(dup).toMatchObject({ order_id: 'A1', file: 'sep.csv', line: 3, path: 'sep.csv rows[1].order_id' });
+    expect(dup.detail).toContain('sep.csv line 3 (first on aug.csv line 2)');
+  });
+
+  it('adds an upload to saved data, ignoring orders already saved; a repeat upload changes nothing', async () => {
+    const head = 'order_id,date,gross_inr,discount_inr,refund_inr,net_sales_inr,product_cost_inr,recovered_product_cost_inr,shipping_inr,payment_fee_inr,return_cost_inr,returned\n';
+    const aug = head + 'A1,2026-08-02,1000,100,0,900,400,0,60,20,0,false\n';
+    const sep = head + 'S1,2026-09-02,1000,100,0,900,400,0,60,20,0,false\nA1,2026-08-02,1000,100,0,900,400,0,60,20,0,false\n';
+    const first = await request(app).post(`${api}/datasets`).attach('file', Buffer.from(aug), 'aug.csv');
+    const added = await request(app).post(`${api}/datasets`).field('append_to', first.body.dataset_id).attach('file', Buffer.from(sep), 'sep.csv');
+    expect(added.status).toBe(201);
+    expect(added.body).toMatchObject({ rows_kept: 2, rows_added: 1, duplicates_ignored: 1, appended_to: first.body.dataset_id, period_end: '2026-09-30' });
+    expect(added.body.files).toEqual([{ name: 'aug.csv', rows: 1 }, { name: 'sep.csv', rows: 2 }]);
+    expect(added.body.flags.find((f: { order_id: string }) => f.order_id === 'A1').detail).toBe('A1 on line 3 is already saved — ignored.');
+    const again = await request(app).post(`${api}/datasets?append_to=${added.body.dataset_id}`).attach('file', Buffer.from(sep), 'sep.csv');
+    expect(again.status).toBe(200);
+    expect(again.body).toMatchObject({ unchanged: true, rows_added: 0, duplicates_ignored: 2, dataset_id: added.body.dataset_id, message: 'Nothing new: all 2 orders were already saved.' });
+    const a = await request(app).post(`${api}/datasets/${added.body.dataset_id}/analyses`).send({});
+    expect(a.body.orders.map((o: { order_id: string }) => o.order_id).sort()).toEqual(['A1', 'S1']);
+    expect((await request(app).post(`${api}/datasets?append_to=nope`).attach('file', Buffer.from(sep), 'sep.csv')).status).toBe(404);
+  });
+
+  it('a broken file in a multi-file upload is named in the error', async () => {
+    const good = 'order_id,date,gross_inr,discount_inr,refund_inr,net_sales_inr,product_cost_inr,recovered_product_cost_inr,shipping_inr,payment_fee_inr,return_cost_inr,returned\nA1,2026-08-02,1000,100,0,900,400,0,60,20,0,false\n';
+    const bad = 'date,gross_inr\n2026-09-02,1000\n';
+    const r = await request(app).post(`${api}/datasets`).attach('file', Buffer.from(good), 'aug.csv').attach('file', Buffer.from(bad), 'sep.csv');
+    expect([r.status, r.body.error.code]).toEqual([422, 'schema_invalid']);
+    expect(r.body.error.message).toContain('sep.csv');
+  });
+
   it('a CSV header named __proto__ is refused with 422 (no prototype pollution)', async () => {
     const csv = 'order_id,__proto__,date\nX1,1,2026-09-02\n';
     const r = await request(app).post(`${api}/datasets`).set('Content-Type', 'text/csv').send(csv);
@@ -140,7 +180,7 @@ describe('api contract (Blueprint §10, §16)', () => {
 
   it('GET /template.csv downloads a C21 template that imports back cleanly', async () => {
     const tpl = await request(app).get(`${api}/template.csv`);
-    expect(tpl.headers['content-disposition']).toMatch(/c21-orders-template\.csv/);
+    expect(tpl.headers['content-disposition']).toMatch(/profyn-orders-template\.csv/);
     const back = await request(app).post(`${api}/datasets`).set('Content-Type', 'text/csv').send(tpl.text);
     expect(back.status).toBe(201);
     expect(back.body.rows_kept).toBe(3);
