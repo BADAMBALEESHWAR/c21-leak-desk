@@ -6,21 +6,11 @@ import preview from './preview.json';
 /** The engine's cause label; the "(unknown)" suffix is shown as the unknown pill instead. */
 export const leakName = (label: string) => label.replace(/\s*\(unknown\)$/i, '');
 
-/** The month that sold the most, and what it kept. Read from the engine's month rows, not written by hand. */
-export function topSellerInsight() {
-  const top = preview.months.reduce((b, m) => (m.net_sales_inr > b.net_sales_inr ? m : b), preview.months[0]);
-  return {
-    title: top.contribution_inr < 0 ? `${month(top.month)} sold the most and still lost ${inr(Math.abs(top.contribution_inr))}.` : `${month(top.month)} sold the most and kept ${inr(top.contribution_inr)}.`,
-    detail: `Discounts averaged ${pct(top.discount_depth_pct)} of gross that month.`,
-  };
-}
-
 /** A window onto Pulse, drawn from the engine's output on the synthetic 12-month demo brand. */
 export function HeroDashboard() {
   const t = preview.totals;
   const first = preview.months[0].month;
   const last = preview.months[preview.months.length - 1].month;
-  const insight = topSellerInsight();
   const best = preview.months.reduce((b, m) => (m.contribution_inr > b.contribution_inr ? m : b), preview.months[0]);
   const worst = preview.months.reduce((b, m) => (m.contribution_inr < b.contribution_inr ? m : b), preview.months[0]);
   const rec = preview.reconciliation;
@@ -117,16 +107,6 @@ export function HeroDashboard() {
           </p>
         ) : null}
       </figure>
-      <aside className="l-insight" aria-label="Insight from Pulse on the sample data">
-        <span className="l-insight-icon" aria-hidden="true">
-          <Icon name="lightbulb" size={18} />
-        </span>
-        <span className="l-insight-body">
-          <span className="l-insight-kicker">Insight · sample data</span>
-          <strong>{insight.title}</strong>
-          <span>{insight.detail}</span>
-        </span>
-      </aside>
     </div>
   );
 }

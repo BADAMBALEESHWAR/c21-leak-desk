@@ -23,9 +23,10 @@ export function Pricing() {
       </div>
       <div className="l-plans">
         {PLANS.map((p) => {
+          const free = p.monthly === 0;
           const price = annual ? annualMonthly(p.monthly) : p.monthly;
           return (
-            <article key={p.name} className={`l-plan${p.popular ? ' is-popular' : ''}`} aria-labelledby={`plan-${p.name}`}>
+            <article key={p.name} className={`l-plan${p.popular ? ' is-popular' : ''}${free ? ' is-free' : ''}`} aria-labelledby={`plan-${p.name}`}>
               {p.popular ? <span className="l-plan-badge">Most popular</span> : null}
               <h3 id={`plan-${p.name}`} className="l-plan-name">
                 {p.name}
@@ -33,10 +34,12 @@ export function Pricing() {
               <p className="l-plan-blurb">{p.blurb}</p>
               <p className="l-plan-price">
                 <span className="l-plan-amount">{inr(price)}</span>
-                <span className="l-plan-per">/ month</span>
+                <span className="l-plan-per">{free ? 'forever' : '/ month'}</span>
               </p>
               <p className="l-plan-billed">
-                {annual ? (
+                {free ? (
+                  'No card needed'
+                ) : annual ? (
                   <>
                     Billed yearly · <s>{inr(p.monthly)}</s> monthly
                   </>
@@ -54,14 +57,14 @@ export function Pricing() {
                 ))}
               </ul>
               <a className={`l-btn l-btn-block ${p.popular ? 'l-btn-primary' : 'l-btn-secondary'}`} href={LINKS.signUp}>
-                Start free trial
+                {p.cta}
               </a>
             </article>
           );
         })}
       </div>
       <p className="l-fine">
-        14-day free trial on your own CSV. Prices in Indian rupees, before GST. Every plan includes every feature; plans differ by monthly order volume, and Scale adds API access.
+        Prices in Indian rupees, before GST. Paid plans include every feature and differ by monthly order volume; Scale adds API access.
       </p>
     </>
   );

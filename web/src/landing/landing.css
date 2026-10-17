@@ -2437,3 +2437,60 @@ body {
     transform: none;
   }
 }
+
+/* ---- Concise landing: 3 reasons, 3 steps, 4 plans ------------------------------------------------- */
+
+.l-hero-visual {
+  margin-bottom: 0;
+}
+
+.l-feature-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 16px;
+  font-weight: 600;
+  color: var(--primary);
+  text-decoration: none;
+}
+
+.l-feature-link:hover {
+  text-decoration: underline;
+}
+
+.l-steps.l-steps-3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.l-steps.l-steps-3 .l-step:nth-child(3)::after {
+  display: none;
+}
+
+.l-plans {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  max-width: 1200px;
+}
+
+.l-plan.is-free .l-plan-amount {
+  color: var(--text);
+}
+
+@media (max-width: 1200px) {
+  .l-plans {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    max-width: 760px;
+  }
+}
+
+@media (max-width: 900px) {
+  .l-steps.l-steps-3 {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .l-plans {
+    grid-template-columns: minmax(0, 1fr);
+    max-width: 520px;
+  }
+}
