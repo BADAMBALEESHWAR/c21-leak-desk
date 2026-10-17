@@ -67,8 +67,16 @@ function readErrorBody(body: unknown): ApiErrorBody['error'] | null {
   return null;
 }
 
-const UNREACHABLE =
-  'Could not reach the API at /api/v1. Start it with "npm run dev" in the api folder, then try again.';
+/** Shown only after the automatic retries below have run out; developers also get the local hint. */
+const UNREACHABLE = import.meta.env.DEV
+  ? 'Could not reach the API at /api/v1. Start it with "npm run dev" in the api folder, then try again.'
+  : 'Profyn could not be reached just now. Nothing was lost; please try again in a moment.';
+
+// A deploy restarts the API for a few seconds. Network failures and gateway errors (502/503/504 without our own JSON
+// error body) are retried quietly before anything is shown, so a person never sees a blip.
+const RETRY_DELAYS_MS = [700, 1500, 3000, 5000];
+const wait = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
+const isGatewayError = (res: Response) => res.status === 502 || res.status === 503 || res.status === 504;
 
 // ---- Session ------------------------------------------------------------------------------
 // Demo mode sends no token. Workspace mode sends the signed-in owner's id token on every call and never falls back to
@@ -131,23 +139,34 @@ async function send(method: 'GET' | 'POST', path: string, body?: unknown, auth =
     init.body = JSON.stringify(body);
     headers['Content-Type'] = 'application/json';
   }
-  let res: Response;
-  try {
-    res = await fetch(`${API_BASE}${path}`, init);
-  } catch {
-    throw new ApiError(0, null, UNREACHABLE);
-  }
-  if (res.status === 401 && token) endSession();
-  const text = await res.text();
-  let parsed: unknown = null;
-  if (text) {
+  for (let attempt = 0; ; attempt++) {
+    let res: Response | null = null;
     try {
-      parsed = JSON.parse(text);
+      res = await fetch(`${API_BASE}${path}`, init);
     } catch {
-      parsed = null;
+      res = null;
     }
+    const retryable = res === null || isGatewayError(res);
+    let parsed: unknown = null;
+    if (res) {
+      const text = await res.text();
+      if (text) {
+        try {
+          parsed = JSON.parse(text);
+        } catch {
+          parsed = null;
+        }
+      }
+    }
+    // Our API answers with a JSON error body; only a missing answer or a gateway page is a blip worth retrying.
+    if (retryable && !readErrorBody(parsed) && attempt < RETRY_DELAYS_MS.length) {
+      await wait(RETRY_DELAYS_MS[attempt]);
+      continue;
+    }
+    if (!res) throw new ApiError(0, null, UNREACHABLE);
+    if (res.status === 401 && token) endSession();
+    return { res, parsed };
   }
-  return { res, parsed };
 }
 
 async function request<T>(method: 'GET' | 'POST', path: string, body?: unknown, auth = true): Promise<T> {

@@ -197,9 +197,15 @@ export function App() {
                 </Callout>
               ) : null}
               {apiStatus === 'down' ? (
-                <Callout tone="danger" title="The API is not reachable at /api/v1." role="alert">
-                  <p className="callout-hint">Start it with &ldquo;npm run dev&rdquo; in the api folder; this page checks again every few seconds.</p>
-                </Callout>
+                import.meta.env.DEV ? (
+                  <Callout tone="danger" title="The API is not reachable at /api/v1." role="alert">
+                    <p className="callout-hint">Start it with &ldquo;npm run dev&rdquo; in the api folder; this page checks again every few seconds.</p>
+                  </Callout>
+                ) : (
+                  <Callout tone="info" title="Reconnecting to Profyn…" role="status">
+                    <p className="callout-hint">This page checks again every few seconds. Nothing you saved is lost.</p>
+                  </Callout>
+                )
               ) : null}
               {restoreError ? <Callout tone="danger" title={restoreError} /> : null}
               {deepLink.busy ? (
