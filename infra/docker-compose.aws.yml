@@ -3,6 +3,9 @@ services:
   mongo:
     image: mongo:7
     restart: unless-stopped
+    # t3.micro (1 GB): cap memory so api + mongo + the OS fit; user-data also adds 1 GB swap.
+    command: ["--wiredTigerCacheSizeGB", "0.25"]
+    mem_limit: 400m
     volumes:
       - mongo-data:/data/db
     healthcheck:
@@ -14,6 +17,7 @@ services:
   api:
     image: ${API_IMAGE}
     restart: unless-stopped
+    mem_limit: 300m
     env_file: /opt/leakdesk/.env
     environment:
       PORT: 8080

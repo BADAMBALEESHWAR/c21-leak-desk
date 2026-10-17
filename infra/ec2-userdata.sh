@@ -1,12 +1,15 @@
 #!/bin/bash
 # EC2 user-data (Ubuntu 24.04): Docker + compose, pull the API image from ECR, read secrets from SSM, start api + mongo.
-# Placeholders __REGION__, __ACCOUNT__, __UPLOADS_BUCKET__ and __COMPOSE__ are filled by infra/aws-up.sh.
+# Placeholders (REGION, ACCOUNT, UPLOADS_BUCKET and COMPOSE, each wrapped in double underscores) are filled by infra/aws-up.sh;
+# they must appear only where they are used, never in a comment.
 # Behind CloudFront the browser and /api/* share one origin, so CORS_ORIGIN is only needed for the EC2-IP fallback.
 set -euo pipefail
 REGION=__REGION__
 ACCOUNT=__ACCOUNT__
 REGISTRY="$ACCOUNT.dkr.ecr.$REGION.amazonaws.com"
 
+# 1 GB swap so a t3.micro survives the image pull and mongo start-up
+if [ ! -f /swapfile ]; then fallocate -l 1G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile && echo '/swapfile none swap sw 0 0' >> /etc/fstab; fi
 apt-get update -y
 apt-get install -y ca-certificates curl unzip
 install -m 0755 -d /etc/apt/keyrings
@@ -30,6 +33,9 @@ param() { aws ssm get-parameter --region $REGION --with-decryption --name "\$1" 
   echo "GEMINI_API_KEY=\$(param /leakdesk/GEMINI_API_KEY)"
   echo "GEMINI_MODEL=\$(param /leakdesk/GEMINI_MODEL)"
   echo "AI_DISABLED=\$(param /leakdesk/AI_DISABLED)"
+  echo "COGNITO_POOL_ID=\$(param /leakdesk/COGNITO_POOL_ID)"
+  echo "COGNITO_CLIENT_ID=\$(param /leakdesk/COGNITO_CLIENT_ID)"
+  echo "COGNITO_DOMAIN=\$(param /leakdesk/COGNITO_DOMAIN)"
 } > /opt/leakdesk/.env
 chmod 600 /opt/leakdesk/.env
 aws ecr get-login-password --region $REGION | docker login --username AWS --password-stdin $REGISTRY
