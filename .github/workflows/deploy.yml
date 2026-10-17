@@ -34,6 +34,7 @@ jobs:
           npm ci --prefix web && npm run build --prefix web
           aws s3 sync web/dist "s3://${{ secrets.WEB_BUCKET }}/releases/${GITHUB_SHA::7}/" --delete
           aws s3 sync web/dist "s3://${{ secrets.WEB_BUCKET }}/" --delete --exclude "releases/*"
+          aws s3 cp web/dist "s3://${{ secrets.WEB_BUCKET }}/" --recursive --exclude "*" --include "*.html" --cache-control "no-cache"
           aws cloudfront create-invalidation --distribution-id "${{ secrets.DIST_ID }}" --paths "/*"
       - uses: aws-actions/amazon-ecr-login@v2
         id: ecr
