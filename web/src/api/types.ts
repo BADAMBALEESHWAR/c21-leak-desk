@@ -283,6 +283,8 @@ export interface ValidationFlag {
   order_id: string | null;
   /** 1-based line in the file (CSV counts the header). */
   line: number;
+  /** The file the row came from, when several files were uploaded together. */
+  file?: string;
   reason: FlagReason;
   detail: string;
   field?: string;
@@ -302,6 +304,7 @@ export const SAMPLE_SOURCES = [
   'refund_over_gross',
   'recovery_400',
   'bad_schema',
+  'demo_12m',
 ] as const;
 
 export type SampleSource = (typeof SAMPLE_SOURCES)[number];
@@ -334,7 +337,20 @@ export interface DatasetResponse {
   warnings: string[];
   period_end: string;
   schema_version?: string;
-  persisted: boolean;
+  /** Present when several files were merged into this dataset, in upload order (after an append: every file so far). */
+  files?: Array<{ name: string; rows: number }>;
+  /** Absent on GET /datasets/:id. */
+  persisted?: boolean;
+  /** Adding to saved data (append_to): orders this upload added. flags, rows_in and rows_rejected then describe this upload only. */
+  rows_added?: number;
+  /** Orders in this upload whose order_id was already saved; ignored, never counted twice. */
+  duplicates_ignored?: number;
+  /** The saved dataset this upload was added to; dataset_id is the new version (or the saved one when unchanged). */
+  appended_to?: string;
+  /** 200 with nothing new: the saved dataset stays as it is. */
+  unchanged?: boolean;
+  /** The API's sentence for an unchanged upload, e.g. "Nothing new: all 2 orders were already saved." */
+  message?: string;
 }
 
 export interface AnalysisRequest {
@@ -464,4 +480,184 @@ export interface ApiErrorBody {
     hint?: string;
     issues?: ApiIssue[];
   };
+}
+
+// ---- Accounts (Cognito, optional) ------------------------------------------------------
+
+export interface AuthConfig {
+  enabled: boolean;
+  domain?: string;
+  client_id?: string;
+  region?: string;
+}
+
+export interface MeResponse {
+  user: { sub: string; email: string | null } | null;
+  auth_enabled: boolean;
+  workspace?: WorkspaceKind;
+}
+
+export type WorkspaceKind = 'account' | 'demo';
+
+/** One saved dataset in GET /workspace. Data that was added to is listed once, as its newest version. */
+export interface WorkspaceDataset {
+  dataset_id: string;
+  source: string;
+  period_end: string;
+  rows_kept: number;
+  files: Array<{ name: string; rows: number }> | null;
+  created_at: string;
+  latest_analysis: {
+    analysis_id: string;
+    attribution: AttributionMode;
+    created_at: string;
+    contribution_inr: number | null;
+  } | null;
+}
+
+/** GET /workspace: the signed-in owner's saved data, newest first. Without a token: the demo workspace, which lists nothing. */
+export interface WorkspaceResponse {
+  workspace: WorkspaceKind;
+  user: { sub: string; email: string | null } | null;
+  datasets: WorkspaceDataset[];
+  /** The newest saved data; analysis_id is null when it has not been analysed yet. */
+  latest: { dataset_id: string; analysis_id: string | null } | null;
+}
+
+// ---- Pulse (owner analytics) ------------------------------------------------------------
+
+export interface PulseCommon {
+  labels: string[];
+  unknown_count: number;
+  synthetic_rows?: number;
+}
+
+export interface PulseHeadline {
+  orders: number;
+  gross_inr: number;
+  net_sales_inr: number;
+  contribution_inr: Inr;
+  contribution_pct: number | null;
+  return_pct: number | null;
+  aov_inr: number | null;
+}
+
+export interface PulseExtreme {
+  month: string;
+  value_inr: number | null;
+}
+
+export interface PulseAction {
+  title: string;
+  detail: string;
+  recoverable_inr: number | null;
+  lever: string;
+  /** Present only when the Scenario step can model the action. */
+  overrides?: ScenarioOverrides;
+}
+
+export interface PulseOverview extends PulseCommon {
+  month: string;
+  months: string[];
+  headline: PulseHeadline;
+  previous: PulseHeadline | null;
+  /** null for the first month (no previous month to compare). */
+  deltas: { orders_pct: number | null; net_sales_pct: number | null; contribution_pct: number | null; return_pct_pts: number | null } | null;
+  /** null when the file has fewer than two months to compare; a metric is null when every month ties. */
+  best: { net_sales: PulseExtreme | null; contribution: PulseExtreme | null; contribution_per_order: PulseExtreme | null } | null;
+  worst: { net_sales: PulseExtreme | null; contribution: PulseExtreme | null; contribution_per_order: PulseExtreme | null } | null;
+  months_compared?: number;
+  actions: PulseAction[];
+}
+
+export interface PulseMonth {
+  month: string;
+  orders: number;
+  gross_inr: number;
+  net_sales_inr: number;
+  contribution_inr: Inr;
+  contribution_pct: number | null;
+  return_pct: number | null;
+  discount_depth_pct: number | null;
+  aov_inr: number | null;
+  unknown: number;
+}
+
+export interface PulseMonths extends PulseCommon {
+  months: PulseMonth[];
+}
+
+export type ProductLabel = 'push' | 'fix' | 'niche' | 'review';
+
+export interface PulseProduct {
+  product_id: string;
+  units: number;
+  orders: number;
+  net_sales_inr: number;
+  contribution_inr: Inr;
+  contribution_per_unit_inr: number | null;
+  return_pct: number | null;
+  discount_depth_pct: number | null;
+  rank_units: number;
+  rank_net_sales: number;
+  rank_contribution: number;
+  label: ProductLabel;
+  lever: string;
+  note: string;
+}
+
+export interface PulseProducts extends PulseCommon {
+  products: PulseProduct[];
+}
+
+export interface PulseChannel {
+  channel: string;
+  orders: number;
+  net_sales_inr: number;
+  contribution_inr: Inr;
+  return_pct: number | null;
+  ads_inr: number | null;
+  ads_share_pct: number | null;
+}
+
+export interface PulsePaymentRow {
+  payment_type: string;
+  orders: number;
+  share_pct: number | null;
+  return_pct: number | null;
+  payment_fee_per_order_inr: number | null;
+  return_cost_per_order_inr: number | null;
+  contribution_per_order_inr: number | null;
+}
+
+export interface PulseChannels extends PulseCommon {
+  attribution: AttributionMode;
+  channels: PulseChannel[];
+  payments: { not_in_file: true } | { rows: PulsePaymentRow[]; cod_vs_prepaid_return_ratio: number | null };
+}
+
+export interface PulseLeakMonth {
+  month: string;
+  by_cause: Record<string, number>;
+  total_lost_inr: number;
+  unknown_orders: number;
+}
+
+export interface PulseLeaks extends PulseCommon {
+  causes: string[];
+  months: PulseLeakMonth[];
+}
+
+export interface PulseInsights {
+  discount_bands: Array<{ band: string; orders: number; contribution_per_order_inr: number | null }>;
+  /** Discount band where contribution per order turns negative (current API). */
+  negative_from_discount_band?: string | null;
+  /** Earlier contract name; read when present. */
+  negative_from_discount_pct?: number | null;
+  order_value_bands: Array<{ band: string; orders: number; shipping_pct_of_net_sales: number | null; contribution_per_order_inr: number | null }>;
+  repeat:
+    | { not_in_file: true }
+    | { customers: number; repeat_customers: number; repeat_rate_pct: number | null; contribution_per_order_first_inr: number | null; contribution_per_order_repeat_inr: number | null };
+  labels: string[];
+  unknown_count?: number;
 }

@@ -188,7 +188,7 @@ export function ChecksDetail() {
         </span>
         <span className="drawer-hero-sub">
           {checksRaw.engine_version ? `Engine ${checksRaw.engine_version}` : 'Engine'}
-          {typeof checksRaw.ms === 'number' ? ` · computed in ${checksRaw.ms} ms` : ''} · each check re-runs the engine on the pack data
+          {typeof checksRaw.ms === 'number' ? ` · computed in ${checksRaw.ms} ms` : ''} · each check re-runs the engine on the reference data
         </span>
         <span className="drawer-hero-actions">
           {checksRaw.all_pass ? (
@@ -319,7 +319,7 @@ export function AboutDetail() {
     {
       key: 'csv',
       icon: 'upload-cloud',
-      title: 'Works from a CSV today, Fynd order APIs tomorrow',
+      title: 'Works from a CSV today, store connectors next',
       text: 'The same order contract takes a CSV upload now and can be fed by order APIs later.',
       see: 'Import and the CSV template',
       go: () => goto('import', () => revealElement(document.querySelector<HTMLElement>('.dropzone'), false)),
@@ -327,7 +327,7 @@ export function AboutDetail() {
   ];
 
   const steps: Array<[string, string]> = [
-    ['Import', 'Load the C21 fixture or a CSV; every row is validated and flagged.'],
+    ['Import', 'Load the sample or your own CSV files; every row is validated and flagged.'],
     ['Ledger', 'Contribution per order, reconciled to channels and products.'],
     ['Leaks', 'Losing orders grouped by cause, with the rupees lost.'],
     ['Scenario', 'Change one assumption and watch the recommendation move.'],

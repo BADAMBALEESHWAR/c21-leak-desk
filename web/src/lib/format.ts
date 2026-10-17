@@ -65,6 +65,14 @@ export function formatDateTime(iso: string): string {
   });
 }
 
+/** A calendar day, e.g. 30 Sep 2026. Plain YYYY-MM-DD dates are read as that day, not shifted by the time zone. */
+export function formatDate(iso: string): string {
+  const day = /^\d{4}-\d{2}-\d{2}$/.test(iso);
+  const d = new Date(day ? `${iso}T00:00:00` : iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+
 export function plural(n: number, one: string, many: string): string {
   return n === 1 ? one : many;
 }

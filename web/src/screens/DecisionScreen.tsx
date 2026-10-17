@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useId, useState, type FormEvent } from 'react';
-import { api, ApiError, toErrorInfo, type ErrorInfo } from '../api/client';
+import { api, ApiError, authDownload, toErrorInfo, type ErrorInfo } from '../api/client';
+import { useAuth } from '../auth/AuthContext';
 import type { AnalysisResponse, Candidate, DecisionRequest, DecisionSaved, DecisionSummary, OverrideKey, Recommendation, ScenarioResponse, TextSource } from '../api/types';
 import { ConfidenceBadge, Pill, SourceTag } from '../components/Badge';
 import { Button, ButtonLink } from '../components/Button';
@@ -34,6 +35,8 @@ function FieldError({ id, message }: { id: string; message?: string }) {
 }
 
 function DecisionsList({ version }: { version: number }) {
+  const { showToast } = useStore();
+  const onDownloadError = (e: ErrorInfo) => showToast(e.message, 'info');
   const [rows, setRows] = useState<DecisionSummary[] | null>(null);
   const [error, setError] = useState<ErrorInfo | null>(null);
 
@@ -68,10 +71,10 @@ function DecisionsList({ version }: { version: number }) {
       className: 'col-nowrap',
       cell: (d) => (
         <span className="export-links">
-          <ButtonLink variant="secondary" size="sm" icon="download" href={api.exportUrl(d.decision_id, 'md')} download>
+          <ButtonLink variant="secondary" size="sm" icon="download" href={api.exportUrl(d.decision_id, 'md')} download onClick={authDownload(api.exportUrl(d.decision_id, 'md'), `decision-${d.decision_id}.md`, onDownloadError)}>
             Export Markdown
           </ButtonLink>
-          <ButtonLink variant="secondary" size="sm" icon="download" href={api.exportUrl(d.decision_id, 'json')} download>
+          <ButtonLink variant="secondary" size="sm" icon="download" href={api.exportUrl(d.decision_id, 'json')} download onClick={authDownload(api.exportUrl(d.decision_id, 'json'), `decision-${d.decision_id}.json`, onDownloadError)}>
             Export JSON
           </ButtonLink>
         </span>
@@ -210,6 +213,7 @@ function snapshotValue(k: string, v: unknown): string {
 }
 
 function SavedSnapshot({ saved }: { saved: DecisionSaved }) {
+  const account = useAuth().mode === 'account';
   const entries = Object.entries({ ...saved.assumptions, engine_version: saved.engine_version }).filter(([k]) => k in SNAPSHOT_KEYS);
   return (
     <section className="card saved-card" aria-labelledby="saved-title">
@@ -222,7 +226,7 @@ function SavedSnapshot({ saved }: { saved: DecisionSaved }) {
             Decision saved
           </h2>
           <p className="card-sub">
-            {formatDateTime(saved.saved_at)} · {saved.persisted === false ? 'in memory only' : 'saved to MongoDB'}
+            {formatDateTime(saved.saved_at)} · {saved.persisted === false ? (account ? 'not saved: the database is unavailable' : 'demo workspace, not kept') : account ? 'saved to your account' : 'saved'}
           </p>
         </div>
       </div>
@@ -528,7 +532,7 @@ export function DecisionScreen() {
       <PageHeader title="Save the decision" subtitle="Record what to try, who owns it, and when to stop — with the numbers it was based on." />
 
       {!analysis || !rec ? (
-        <NeedsAnalysis sentence="No analysis yet. Load the C21 fixture, compare a scenario, then save the decision here." icon="check-circle" />
+        <NeedsAnalysis sentence="No analysis yet. Load the sample orders, compare a scenario, then save the decision here." icon="check-circle" />
       ) : (
         <>
           <Callout tone="info" title={current ? 'Recorded against the scenario you last ran.' : 'Recorded against the observed baseline; no scenario has been run.'}>

@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { api, ApiError, toErrorInfo, type DatasetInput, type ErrorInfo } from '../api/client';
+import { api, ApiError, isSessionEnded, toErrorInfo, type DatasetInput, type DatasetOptions, type ErrorInfo } from '../api/client';
 import type {
   AnalysisResponse,
   AttributionMode,
@@ -13,9 +13,17 @@ import type {
   ScenarioResponse,
   TextSource,
   WorkedOrderResult,
+  WorkspaceDataset,
+  WorkspaceResponse,
 } from '../api/types';
+import { useAuth } from '../auth/AuthContext';
 import { parseHash } from '../lib/router';
 import { storage } from '../lib/storage';
+
+/** Read before the app trims the hash: a deep link that loads a sample replaces whatever would be restored. */
+const START_LOAD = parseHash(window.location.hash).params.has('load');
+
+export type WorkspaceStatus = 'idle' | 'loading' | 'ready' | 'error';
 
 export type BridgeFocus = 'gross' | 'net_sales' | 'contribution';
 export type LedgerTab = 'orders' | 'channel' | 'product';
@@ -34,8 +42,8 @@ export type ApiStatus = 'checking' | 'up' | 'down';
 
 /** Used when GET /samples is not reachable, so the import screen still lists every drill. */
 export const FALLBACK_SAMPLES: Sample[] = [
-  { source: 'fixture', label: 'C21 fixture', description: 'The 20 reference orders from the pack, untouched.' },
-  { source: 'extended', label: 'Fixture + labelled synthetic rows', description: 'Reference orders plus S01–S08 with channels, products and ads.' },
+  { source: 'fixture', label: 'Sample orders', description: '20 reference orders from a small D2C store, unchanged.' },
+  { source: 'extended', label: 'Extended sample', description: 'The 20 sample orders plus S01–S08 (labelled synthetic) with channels, products and ads.' },
   { source: 'duplicate_order', label: 'Duplicate order', description: 'O07 appears twice. Expect 20 orders and one duplicate flag.' },
   { source: 'late_refund', label: 'Late refund', description: 'O10 refund dated after the period end. Expect it pending.' },
   { source: 'null_refund', label: 'Missing refund', description: 'O05 refund_inr is null. Expect unknown, never zero.' },
@@ -43,6 +51,7 @@ export const FALLBACK_SAMPLES: Sample[] = [
   { source: 'refund_over_gross', label: 'Refund over gross', description: 'O03 refund above gross. Expect O03 invalid and excluded.' },
   { source: 'recovery_400', label: 'Full recovery', description: 'Recovered cost 400 on returns. Expect returns at −130.' },
   { source: 'bad_schema', label: 'Bad schema (CSV)', description: 'No product_cost_inr column. Expect 422 with the field path.' },
+  { source: 'demo_12m', label: '12-month demo brand (synthetic)', description: '3,000 labelled synthetic orders over twelve months, for the Pulse owner analytics.' },
 ];
 
 export const OVERRIDE_KEYS: OverrideKey[] = ['return_rate_pct', 'recovery_pct', 'shipping_inr', 'refund_policy', 'ads_per_order'];
@@ -105,7 +114,20 @@ interface StoreValue {
   overrides: ScenarioOverrides;
   setOverrides: (o: ScenarioOverrides) => void;
 
-  importDataset: (input: DatasetInput) => Promise<DatasetResponse>;
+  /** Workspace mode: the owner's saved data (GET /workspace). Null in demo mode. */
+  workspace: WorkspaceResponse | null;
+  workspaceStatus: WorkspaceStatus;
+  workspaceError: ErrorInfo | null;
+  refreshWorkspace: () => Promise<void>;
+  /** True until the start state is known: in workspace mode, the saved data and its latest analysis are loaded. */
+  starting: boolean;
+  /** Opens a saved dataset: its latest analysis, or a new one when it has none. */
+  openSaved: (d: WorkspaceDataset) => Promise<AnalysisResponse>;
+  /** The dataset being opened from the saved list. */
+  openingId: string | null;
+
+  /** appendTo: add the upload to that saved dataset; orders already saved are skipped. */
+  importDataset: (input: DatasetInput, options?: DatasetOptions) => Promise<DatasetResponse>;
   /** handling: ₹ per order for rows without handling_inr (config.handling_default_inr). */
   runAnalysis: (attribution: AttributionMode, periodEnd?: string, datasetId?: string, handling?: number) => Promise<AnalysisResponse>;
   runScenario: (overrides: ScenarioOverrides) => Promise<void>;
@@ -130,8 +152,8 @@ interface StoreValue {
   tableFocus: number;
   focusLedgerTable: (filter?: LedgerFilter) => void;
 
-  toast: { id: number; text: string } | null;
-  showToast: (text: string) => void;
+  toast: { id: number; text: string; tone: 'success' | 'info' } | null;
+  showToast: (text: string, tone?: 'success' | 'info') => void;
 
   decisionSavedFor: string | null;
   markDecisionSaved: (analysisId: string) => void;
@@ -145,6 +167,11 @@ export function useStore(): StoreValue {
   return v;
 }
 
+/** GET /datasets/:id has no file list; the saved list does. */
+function withFiles(ds: DatasetResponse, item: WorkspaceDataset | undefined): DatasetResponse {
+  return item?.files && !ds.files ? { ...ds, files: item.files } : ds;
+}
+
 export function findOrder(analysis: AnalysisResponse | null, orderId: string): OrderResult | null {
   if (!analysis) return null;
   return (
@@ -155,7 +182,16 @@ export function findOrder(analysis: AnalysisResponse | null, orderId: string): O
 }
 
 export function StoreProvider({ children }: { children: ReactNode }) {
+  const auth = useAuth();
+  const account = auth.ready && auth.mode === 'account';
+  const accountRef = useRef(account);
+  accountRef.current = account;
   const [apiStatus, setApiStatus] = useState<ApiStatus>('checking');
+  const [workspace, setWorkspace] = useState<WorkspaceResponse | null>(null);
+  const [workspaceStatus, setWorkspaceStatus] = useState<WorkspaceStatus>('idle');
+  const [workspaceError, setWorkspaceError] = useState<ErrorInfo | null>(null);
+  const [starting, setStarting] = useState(true);
+  const [openingId, setOpeningId] = useState<string | null>(null);
   const [engineVersion, setEngineVersion] = useState<string | null>(null);
   const [dbStatus, setDbStatus] = useState<string | null>(null);
   const [samples, setSamples] = useState<Sample[] | null>(null);
@@ -181,7 +217,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const [drawer, setDrawer] = useState<DrawerContent | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [toast, setToast] = useState<{ id: number; text: string } | null>(null);
+  const [toast, setToast] = useState<{ id: number; text: string; tone: 'success' | 'info' } | null>(null);
   const [decisionSavedFor, setDecisionSavedFor] = useState<string | null>(null);
   // Deep links may name a tab (?tab=channel); read before App cleans the hash.
   const [ledgerTab, setLedgerTab] = useState<LedgerTab>(() => {
@@ -253,36 +289,116 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     if (apiStatus === 'up') void refreshChecks();
   }, [apiStatus, refreshChecks]);
 
-  // Restore the last analysis after a reload, unless a deep link is about to load a sample.
+  const refreshWorkspace = useCallback(async () => {
+    if (!accountRef.current) return;
+    try {
+      const ws = await api.workspace();
+      setWorkspace(ws);
+      setWorkspaceStatus('ready');
+      setWorkspaceError(null);
+    } catch (err) {
+      if (!isSessionEnded(err)) setWorkspaceError(toErrorInfo(err));
+      setWorkspaceStatus((s) => (s === 'ready' ? s : 'error'));
+    }
+  }, []);
+
+  /** A saved dataset and one of its analyses, shown as if just run. */
+  const showSaved = useCallback((ds: DatasetResponse | null, a: AnalysisResponse | null) => {
+    analysisSeq.current++;
+    scenarioSeq.current++;
+    setDataset(ds);
+    setDatasetId(ds?.dataset_id ?? a?.dataset_id ?? null);
+    setAnalysis(a);
+    setAnalysing(false);
+    setNarration(null);
+    setScenario(null);
+    setScenarioOverrides(null);
+    setScenarioError(null);
+    setScenarioLoading(false);
+    setOverrides({});
+    setLedgerFilter('all');
+    setDrawerOpen(false);
+    setRestoreError(null);
+  }, []);
+
+  // Start. Workspace mode: the owner's saved data, opening the latest analysis. Demo mode: the last analysis in this
+  // browser. Either way a deep link that loads a sample wins.
   useEffect(() => {
-    if (parseHash(window.location.hash).params.has('load')) return;
+    if (!auth.ready) return;
+    let cancelled = false;
+
+    if (auth.mode === 'account') {
+      setStarting(true);
+      setRestoring(true);
+      setWorkspaceStatus('loading');
+      (async () => {
+        try {
+          const ws = await api.workspace();
+          if (cancelled) return;
+          setWorkspace(ws);
+          setWorkspaceStatus('ready');
+          setWorkspaceError(null);
+          const latest = ws.latest;
+          if (latest && !START_LOAD) {
+            const item = ws.datasets.find((d) => d.dataset_id === latest.dataset_id);
+            const [ds, a] = await Promise.all([
+              api.getDataset(latest.dataset_id).catch(() => null),
+              latest.analysis_id ? api.getAnalysis(latest.analysis_id) : api.createAnalysis(latest.dataset_id, { attribution: 'allocate' }),
+            ]);
+            if (cancelled || analysisRef.current) return;
+            showSaved(ds ? withFiles(ds, item) : null, a);
+          }
+        } catch (err) {
+          if (cancelled) return;
+          setWorkspaceStatus((s) => (s === 'ready' ? s : 'error'));
+          // An ended session has its own notice with "Sign in again".
+          if (!isSessionEnded(err)) {
+            setWorkspaceError(toErrorInfo(err));
+            setRestoreError(`Your saved data could not be opened. ${toErrorInfo(err).message}`);
+          }
+        } finally {
+          if (!cancelled) {
+            setRestoring(false);
+            setStarting(false);
+          }
+        }
+      })();
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    setStarting(false);
+    if (START_LOAD) return;
     const analysisId = storage.analysisId();
     if (!analysisId) return;
-    let cancelled = false;
     setRestoring(true);
-    api
-      .getAnalysis(analysisId)
-      .then((a) => {
+    (async () => {
+      try {
+        const a = await api.getAnalysis(analysisId);
+        const ds = await api.getDataset(a.dataset_id ?? storage.datasetId() ?? '').catch(() => null);
         if (cancelled || analysisRef.current) return;
         setAnalysis(a);
         setDatasetId(a.dataset_id ?? storage.datasetId());
-      })
-      .catch((err) => {
+        if (ds) setDataset(ds);
+      } catch (err) {
         if (cancelled) return;
         if (err instanceof ApiError && err.status === 404) storage.clear();
         else setRestoreError(`The last analysis could not be restored. ${toErrorInfo(err).message}`);
-      })
-      .finally(() => {
+      } finally {
         if (!cancelled) setRestoring(false);
-      });
+      }
+    })();
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [auth.ready, auth.mode, showSaved]);
 
+  // Demo mode remembers the ids in this browser; workspace mode starts from the saved data instead.
   useEffect(() => {
+    if (!auth.ready || auth.mode === 'account') return;
     if (datasetId || analysis) storage.save(datasetId, analysis?.analysis_id ?? null);
-  }, [datasetId, analysis]);
+  }, [auth.ready, auth.mode, datasetId, analysis]);
 
   // Optional AI wording, fetched after the analysis renders; template text stays until "ai" text arrives.
   const analysisId = analysis?.analysis_id ?? null;
@@ -318,17 +434,24 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setTableFocus((n) => n + 1);
   }, []);
 
-  const importDataset = useCallback(async (input: DatasetInput) => {
+  const importDataset = useCallback(async (input: DatasetInput, options?: DatasetOptions) => {
     setImportError(null);
     setImporting(true);
     let ds: DatasetResponse;
     try {
-      ds = await api.createDataset(input);
+      ds = await api.createDataset(input, options);
     } catch (err) {
       setImportError(toErrorInfo(err));
       throw err;
     } finally {
       setImporting(false);
+    }
+    if (accountRef.current) void refreshWorkspace();
+    if (ds.unchanged && ds.dataset_id === datasetIdRef.current) {
+      // Nothing new: the loaded data and its analysis stay as they are; the report shows this upload's flags.
+      setDataset((prev) => ({ ...ds, files: ds.files ?? prev?.files }));
+      setRestoreError(null);
+      return ds;
     }
     setDataset(ds);
     setDatasetId(ds.dataset_id);
@@ -339,7 +462,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setDrawerOpen(false);
     setRestoreError(null);
     return ds;
-  }, []);
+  }, [refreshWorkspace]);
 
   const runAnalysis = useCallback(async (attribution: AttributionMode, periodEnd?: string, dsId?: string, handling?: number) => {
     const id = dsId ?? datasetIdRef.current;
@@ -358,11 +481,32 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         resetScenario();
         setRestoreError(null);
       }
+      // The saved list shows each dataset's latest contribution.
+      if (accountRef.current) void refreshWorkspace();
       return a;
     } finally {
       if (seq === analysisSeq.current) setAnalysing(false);
     }
-  }, []);
+  }, [refreshWorkspace]);
+
+  const openSaved = useCallback(
+    async (d: WorkspaceDataset) => {
+      setOpeningId(d.dataset_id);
+      try {
+        if (d.latest_analysis) {
+          const [ds, a] = await Promise.all([api.getDataset(d.dataset_id).catch(() => null), api.getAnalysis(d.latest_analysis.analysis_id)]);
+          showSaved(ds ? withFiles(ds, d) : null, a);
+          return a;
+        }
+        const ds = await api.getDataset(d.dataset_id);
+        showSaved(withFiles(ds, d), null);
+        return await runAnalysis('allocate', undefined, d.dataset_id);
+      } finally {
+        setOpeningId(null);
+      }
+    },
+    [showSaved, runAnalysis],
+  );
 
   const runScenario = useCallback(async (o: ScenarioOverrides) => {
     const a = analysisRef.current;
@@ -437,7 +581,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const closeDrawer = useCallback(() => setDrawerOpen(false), []);
 
-  const showToast = useCallback((text: string) => setToast({ id: Date.now(), text }), []);
+  const showToast = useCallback((text: string, tone: 'success' | 'info' = 'success') => setToast({ id: Date.now(), text, tone }), []);
 
   useEffect(() => {
     if (!toast) return;
@@ -467,6 +611,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       narration: narration && narration.analysis_id === analysis?.analysis_id ? narration : null,
       importError,
       setImportError,
+      workspace,
+      workspaceStatus,
+      workspaceError,
+      refreshWorkspace,
+      starting,
+      openSaved,
+      openingId,
       scenario,
       scenarioOverrides,
       scenarioLoading,
@@ -515,6 +666,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       restoreError,
       narration,
       importError,
+      workspace,
+      workspaceStatus,
+      workspaceError,
+      refreshWorkspace,
+      starting,
+      openSaved,
+      openingId,
       scenario,
       scenarioOverrides,
       scenarioLoading,

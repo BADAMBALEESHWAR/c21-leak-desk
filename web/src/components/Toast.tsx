@@ -7,8 +7,8 @@ export function Toast() {
   return (
     <div className="toast-region" role="status" aria-live="polite">
       {toast ? (
-        <p key={toast.id} className="toast">
-          <Icon name="check-circle" size={18} />
+        <p key={toast.id} className={`toast toast-${toast.tone}`}>
+          <Icon name={toast.tone === 'info' ? 'info' : 'check-circle'} size={18} />
           {toast.text}
         </p>
       ) : null}

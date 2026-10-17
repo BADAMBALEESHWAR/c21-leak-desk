@@ -51,7 +51,7 @@ export const HEADER_ALIASES: Array<[string, string]> = [
   ['handling', 'handling_inr'],
 ];
 
-/** Judge drills: a short tag and its tone for each negative-test sample. */
+/** Data-quality drills: a short tag and its tone for each negative-test sample. */
 export const DRILL_TAGS: Record<string, { tag: string; tone: 'primary' | 'warning' | 'danger' | 'teal' }> = {
   duplicate_order: { tag: 'Duplicate', tone: 'primary' },
   late_refund: { tag: 'Late refund', tone: 'warning' },
@@ -61,3 +61,22 @@ export const DRILL_TAGS: Record<string, { tag: string; tone: 'primary' | 'warnin
   recovery_400: { tag: 'Recovery', tone: 'teal' },
   bad_schema: { tag: 'Schema', tone: 'danger' },
 };
+
+/** Plain names for the built-in samples. */
+export const SAMPLE_NAMES: Record<string, string> = {
+  fixture: 'Sample orders',
+  extended: 'Extended sample',
+  demo_12m: '12-month demo',
+};
+
+/** What people call a dataset: the sample's name, or the uploaded file names ("aug.csv + sep.csv", "aug.csv + 4 more files"). */
+export function datasetName(source: string | undefined, files?: Array<{ name: string }> | null, label?: string): string {
+  if (!source) return 'Dataset';
+  if (SAMPLE_NAMES[source]) return SAMPLE_NAMES[source];
+  if (files && files.length > 0) {
+    const names = files.map((f) => f.name);
+    return names.length <= 2 ? names.join(' + ') : `${names[0]} + ${names.length - 1} more files`;
+  }
+  if (source.startsWith('upload:')) return source.slice('upload:'.length) || 'Upload';
+  return label ?? source.replace(/_/g, ' ');
+}

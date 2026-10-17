@@ -1,0 +1,376 @@
+/*
+ * Shared by the public pages (landing and sign-in): reset, type, buttons, inputs, wordmark.
+ * Colours come only from tokens.css.
+ */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--surface);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 16px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+h1,
+h2,
+h3,
+h4,
+p,
+dl,
+dd,
+ol,
+ul,
+figure {
+  margin: 0;
+}
+
+ol,
+ul {
+  padding: 0;
+  list-style: none;
+}
+
+a {
+  color: var(--primary);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+button,
+input {
+  font: inherit;
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--primary-bright);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+main:focus {
+  outline: none;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+.l-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.l-icon {
+  flex: none;
+}
+
+.l-skip {
+  position: absolute;
+  left: 16px;
+  top: -64px;
+  z-index: 80;
+  padding: 10px 16px;
+  border-radius: var(--r-sm);
+  background: var(--cta);
+  color: var(--on-dark);
+  font-weight: 600;
+}
+
+.l-skip:focus {
+  top: 8px;
+}
+
+.l-wrap {
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 32px;
+}
+
+/* ---- Wordmark --------------------------------------------------------------------------- */
+
+.l-wordmark {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  color: var(--text);
+  font-size: 19px;
+  font-weight: 650;
+  letter-spacing: -0.025em;
+}
+
+.l-wordmark:hover {
+  text-decoration: none;
+}
+
+.l-mark {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  background: var(--cta);
+  color: var(--on-dark);
+}
+
+.l-wordmark.on-dark {
+  color: var(--on-dark);
+}
+
+.l-wordmark.on-dark .l-mark {
+  background: var(--on-dark);
+  color: var(--cta);
+}
+
+/* ---- Buttons ---------------------------------------------------------------------------- */
+
+.l-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 20px;
+  border: 1px solid transparent;
+  border-radius: var(--r-pill);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.2;
+  text-align: center;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color var(--t-fast), border-color var(--t-fast), box-shadow var(--t-fast), color var(--t-fast), transform var(--t-fast);
+}
+
+.l-btn:hover {
+  text-decoration: none;
+}
+
+.l-btn:disabled {
+  cursor: progress;
+}
+
+.l-btn-sm {
+  min-height: 40px;
+  padding: 0 16px;
+  font-size: 14px;
+}
+
+.l-btn-lg {
+  min-height: 52px;
+  padding: 0 26px;
+  font-size: 16px;
+}
+
+.l-btn-block {
+  width: 100%;
+}
+
+.l-btn-primary {
+  background: var(--cta);
+  color: var(--on-dark);
+}
+
+.l-btn-primary:hover:not(:disabled) {
+  background: var(--cta-hover);
+  box-shadow: var(--shadow-s);
+}
+
+.l-btn-primary:disabled {
+  background: var(--cta-hover);
+  opacity: 0.75;
+}
+
+.l-btn-secondary {
+  background: var(--surface);
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+
+.l-btn-secondary:hover:not(:disabled) {
+  border-color: var(--text-3);
+  background: var(--surface-2);
+}
+
+.l-btn-ghost {
+  background: transparent;
+  color: var(--text);
+  padding: 0 14px;
+}
+
+.l-btn-ghost:hover {
+  background: var(--neutral-bg);
+}
+
+.l-btn-on-dark {
+  background: var(--on-dark);
+  color: var(--cta);
+}
+
+.l-btn-on-dark:hover {
+  background: var(--primary-25);
+}
+
+.l-btn-outline-dark {
+  border-color: var(--ink-border);
+  background: transparent;
+  color: var(--on-dark);
+}
+
+.l-btn-outline-dark:hover {
+  border-color: var(--on-dark-3);
+  background: var(--ink-2);
+}
+
+.l-btn-on-dark:focus-visible,
+.l-btn-outline-dark:focus-visible {
+  outline-color: var(--on-dark);
+}
+
+.l-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: l-spin 0.7s linear infinite;
+}
+
+@keyframes l-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ---- Inputs ----------------------------------------------------------------------------- */
+
+.l-field {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.l-field-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.l-label {
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.l-hint {
+  color: var(--text-3);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.l-input {
+  display: block;
+  width: 100%;
+  min-height: 48px;
+  padding: 10px 14px;
+  border: 1px solid var(--border-input);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 16px;
+  line-height: 1.4;
+  transition: border-color var(--t-fast), box-shadow var(--t-fast);
+}
+
+.l-input::placeholder {
+  color: var(--text-3);
+}
+
+.l-input:focus,
+.l-input:focus-visible {
+  border-color: var(--primary-bright);
+  outline: none;
+  box-shadow: 0 0 0 4px var(--primary-50);
+}
+
+.l-input[aria-invalid='true'] {
+  border-color: var(--danger);
+}
+
+/* ---- Chips ------------------------------------------------------------------------------ */
+
+.l-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 9px;
+  border-radius: var(--r-pill);
+  background: var(--primary-50);
+  color: var(--primary);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+
+.l-chip-warn {
+  background: var(--warning-bg);
+  color: var(--warning);
+}
+
+.l-chip-ok {
+  background: var(--success-bg);
+  color: var(--success);
+}
+
+.l-unknown {
+  display: inline-block;
+  padding: 1px 8px;
+  border: 1px dashed var(--border-input);
+  border-radius: var(--r-pill);
+  color: var(--text-2);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.5;
+}
+
+@media (max-width: 640px) {
+  .l-wrap {
+    padding: 0 16px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto !important;
+  }
+
+  *,
+  *::before,
+  *::after {
+    transition: none !important;
+    animation-duration: 1.5s !important;
+  }
+}

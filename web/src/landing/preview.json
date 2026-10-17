@@ -1,0 +1,326 @@
+{
+  "label": "Synthetic demo data",
+  "engine_version": "1.0.0",
+  "orders": 3020,
+  "synthetic_rows": 3020,
+  "totals": {
+    "gross_inr": 5577732,
+    "net_sales_inr": 3570523,
+    "contribution_inr": 385157,
+    "unknown_count": 5,
+    "negative_count": 890,
+    "return_pct": 19.2,
+    "avg_shipping_inr": 81.84
+  },
+  "reconciliation": {
+    "orders_inr": 385157,
+    "channels_inr": 385157,
+    "products_inr": 385157,
+    "ok": true
+  },
+  "bridge": [
+    {
+      "key": "gross",
+      "label": "Gross sales",
+      "amount_inr": 5558839,
+      "kind": "start"
+    },
+    {
+      "key": "discount",
+      "label": "Discounts",
+      "amount_inr": -791680,
+      "kind": "deduction"
+    },
+    {
+      "key": "refund",
+      "label": "Refunds",
+      "amount_inr": -1196636,
+      "kind": "deduction"
+    },
+    {
+      "key": "net_sales",
+      "label": "Net sales",
+      "amount_inr": 3570523,
+      "kind": "subtotal"
+    },
+    {
+      "key": "net_product_cost",
+      "label": "Net product cost",
+      "amount_inr": -2159640,
+      "kind": "deduction"
+    },
+    {
+      "key": "shipping",
+      "label": "Shipping",
+      "amount_inr": -246715,
+      "kind": "deduction"
+    },
+    {
+      "key": "payment_fee",
+      "label": "Payment fees",
+      "amount_inr": -114186,
+      "kind": "deduction"
+    },
+    {
+      "key": "return_cost",
+      "label": "Return costs",
+      "amount_inr": -50395,
+      "kind": "deduction"
+    },
+    {
+      "key": "handling",
+      "label": "Handling",
+      "amount_inr": -60300,
+      "kind": "deduction"
+    },
+    {
+      "key": "ads",
+      "label": "Ads on orders",
+      "amount_inr": -554130,
+      "kind": "deduction"
+    },
+    {
+      "key": "contribution",
+      "label": "Contribution",
+      "amount_inr": 385157,
+      "kind": "total"
+    }
+  ],
+  "months": [
+    {
+      "month": "2025-10",
+      "orders": 420,
+      "net_sales_inr": 401558,
+      "contribution_inr": -6701,
+      "discount_depth_pct": 28,
+      "return_pct": 17.6,
+      "unknown": 0
+    },
+    {
+      "month": "2025-11",
+      "orders": 300,
+      "net_sales_inr": 362413,
+      "contribution_inr": 40239,
+      "discount_depth_pct": 18.2,
+      "return_pct": 15.7,
+      "unknown": 0
+    },
+    {
+      "month": "2025-12",
+      "orders": 240,
+      "net_sales_inr": 270539,
+      "contribution_inr": 29799,
+      "discount_depth_pct": 11.3,
+      "return_pct": 22.5,
+      "unknown": 0
+    },
+    {
+      "month": "2026-01",
+      "orders": 200,
+      "net_sales_inr": 242020,
+      "contribution_inr": 36116,
+      "discount_depth_pct": 9.9,
+      "return_pct": 20,
+      "unknown": 0
+    },
+    {
+      "month": "2026-02",
+      "orders": 190,
+      "net_sales_inr": 249221,
+      "contribution_inr": 31247,
+      "discount_depth_pct": 10.5,
+      "return_pct": 16.8,
+      "unknown": 0
+    },
+    {
+      "month": "2026-03",
+      "orders": 220,
+      "net_sales_inr": 263363,
+      "contribution_inr": 28081,
+      "discount_depth_pct": 12.1,
+      "return_pct": 20.5,
+      "unknown": 0
+    },
+    {
+      "month": "2026-04",
+      "orders": 230,
+      "net_sales_inr": 270382,
+      "contribution_inr": 36919,
+      "discount_depth_pct": 10.3,
+      "return_pct": 20.9,
+      "unknown": 0
+    },
+    {
+      "month": "2026-05",
+      "orders": 240,
+      "net_sales_inr": 304986,
+      "contribution_inr": 36242,
+      "discount_depth_pct": 11.4,
+      "return_pct": 20,
+      "unknown": 0
+    },
+    {
+      "month": "2026-06",
+      "orders": 230,
+      "net_sales_inr": 252209,
+      "contribution_inr": 27589,
+      "discount_depth_pct": 10.3,
+      "return_pct": 20.9,
+      "unknown": 0
+    },
+    {
+      "month": "2026-07",
+      "orders": 250,
+      "net_sales_inr": 328653,
+      "contribution_inr": 38658,
+      "discount_depth_pct": 15.2,
+      "return_pct": 16.8,
+      "unknown": 0
+    },
+    {
+      "month": "2026-08",
+      "orders": 260,
+      "net_sales_inr": 338195,
+      "contribution_inr": 56418,
+      "discount_depth_pct": 11.6,
+      "return_pct": 16.5,
+      "unknown": 0
+    },
+    {
+      "month": "2026-09",
+      "orders": 240,
+      "net_sales_inr": 286984,
+      "contribution_inr": 30550,
+      "discount_depth_pct": 10.3,
+      "return_pct": 25,
+      "unknown": 5
+    }
+  ],
+  "leaks": [
+    {
+      "cause": "full_return_partial_recovery",
+      "label": "Full return, partial recovery",
+      "count": 576,
+      "lost_inr": 468678
+    },
+    {
+      "cause": "discount_exceeds_margin",
+      "label": "Discount deeper than margin",
+      "count": 276,
+      "lost_inr": 33471
+    },
+    {
+      "cause": "fees_exceed_margin",
+      "label": "Shipping and fees exceed margin",
+      "count": 38,
+      "lost_inr": 2970
+    },
+    {
+      "cause": "refund_unknown",
+      "label": "Refund without recovery fact (unknown)",
+      "count": 5,
+      "lost_inr": null
+    }
+  ],
+  "actions": [
+    {
+      "title": "Halve instagram ad spend per order",
+      "detail": "instagram brings 779 orders at −₹ 1,48,425 contribution; its ads are 40.3% of its net sales. Halving ad spend per order there saves about ₹ 1,73,790 if the same orders still come.",
+      "recoverable_inr": 173790,
+      "lever": "ads",
+      "modelled": false
+    },
+    {
+      "title": "Cap discounts at 15%",
+      "detail": "Kept orders discounted above 15% of gross gave away ₹ 1,10,365 more than a 15% cap allows, assuming the same orders still happen.",
+      "recoverable_inr": 110365,
+      "lever": "discount",
+      "modelled": false
+    },
+    {
+      "title": "Inspect P2 returns before restocking",
+      "detail": "P2 is rank 1 on units but 6 on contribution; 37.5% of its orders come back. Recovering 90% of product cost on its returns adds about ₹ 70,955.",
+      "recoverable_inr": 70955,
+      "lever": "returns",
+      "modelled": true
+    }
+  ],
+  "products": [
+    {
+      "product_id": "P2",
+      "label": "fix",
+      "units": 952,
+      "contribution_inr": -48713,
+      "return_pct": 37.5
+    },
+    {
+      "product_id": "P4",
+      "label": "niche",
+      "units": 422,
+      "contribution_inr": 138505,
+      "return_pct": 19.9
+    },
+    {
+      "product_id": "P3",
+      "label": "push",
+      "units": 543,
+      "contribution_inr": 144375,
+      "return_pct": 13.8
+    },
+    {
+      "product_id": "P1",
+      "label": "push",
+      "units": 734,
+      "contribution_inr": 98709,
+      "return_pct": 12.2
+    },
+    {
+      "product_id": "P5",
+      "label": "review",
+      "units": 490,
+      "contribution_inr": 17979,
+      "return_pct": 5.1
+    },
+    {
+      "product_id": "P6",
+      "label": "review",
+      "units": 320,
+      "contribution_inr": 34302,
+      "return_pct": 8.4
+    }
+  ],
+  "channels": [
+    {
+      "channel": "instagram",
+      "orders": 779,
+      "return_pct": 25.3,
+      "contribution_inr": -148425
+    },
+    {
+      "channel": "marketplace",
+      "orders": 877,
+      "return_pct": 15.1,
+      "contribution_inr": 260234
+    },
+    {
+      "channel": "web",
+      "orders": 1364,
+      "return_pct": 18.5,
+      "contribution_inr": 273348
+    }
+  ],
+  "payments": [
+    {
+      "payment_type": "cod",
+      "orders": 1388,
+      "share_pct": 46,
+      "return_pct": 29.4
+    },
+    {
+      "payment_type": "prepaid",
+      "orders": 1632,
+      "share_pct": 54,
+      "return_pct": 10.6
+    }
+  ]
+}

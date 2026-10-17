@@ -483,7 +483,7 @@ export function ScenarioScreen() {
     return (
       <div className="page">
         <PageHeader title="Compare a scenario" subtitle="Change one assumption and watch the recommendation move." />
-        <NeedsAnalysis sentence="No analysis yet. Load the C21 fixture to compare a scenario against the observed baseline." icon="sliders" />
+        <NeedsAnalysis sentence="No analysis yet. Load the sample orders to compare a scenario against the observed baseline." icon="sliders" />
       </div>
     );
   }

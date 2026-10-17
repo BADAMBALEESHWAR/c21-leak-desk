@@ -1,3 +1,4 @@
+import type { MouseEvent } from 'react';
 import type {
   AnalysisRequest,
   AnalysisResponse,
@@ -17,7 +18,17 @@ import type {
   ScenarioResponse,
   TestPlan,
   WorkedOrderResult,
+  MeResponse,
+  PulseOverview,
+  PulseMonths,
+  PulseProducts,
+  PulseChannels,
+  PulseLeaks,
+  PulseInsights,
+  WorkspaceResponse,
 } from './types';
+
+import { getIdToken } from '../auth/auth';
 
 export const API_BASE = '/api/v1';
 
@@ -59,13 +70,66 @@ function readErrorBody(body: unknown): ApiErrorBody['error'] | null {
 const UNREACHABLE =
   'Could not reach the API at /api/v1. Start it with "npm run dev" in the api folder, then try again.';
 
-async function send(method: 'GET' | 'POST', path: string, body?: unknown): Promise<{ res: Response; parsed: unknown }> {
-  const init: RequestInit = { method, headers: { Accept: 'application/json' } };
+// ---- Session ------------------------------------------------------------------------------
+// Demo mode sends no token. Workspace mode sends the signed-in owner's id token on every call and never falls back to
+// the demo workspace: an expired token is renewed first, and a session the API rejects ends here, once, for the UI to say so.
+
+interface SessionBinding {
+  /** Workspace mode: every call carries the session. */
+  account: boolean;
+  /** Renews an expired id token with the refresh token; null when that is no longer possible. */
+  renew: () => Promise<string | null>;
+  /** Called once when the session is gone (a 401, or a token that cannot be renewed). */
+  onEnded: () => void;
+}
+
+let binding: SessionBinding | null = null;
+let ended = false;
+
+/** AuthProvider calls this once the mode is known; until then calls go out without a token. */
+export function bindSession(b: SessionBinding | null): void {
+  binding = b;
+  ended = false;
+}
+
+export const SESSION_ENDED = 'Your session has ended. Sign in again to keep working with your saved data.';
+
+const sessionEndedError = () =>
+  new ApiError(401, { error: { code: 'unauthorized', message: SESSION_ENDED, hint: 'Your saved data is safe; it opens again after you sign in.' } }, SESSION_ENDED);
+
+/** The session has ended: the app shows one notice for it, so screens need not repeat the error. */
+export function isSessionEnded(err: unknown): boolean {
+  return ended && err instanceof ApiError && err.status === 401;
+}
+
+function endSession(): void {
+  if (ended) return;
+  ended = true;
+  binding?.onEnded();
+}
+
+/** The Bearer token for this call, or null in demo mode. */
+async function bearer(): Promise<string | null> {
+  if (!binding?.account) return null;
+  if (ended) throw sessionEndedError();
+  const token = getIdToken();
+  if (token) return token;
+  const renewed = await binding.renew();
+  if (renewed) return renewed;
+  endSession();
+  throw sessionEndedError();
+}
+
+async function send(method: 'GET' | 'POST', path: string, body?: unknown, auth = true): Promise<{ res: Response; parsed: unknown }> {
+  const headers: Record<string, string> = { Accept: 'application/json' };
+  const init: RequestInit = { method, headers };
+  const token = auth ? await bearer() : null;
+  if (token) headers.Authorization = `Bearer ${token}`;
   if (body instanceof FormData) {
     init.body = body;
   } else if (body !== undefined) {
     init.body = JSON.stringify(body);
-    (init.headers as Record<string, string>)['Content-Type'] = 'application/json';
+    headers['Content-Type'] = 'application/json';
   }
   let res: Response;
   try {
@@ -73,6 +137,7 @@ async function send(method: 'GET' | 'POST', path: string, body?: unknown): Promi
   } catch {
     throw new ApiError(0, null, UNREACHABLE);
   }
+  if (res.status === 401 && token) endSession();
   const text = await res.text();
   let parsed: unknown = null;
   if (text) {
@@ -85,9 +150,10 @@ async function send(method: 'GET' | 'POST', path: string, body?: unknown): Promi
   return { res, parsed };
 }
 
-async function request<T>(method: 'GET' | 'POST', path: string, body?: unknown): Promise<T> {
-  const { res, parsed } = await send(method, path, body);
+async function request<T>(method: 'GET' | 'POST', path: string, body?: unknown, auth = true): Promise<T> {
+  const { res, parsed } = await send(method, path, body, auth);
   if (!res.ok) {
+    if (res.status === 401 && binding?.account) throw sessionEndedError();
     // A proxy or gateway page without a JSON error body means the API process is down.
     if (!readErrorBody(parsed) && res.status >= 500) throw new ApiError(res.status, null, UNREACHABLE);
     throw new ApiError(res.status, parsed, `The request failed with status ${res.status}.`);
@@ -95,27 +161,83 @@ async function request<T>(method: 'GET' | 'POST', path: string, body?: unknown):
   return parsed as T;
 }
 
-export type DatasetInput = { source: SampleSource; period_end?: string } | FixtureFile | File;
+/** A File[] is merged by the API into one dataset (monthly exports, up to 12 files). */
+export type DatasetInput = { source: SampleSource; period_end?: string } | FixtureFile | File | File[];
+
+export interface DatasetOptions {
+  /** Add the upload to this saved dataset; orders already saved there are skipped, never counted twice. */
+  appendTo?: string;
+}
+
+function saveBlob(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+/** Fetches a file with the session and saves it. A plain download link cannot send the Authorization header. */
+export async function downloadFile(url: string, filename: string): Promise<void> {
+  const token = await bearer();
+  let res: Response;
+  try {
+    res = await fetch(url, token ? { headers: { Authorization: `Bearer ${token}` } } : undefined);
+  } catch {
+    throw new ApiError(0, null, UNREACHABLE);
+  }
+  if (res.status === 401 && token) {
+    endSession();
+    throw sessionEndedError();
+  }
+  if (!res.ok) {
+    const parsed = await res.json().catch(() => null);
+    throw new ApiError(res.status, parsed, `The download failed with status ${res.status}.`);
+  }
+  saveBlob(await res.blob(), filename);
+}
+
+/**
+ * onClick for an export link. Demo mode keeps the plain link; workspace mode fetches the file with the session, since
+ * the API only shows an owner's records to that owner.
+ */
+export function authDownload(url: string, filename: string, onError?: (e: ErrorInfo) => void) {
+  return (e: MouseEvent<HTMLAnchorElement>) => {
+    if (!binding?.account) return;
+    e.preventDefault();
+    downloadFile(url, filename).catch((err) => onError?.(toErrorInfo(err)));
+  };
+}
 
 export const api = {
   /** 503 with a body means the API is up but the database is down; that still counts as up. */
   health: async (): Promise<Health> => {
-    const { res, parsed } = await send('GET', '/health');
+    const { res, parsed } = await send('GET', '/health', undefined, false);
     if (parsed && typeof parsed === 'object' && 'engine_version' in parsed) return parsed as Health;
     throw new ApiError(res.status, parsed, UNREACHABLE);
   },
-  samples: () => request<Sample[]>('GET', '/samples'),
-  checks: () => request<Checks>('GET', '/checks'),
-  workedOrder: () => request<WorkedOrderResult>('GET', '/worked-order'),
+  samples: () => request<Sample[]>('GET', '/samples', undefined, false),
+  checks: () => request<Checks>('GET', '/checks', undefined, false),
+  workedOrder: () => request<WorkedOrderResult>('GET', '/worked-order', undefined, false),
 
-  createDataset: (input: DatasetInput) => {
-    if (input instanceof File) {
+  createDataset: (input: DatasetInput, options: DatasetOptions = {}) => {
+    const { appendTo } = options;
+    if (input instanceof File || Array.isArray(input)) {
       const form = new FormData();
-      form.append('file', input, input.name);
+      if (appendTo) form.append('append_to', appendTo);
+      for (const file of input instanceof File ? [input] : input) form.append('file', file, file.name);
       return request<DatasetResponse>('POST', '/datasets', form);
     }
-    return request<DatasetResponse>('POST', '/datasets', input);
+    return request<DatasetResponse>('POST', appendTo ? `/datasets?append_to=${encodeURIComponent(appendTo)}` : '/datasets', input);
   },
+
+  getDataset: (datasetId: string) => request<DatasetResponse>('GET', `/datasets/${encodeURIComponent(datasetId)}`),
+
+  /** The signed-in owner's saved datasets, newest first, each with its latest analysis. */
+  workspace: () => request<WorkspaceResponse>('GET', '/workspace'),
 
   createAnalysis: (datasetId: string, body: AnalysisRequest) =>
     request<AnalysisResponse>('POST', `/datasets/${encodeURIComponent(datasetId)}/analyses`, body),
@@ -133,6 +255,16 @@ export const api = {
     request<DecisionSaved>('POST', `/analyses/${encodeURIComponent(analysisId)}/decisions`, body),
 
   listDecisions: () => request<DecisionSummary[]>('GET', '/decisions'),
+
+  me: () => request<MeResponse>('GET', '/me'),
+
+  pulseOverview: (analysisId: string, month?: string) =>
+    request<PulseOverview>('GET', `/analyses/${encodeURIComponent(analysisId)}/pulse/overview${month ? `?month=${encodeURIComponent(month)}` : ''}`),
+  pulseMonths: (analysisId: string) => request<PulseMonths>('GET', `/analyses/${encodeURIComponent(analysisId)}/pulse/months`),
+  pulseProducts: (analysisId: string) => request<PulseProducts>('GET', `/analyses/${encodeURIComponent(analysisId)}/pulse/products`),
+  pulseChannels: (analysisId: string) => request<PulseChannels>('GET', `/analyses/${encodeURIComponent(analysisId)}/pulse/channels`),
+  pulseLeaks: (analysisId: string) => request<PulseLeaks>('GET', `/analyses/${encodeURIComponent(analysisId)}/pulse/leaks`),
+  pulseInsights: (analysisId: string) => request<PulseInsights>('GET', `/analyses/${encodeURIComponent(analysisId)}/pulse/insights`),
 
   templateUrl: () => `${API_BASE}/template.csv`,
 

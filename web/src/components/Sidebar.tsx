@@ -1,3 +1,4 @@
+import { BRAND } from '../brand';
 import { hrefFor, type Route } from '../lib/router';
 import { useStore } from '../state/store';
 import { Icon, type IconName } from './Icon';
@@ -19,18 +20,20 @@ export function Sidebar({ route }: { route: Route }) {
     leaks: analysis !== null,
     scenario: analysis !== null && scenario !== null && scenario.analysis_id === analysis.analysis_id,
     decision: analysis !== null && decisionSavedFor === analysis.analysis_id,
+    pulse: false,
   };
+  const pulseCurrent = route === 'pulse';
   const allPass = checks !== null && checks.passed === checks.total;
 
   return (
     <nav className="sidebar" aria-label="Steps">
-      <button type="button" className="brand" onClick={openAbout} aria-label="About Leak Desk" data-tip="About Leak Desk">
+      <button type="button" className="brand" onClick={openAbout} aria-label={`About ${BRAND.name}`} data-tip={`About ${BRAND.name}`}>
         <span className="brand-mark" aria-hidden="true">
           <Icon name="drop" size={18} strokeWidth={2} />
         </span>
         <span className="brand-text">
-          <span className="brand-name">Leak Desk</span>
-          <span className="brand-sub">Profit leak desk · C21</span>
+          <span className="brand-name">{BRAND.name}</span>
+          <span className="brand-sub">{BRAND.tagline}</span>
         </span>
       </button>
 
@@ -63,13 +66,32 @@ export function Sidebar({ route }: { route: Route }) {
         })}
       </ol>
 
+      <div className="nav-group" role="group" aria-labelledby="nav-group-owner">
+        <span id="nav-group-owner" className="nav-group-label">
+          Owner analytics
+        </span>
+        <a
+          href={hrefFor('pulse')}
+          className={`nav-item ${pulseCurrent ? 'is-active' : analysis ? 'is-done-quiet' : 'is-future'}`}
+          aria-current={pulseCurrent ? 'page' : undefined}
+          aria-label="Pulse: owner analytics"
+          data-tip="Pulse"
+        >
+          <Icon name="bar-chart" size={19} />
+          <span className="nav-text">
+            <span className="nav-label">Pulse</span>
+            <span className="nav-hint">Months, products, channels</span>
+          </span>
+        </a>
+      </div>
+
       <div className="sidebar-foot">
         {checks ? (
           <button
             type="button"
             className={`checks-card${allPass ? '' : ' is-failing'}`}
             onClick={openChecks}
-            aria-label={`Pack checks ${checks.passed} of ${checks.total} pass — open the public checks`}
+            aria-label={`${checks.passed} of ${checks.total} engine checks pass — open the public checks`}
             data-tip="Public checks"
           >
             <span className="checks-icon" aria-hidden="true">
@@ -77,7 +99,7 @@ export function Sidebar({ route }: { route: Route }) {
             </span>
             <span className="checks-text">
               <strong>
-                Pack checks {checks.passed} of {checks.total} pass
+                {allPass ? `All ${checks.total} checks pass` : `${checks.passed} of ${checks.total} checks pass`}
               </strong>
               {engineVersion ? <span>Engine {engineVersion} · view details</span> : null}
             </span>

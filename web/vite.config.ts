@@ -1,5 +1,6 @@
-import { defineConfig } from 'vite';
+import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
+import { BRAND } from './src/brand';
 
 const apiProxy = {
   '/api': {
@@ -8,8 +9,25 @@ const apiProxy = {
   },
 };
 
+/** The HTML pages take the brand from src/brand.ts, so the name changes in one place. */
+function brandHtml(): Plugin {
+  const values: Record<string, string> = {
+    __BRAND_NAME__: BRAND.name,
+    __BRAND_TAGLINE__: BRAND.tagline,
+    __BRAND_DESCRIPTION__: BRAND.description,
+    __BRAND_DOMAIN__: BRAND.domain,
+  };
+  return {
+    name: 'brand-html',
+    transformIndexHtml: {
+      order: 'pre',
+      handler: (html) => html.replace(/__BRAND_[A-Z]+__/g, (token) => values[token] ?? token),
+    },
+  };
+}
+
 export default defineConfig({
-  plugins: [react()],
+  plugins: [brandHtml(), react()],
   server: {
     port: 5173,
     strictPort: true,
@@ -23,5 +41,21 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     sourcemap: false,
+    rollupOptions: {
+      // Landing page at /, the app at /app/ (its hash router is unchanged), sign-in at /login/.
+      // (/login without the slash is redirected by nginx and the CloudFront function.)
+      input: {
+        landing: 'index.html',
+        app: 'app/index.html',
+        login: 'login/index.html',
+      },
+      output: {
+        // React is shared by both pages; keep it in one cacheable chunk with a plain name.
+        manualChunks(id) {
+          if (id.includes('node_modules')) return 'vendor';
+          return undefined;
+        },
+      },
+    },
   },
 });

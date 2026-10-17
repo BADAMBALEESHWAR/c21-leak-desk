@@ -3481,3 +3481,636 @@ button.checks-card:focus-visible {
 .see-it {
   text-align: left;
 }
+
+/* ---- Columns, stacks and quadrant (Pulse) ------------------------------------------------- */
+
+.column-svg,
+.quadrant-svg {
+  display: block;
+  max-width: 100%;
+  overflow: visible;
+}
+
+.column-svg:focus-visible,
+.quad-point:focus-visible {
+  outline: 2px solid var(--primary-bright);
+  outline-offset: 2px;
+}
+
+.column-hover {
+  fill: var(--chart-hover);
+}
+
+.axis-line {
+  stroke: var(--border-strong);
+  stroke-width: 1;
+  shape-rendering: crispEdges;
+}
+
+.axis-title {
+  fill: var(--text-3);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.chart-callout {
+  fill: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.tone-series-1 { fill: var(--series-1); }
+.tone-series-2 { fill: var(--series-2); }
+.tone-muted { fill: var(--series-muted); }
+.tone-cat-1 { fill: var(--cat-1); }
+.tone-cat-2 { fill: var(--cat-2); }
+.tone-cat-3 { fill: var(--cat-3); }
+.tone-cat-4 { fill: var(--cat-4); }
+.tone-cat-5 { fill: var(--cat-5); }
+
+.tip-key-cat-1 { background: var(--cat-1); }
+.tip-key-cat-2 { background: var(--cat-2); }
+.tip-key-cat-3 { background: var(--cat-3); }
+.tip-key-cat-4 { background: var(--cat-4); }
+.tip-key-cat-5 { background: var(--cat-5); }
+
+.quad-guide {
+  stroke: var(--border-strong);
+  stroke-width: 1;
+  stroke-dasharray: 4 4;
+}
+
+.quad-name {
+  fill: var(--text-3);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.quad-hit {
+  fill: transparent;
+}
+
+.quad-dot {
+  fill: var(--series-1);
+  stroke: var(--surface);
+  stroke-width: 2;
+}
+
+.quad-label {
+  fill: var(--text-2);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.quad-point {
+  cursor: default;
+  outline: none;
+}
+
+.quad-point.is-active .quad-dot {
+  fill: var(--cta);
+}
+
+.quad-point.is-active .quad-label {
+  fill: var(--text);
+  font-weight: 600;
+}
+
+/* ---- Pulse ---------------------------------------------------------------------------- */
+
+.pulse-tabs {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.pulse-tabs .tabs {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.pulse-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--fs-sm);
+  color: var(--text-3);
+}
+
+.pulse-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.pulse-toolbar .field-label {
+  margin: 0;
+}
+
+.input-month {
+  width: auto;
+  min-width: 160px;
+}
+
+.pulse-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin-left: auto;
+}
+
+.pulse-labels {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 6px;
+  max-width: 72ch;
+  font-size: var(--fs-xs);
+  color: var(--text-3);
+}
+
+.pulse-labels .icon {
+  flex: none;
+  margin-top: 1px;
+}
+
+.grid-3 {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--sp-4);
+}
+
+.kpi-grid-3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.extreme-card,
+.insight-card,
+.action-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 18px 20px;
+}
+
+.extreme-list {
+  display: grid;
+  gap: 6px;
+  font-size: var(--fs-body);
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.action-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.action-rank {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--primary-50);
+  color: var(--primary);
+  font-size: var(--fs-sm);
+  font-weight: 700;
+}
+
+.action-title {
+  font-size: var(--fs-md);
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--text);
+}
+
+.action-detail {
+  flex: 1;
+  font-size: var(--fs-sm);
+  color: var(--text-2);
+}
+
+.action-value {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 20px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.action-value-sub {
+  font-size: var(--fs-xs);
+  font-weight: 500;
+  color: var(--text-3);
+}
+
+.action-card .btn {
+  align-self: flex-start;
+}
+
+.insight-card .table {
+  margin-top: 2px;
+}
+
+.insight-card .kv {
+  margin-top: 4px;
+}
+
+.th-key {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.table .col-wrap {
+  white-space: normal;
+  min-width: 220px;
+}
+
+@media (max-width: 1099px) {
+  .grid-3 {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .kpi-grid-3 {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .pulse-meta {
+    margin-left: 0;
+  }
+}
+
+/* ---- Sign-in, account and the Pulse nav group ------------------------------------------------- */
+
+.nav-group {
+  display: grid;
+  gap: 4px;
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
+.nav-group-label {
+  padding: 0 12px 4px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+
+.nav-item.is-done-quiet {
+  color: var(--text);
+}
+
+.user-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.avatar {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--primary-50);
+  color: var(--primary);
+  font-size: var(--fs-sm);
+  font-weight: 700;
+}
+
+.user-email {
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--fs-sm);
+  color: var(--text-2);
+}
+
+.signin-btn {
+  white-space: nowrap;
+}
+
+.toast-info .icon {
+  color: var(--series-muted);
+}
+
+@media (max-width: 1199px) {
+  .nav-group-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+  }
+
+  .nav-group {
+    margin-top: 12px;
+    padding-top: 12px;
+  }
+
+  .user-email {
+    display: none;
+  }
+}
+
+.action-note {
+  font-size: var(--fs-xs);
+  color: var(--text-3);
+}
+
+.demo12-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+}
+
+.demo12-btn {
+  margin-left: -12px;
+}
+
+.demo12-note {
+  font-size: var(--fs-sm);
+  color: var(--text-3);
+}
+
+.col-label {
+  fill: var(--text);
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.quad-name,
+.quad-label,
+.col-label {
+  paint-order: stroke;
+  stroke: var(--surface);
+  stroke-width: 3px;
+  stroke-linejoin: round;
+}
+
+.pulse-kpis .kpi-label {
+  white-space: nowrap;
+}
+
+#pulse-leaks-table .table th {
+  white-space: normal;
+  line-height: 1.3;
+}
+
+/* The dataset chip gives way first when the top bar is crowded (e.g. with the guest pill). */
+.topbar .chip {
+  overflow: hidden;
+  flex-shrink: 1;
+}
+
+.topbar .chip-main,
+.topbar .chip-dot {
+  flex: none;
+}
+
+.topbar .chip-extra {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.topbar-actions > :not(.chip) {
+  flex: none;
+}
+
+/* ---- Workspace and demo modes ------------------------------------------------------------ */
+
+/* Before the mode is known: a calm page, never a flash of the demo. */
+.app-opening {
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 14px;
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--text-2);
+}
+
+.app-opening-mark {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  background: var(--primary-50);
+  color: var(--primary);
+}
+
+/* A signed-in person looking at the demo: one line back to their own data. */
+.mode-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 6px var(--sp-6);
+  background: var(--ink);
+  color: var(--on-dark-2);
+  font-size: var(--fs-sm);
+}
+
+.mode-banner .icon {
+  flex: none;
+  color: var(--on-dark-3);
+}
+
+.mode-banner a {
+  color: var(--on-dark);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.status-pill.is-demo {
+  background: var(--primary-50);
+  color: var(--primary-strong);
+  cursor: help;
+}
+
+.signout-btn {
+  white-space: nowrap;
+}
+
+.session-callout .btn {
+  justify-self: start;
+  margin-top: 6px;
+}
+
+/* Import: demo data group, the add-to-saved-data switch and the storage line. */
+.demo-data {
+  display: grid;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.demo-data-title {
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+
+.demo-data .hero-actions {
+  margin-top: 4px;
+}
+
+.append-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 14px;
+  border: 1px solid var(--primary-border);
+  border-radius: var(--r-card);
+  background: var(--surface);
+  font-size: var(--fs-body);
+  color: var(--text-2);
+  cursor: pointer;
+}
+
+.append-toggle input {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--primary);
+  cursor: pointer;
+}
+
+.append-toggle strong {
+  color: var(--text);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.append-toggle:has(input:disabled) {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.storage-note {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+  font-size: var(--fs-sm);
+  color: var(--text-2);
+}
+
+.storage-note .icon {
+  flex: none;
+  color: var(--text-3);
+}
+
+.storage-note a {
+  font-weight: 600;
+}
+
+.upload-note .callout-title {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Import: the owner's saved data. */
+.saved-data .table-card-head {
+  align-items: flex-start;
+}
+
+.saved-table .saved-name {
+  display: block;
+  max-width: 360px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.saved-table td.saved-action {
+  width: 1%;
+  text-align: right;
+}
+
+.saved-table tbody tr.is-current th,
+.saved-table tbody tr.is-current td {
+  background: var(--primary-25);
+}
+
+.saved-table tbody tr:last-child th,
+.saved-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.saved-data-foot {
+  padding: 0 20px 16px;
+}
+
+.saved-data-error {
+  display: grid;
+  gap: 12px;
+  justify-items: start;
+  padding: 20px;
+}
+
+.saved-data-error .callout {
+  justify-self: stretch;
+}
+
+.hero-first .hero-title {
+  font-size: 38px;
+}
+
+@media (max-width: 900px) {
+  .mode-banner {
+    justify-content: flex-start;
+    padding: 6px var(--sp-5);
+  }
+
+  .saved-table .saved-name {
+    max-width: 200px;
+  }
+}
+
+/* Workspace top bar: the worked example folds to its icon so the data chip keeps its order count. */
+@media (max-width: 1599px) {
+  .worked-btn.is-compact {
+    width: 32px;
+    padding: 0;
+    justify-content: center;
+  }
+
+  .worked-btn.is-compact > span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+}
+
+.user-email {
+  max-width: 160px;
+}
