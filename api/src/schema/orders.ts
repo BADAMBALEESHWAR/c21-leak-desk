@@ -67,6 +67,22 @@ const Inr = z
   .finite()
   .nonnegative('must not be negative');
 
+/**
+ * Store exports name payment methods in many ways ("Cash on Delivery", "Credit Card", "UPI", "PayPal"…).
+ * Cash collected on delivery is COD; anything paid before dispatch is prepaid; anything else stays unknown (null),
+ * so an unfamiliar label never rejects an order.
+ */
+export function paymentType(v: unknown): unknown {
+  if (typeof v !== 'string') return v ?? null;
+  const s = v.trim().toLowerCase();
+  if (s === '') return null;
+  if (s === 'cod' || /cash|pay on delivery|collect on delivery|\bcod\b/.test(s)) return 'cod';
+  if (s === 'prepaid' || /card|upi|paypal|apple ?pay|google ?pay|gpay|phonepe|paytm|net ?banking|netbank|wallet|bank transfer|emi|bnpl|pay ?later|razorpay|stripe|online|prepaid|amazon ?pay|shop ?pay/.test(s)) {
+    return 'prepaid';
+  }
+  return null;
+}
+
 export const OrderRowSchema = z
   .object({
     order_id: z.string({ required_error: 'is missing', invalid_type_error: 'must be text' }).trim().min(1, 'is missing'),
@@ -89,7 +105,7 @@ export const OrderRowSchema = z
     refund_date: IsoDate.nullable().optional(),
     net_product_cost_inr: Inr.nullable().optional(),
     // Optional owner-analytics columns (Pulse); they never change a contribution.
-    payment_type: z.preprocess((v) => (typeof v === 'string' ? v.trim().toLowerCase() : v), z.enum(['cod', 'prepaid'])).nullable().optional(),
+    payment_type: z.preprocess(paymentType, z.enum(['cod', 'prepaid']).nullable()).optional(),
     customer_id: z.string().trim().min(1).nullable().optional(),
     units: z.number().int('must be a whole number').positive('must be at least 1').nullable().optional(),
     synthetic: z.boolean().optional(),

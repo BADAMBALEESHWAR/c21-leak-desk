@@ -19,6 +19,8 @@ const DatasetSchema = new Schema(
     rows_kept: Number,
     files: Mixed,
     supersedes: String,
+    // Large rows live in object storage; this is their key.
+    blob: String,
     created_at: Date,
   },
   opts,
@@ -34,6 +36,8 @@ const AnalysisSchema = new Schema(
     period_end: String,
     config: Mixed,
     result: Mixed,
+    // Large results live in object storage; this is their key.
+    blob: String,
     created_at: Date,
   },
   opts,

@@ -62,7 +62,7 @@ async function readIncoming(req: Request): Promise<Incoming> {
     }
     const total = parts.reduce((n, p) => n + p.ingested.orders.length, 0);
     if (total > config.maxRows) {
-      throw new HttpError(413, 'file_too_large', `The ${parts.length} files have ${total.toLocaleString('en-IN')} orders together; the limit is 10,000.`, { hint: 'Upload fewer months at a time.' });
+      throw new HttpError(413, 'file_too_large', `The ${parts.length} files have ${total.toLocaleString('en-IN')} orders together; the limit is ${config.maxRows.toLocaleString('en-IN')}.`, { hint: 'Upload fewer months at a time.' });
     }
     const files: SourceFile[] = [];
     const orders: unknown[] = [];
@@ -181,7 +181,7 @@ datasetsRouter.post(
     ];
     const rows = base ? [...base.rows, ...v.rows] : v.rows;
     if (rows.length > config.maxRows) {
-      throw new HttpError(413, 'file_too_large', `Saved orders plus this upload come to ${rows.length.toLocaleString('en-IN')}; the limit is 10,000.`, { hint: 'Start a new dataset for a later period.' });
+      throw new HttpError(413, 'file_too_large', `Saved orders plus this upload come to ${rows.length.toLocaleString('en-IN')}; the limit is ${config.maxRows.toLocaleString('en-IN')}.`, { hint: 'Start a new dataset for a later period.' });
     }
     const files = base ? [...(base.files ?? [{ name: base.source.replace(/^upload:/, ''), rows: base.rows.length }]), ...thisUpload] : incoming.files ? thisUpload : undefined;
     for (const raw of incoming.raw ?? []) await put(`uploads/${id}-${safeName(raw.name)}`, raw.body, raw.type).catch(() => undefined);
