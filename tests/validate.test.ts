@@ -108,3 +108,15 @@ describe('validate (V1–V9)', () => {
     expect(reasons).toEqual(expect.arrayContaining(['duplicate:S01', 'late_refund:S06', 'unknown:S04']));
   });
 });
+
+describe('payment methods as stores write them', () => {
+  it('maps cash on delivery to cod, paid-before-dispatch methods to prepaid, and anything else to unknown', async () => {
+    const { paymentType } = await import('../api/src/schema/orders');
+    const cases: Array<[string, string | null]> = [
+      ['Cash on Delivery', 'cod'], ['COD', 'cod'], ['cod', 'cod'], ['Pay on Delivery', 'cod'],
+      ['Credit Card', 'prepaid'], ['Debit Card', 'prepaid'], ['UPI', 'prepaid'], ['PayPal', 'prepaid'], ['Apple Pay', 'prepaid'],
+      ['Net Banking', 'prepaid'], ['Wallet', 'prepaid'], ['prepaid', 'prepaid'], ['Gift voucher', null], ['', null],
+    ];
+    for (const [input, want] of cases) expect([input, paymentType(input)]).toEqual([input, want]);
+  });
+});

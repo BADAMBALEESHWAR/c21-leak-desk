@@ -122,8 +122,8 @@ describe('api contract (Blueprint §10, §16)', () => {
     expect([r.status, r.body.error.code]).toEqual([415, 'unsupported_type']);
   });
 
-  it('413 file_too_large over 10,000 rows', async () => {
-    const r = await request(app).post(`${api}/datasets`).send(Array.from({ length: 10001 }, (_, i) => ({ order_id: `X${i}` })));
+  it('413 file_too_large over 1,00,000 rows', async () => {
+    const r = await request(app).post(`${api}/datasets`).send(Array.from({ length: 100_001 }, (_, i) => ({ order_id: `X${i}` })));
     expect([r.status, r.body.error.code]).toEqual([413, 'file_too_large']);
   });
 
