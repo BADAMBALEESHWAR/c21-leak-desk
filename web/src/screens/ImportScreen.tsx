@@ -142,10 +142,10 @@ function Report({ dataset, reveal, name, note }: { dataset: DatasetResponse; rev
       ) : null}
       {appended ? (
         <div className="kpi-grid kpi-grid-4">
-          <StatCard label="Rows in" value={dataset.rows_in} icon="file" sub="Read from this upload" />
+          <StatCard label="Rows in" value={formatCount(dataset.rows_in)} icon="file" sub="Read from this upload" />
           <StatCard
             label="Added"
-            value={dataset.rows_added ?? 0}
+            value={formatCount(dataset.rows_added ?? 0)}
             icon="check-circle"
             tone="success"
             sub={`${formatCount(dataset.rows_kept)} ${plural(dataset.rows_kept, 'order', 'orders')} saved in total`}
@@ -155,7 +155,7 @@ function Report({ dataset, reveal, name, note }: { dataset: DatasetResponse; rev
           />
           <StatCard
             label="Already saved"
-            value={dataset.duplicates_ignored ?? 0}
+            value={formatCount(dataset.duplicates_ignored ?? 0)}
             icon="database"
             sub="Skipped, never counted twice"
             actionIcon="arrow-right"
@@ -164,7 +164,7 @@ function Report({ dataset, reveal, name, note }: { dataset: DatasetResponse; rev
           />
           <StatCard
             label="Flags"
-            value={dataset.flags.length}
+            value={formatCount(dataset.flags.length)}
             icon="alert-triangle"
             tone={rejectedHere > 0 ? 'danger' : dataset.flags.length > 0 ? 'warning' : 'default'}
             sub={rejectedHere > 0 ? `${rejectedHere} ${plural(rejectedHere, 'row', 'rows')} rejected` : 'This upload only'}
@@ -177,7 +177,7 @@ function Report({ dataset, reveal, name, note }: { dataset: DatasetResponse; rev
         <div className="kpi-grid kpi-grid-4">
           <StatCard
             label="Rows in"
-            value={dataset.rows_in}
+            value={formatCount(dataset.rows_in)}
             icon="file"
             sub="Every row read from the file"
             actionIcon="arrow-right"
@@ -186,7 +186,7 @@ function Report({ dataset, reveal, name, note }: { dataset: DatasetResponse; rev
           />
           <StatCard
             label="Kept"
-            value={dataset.rows_kept}
+            value={formatCount(dataset.rows_kept)}
             icon="check-circle"
             tone="success"
             sub={dataset.kept_ids.length > 60 ? `${compressIds(dataset.kept_ids.slice(0, 60))} …` : compressIds(dataset.kept_ids)}
@@ -196,7 +196,7 @@ function Report({ dataset, reveal, name, note }: { dataset: DatasetResponse; rev
           />
           <StatCard
             label="Dropped / rejected"
-            value={`${dropped} / ${dataset.rows_rejected}`}
+            value={`${formatCount(dropped)} / ${formatCount(dataset.rows_rejected)}`}
             icon="x"
             tone={dropped + dataset.rows_rejected > 0 ? 'danger' : 'default'}
             sub={dropped + dataset.rows_rejected > 0 ? 'Not in the analysis' : 'Every row was usable'}
@@ -206,7 +206,7 @@ function Report({ dataset, reveal, name, note }: { dataset: DatasetResponse; rev
           />
           <StatCard
             label="Flags"
-            value={dataset.flags.length}
+            value={formatCount(dataset.flags.length)}
             icon="alert-triangle"
             tone={dataset.flags.length > 0 ? 'warning' : 'default'}
             sub={dataset.synthetic_rows > 0 ? `${dataset.synthetic_rows} labelled synthetic ${plural(dataset.synthetic_rows, 'row', 'rows')}` : 'Observed rows only'}
@@ -646,7 +646,7 @@ export function ImportScreen() {
         stats={[
           ['required columns', REQUIRED_FIELDS.length],
           ['files at once', MAX_FILES],
-          ['orders per dataset', '10,000'],
+          ['orders per dataset', '1,00,000'],
         ]}
       />
     </section>
@@ -702,7 +702,7 @@ export function ImportScreen() {
               <Icon name="upload-cloud" size={24} />
             </span>
             <p className="dropzone-title">{target && appendOn ? `Drop new orders to add to ${target.name}` : 'Drag and drop JSON or CSV files'}</p>
-            <p className="dropzone-sub">One file, or up to {MAX_FILES} at once (e.g. one per month), merged into one dataset · template column names · 5 MB each, 10,000 orders in total</p>
+            <p className="dropzone-sub">One file, or up to {MAX_FILES} at once (e.g. one per month), merged into one dataset · template column names · 50 MB each, 1,00,000 orders in total</p>
             <span className="dropzone-actions">
               <Button variant="secondary" icon="file" onClick={browse} disabled={busy}>
                 Browse files
