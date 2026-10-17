@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 
-export const ROUTES = ['import', 'ledger', 'leaks', 'scenario', 'decision'] as const;
+export const ROUTES = ['import', 'ledger', 'leaks', 'scenario', 'decision', 'pulse'] as const;
 export type Route = (typeof ROUTES)[number];
 
 export interface Location {
