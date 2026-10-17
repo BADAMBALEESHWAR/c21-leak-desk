@@ -1,6 +1,7 @@
 import type { AnalysisResponse, OrderResult, WorkedOrderResult } from '../api/types';
 import { BridgeChart } from '../charts/BridgeChart';
 import { WaterfallChart, WaterfallNotes } from '../charts/WaterfallChart';
+import { BRAND } from '../brand';
 import { formatInr, formatPct, plural } from '../lib/format';
 import { LEAK_LABELS } from '../lib/labels';
 import { useStore, type BridgeFocus } from '../state/store';
@@ -135,7 +136,7 @@ function OrderDetail({ order, periodEnd }: { order: OrderResult; periodEnd: stri
 function WorkedDetail({ data }: { data: WorkedOrderResult }) {
   return (
     <div className="drawer-stack">
-      <p className="muted">The pack&rsquo;s worked order, six lines, computed by the same engine.</p>
+      <p className="muted">The reference worked order, six lines, computed by the same engine.</p>
       <section className="drawer-section" aria-label="Waterfall">
         <h3 className="section-label">Waterfall</h3>
         <WaterfallChart lines={data.lines} contribution={data.contribution_inr} />
@@ -292,14 +293,14 @@ export function OrderDrawer() {
     );
     body = <OrderDetail order={o} periodEnd={analysis?.period_end ?? null} />;
   } else if (drawer?.kind === 'worked') {
-    title = 'Worked order (pack reference)';
+    title = 'Worked example order';
     meta = drawer.data ? (
       <>
         <span className="drawer-date">Contribution {formatInr(drawer.data.contribution_inr)}</span>
         {drawer.data.expected_contribution_inr !== null ? (
           drawer.data.matches ? (
             <Pill tone="success" icon="check">
-              matches pack {formatInr(drawer.data.expected_contribution_inr)}
+              matches the reference {formatInr(drawer.data.expected_contribution_inr)}
             </Pill>
           ) : (
             <Pill tone="danger">does not match</Pill>
@@ -344,11 +345,13 @@ export function OrderDrawer() {
     body = <MarginDetail a={analysis} />;
   } else if (drawer?.kind === 'checks') {
     title = 'Public checks';
-    meta = <span className="drawer-date">Pack checks for case C21 · 25 points</span>;
+    meta = <span className="drawer-date">Engine checks · 25 points</span>;
     body = <ChecksDetail />;
   } else if (drawer?.kind === 'about') {
-    title = 'About Leak Desk';
-    meta = <span className="drawer-date">Order contribution and profit leak desk · C21</span>;
+    title = `About ${BRAND.name}`;
+    meta = <span className="drawer-date">
+        {BRAND.tagline} · {BRAND.domain}
+      </span>;
     body = <AboutDetail />;
   } else if (drawer?.kind === 'missing') {
     title = drawer.orderId;

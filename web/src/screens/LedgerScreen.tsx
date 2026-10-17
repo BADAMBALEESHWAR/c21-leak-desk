@@ -6,7 +6,7 @@ import { WhaleCurve } from '../charts/WhaleCurve';
 import { Pill, Unknown } from '../components/Badge';
 import { ButtonLink, LinkButton } from '../components/Button';
 import { Pagination } from '../components/Pagination';
-import { api } from '../api/client';
+import { api, authDownload } from '../api/client';
 import { NeedsAnalysis } from '../components/EmptyState';
 import { Icon } from '../components/Icon';
 import { Money } from '../components/Money';
@@ -406,7 +406,7 @@ function LateRefunds({ a }: { a: AnalysisResponse }) {
 }
 
 export function LedgerScreen() {
-  const { analysis, ledgerTab: tab, setLedgerTab: setTab, ledgerFilter: filter, setLedgerFilter: setFilter, tableFocus, openOrderResult } = useStore();
+  const { analysis, ledgerTab: tab, setLedgerTab: setTab, ledgerFilter: filter, setLedgerFilter: setFilter, tableFocus, openOrderResult, showToast } = useStore();
   const [query, setQuery] = useState('');
   const [page, setPage] = useState(1);
   const tableRef = useRef<HTMLElement>(null);
@@ -459,7 +459,7 @@ export function LedgerScreen() {
     return (
       <div className="page">
         <PageHeader title="Contribution ledger" subtitle="Per-order contribution after every cost, reconciled to channels and products." />
-        <NeedsAnalysis sentence="No ledger yet. Load the C21 fixture to see contribution per order." icon="table" />
+        <NeedsAnalysis sentence="No ledger yet. Load the sample orders to see contribution per order." icon="table" />
       </div>
     );
   }
@@ -537,7 +537,15 @@ export function LedgerScreen() {
               </label>
             </div>
           ) : null}
-          <ButtonLink variant="secondary" size="sm" icon="download" href={api.ledgerExportUrl(analysis.analysis_id, 'csv')} download className="toolbar-export">
+          <ButtonLink
+            variant="secondary"
+            size="sm"
+            icon="download"
+            href={api.ledgerExportUrl(analysis.analysis_id, 'csv')}
+            download
+            onClick={authDownload(api.ledgerExportUrl(analysis.analysis_id, 'csv'), `ledger-${analysis.analysis_id}.csv`, (e) => showToast(e.message, 'info'))}
+            className="toolbar-export"
+          >
             Export CSV
           </ButtonLink>
         </div>

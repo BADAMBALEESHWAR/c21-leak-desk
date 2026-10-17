@@ -67,7 +67,7 @@ export function LeaksScreen() {
     return (
       <div className="page">
         <PageHeader title="Where contribution leaks" subtitle="Losing orders grouped by their primary cause, largest loss first." />
-        <NeedsAnalysis sentence="No analysis yet. Load the C21 fixture to see which orders lose money and why." icon="alert-triangle" />
+        <NeedsAnalysis sentence="No analysis yet. Load the sample orders to see which orders lose money and why." icon="alert-triangle" />
       </div>
     );
   }
