@@ -1,0 +1,146 @@
+{
+  "engine_version": "1.0.0",
+  "period_end": "2026-09-30",
+  "worked_order": 230,
+  "fixture": {
+    "orders": 20,
+    "kept": 420,
+    "returned": -180,
+    "total": 6000,
+    "gross": 20000,
+    "net_sales": 14400,
+    "recommendation": {
+      "intervention": "charge_return_shipping",
+      "expected_delta_inr": 200,
+      "confidence": "low"
+    },
+    "scenarios": {
+      "recovery_50": {
+        "total": 5400,
+        "intervention": "raise_recovery_via_inspection",
+        "expected_delta_inr": 640
+      },
+      "return_rate_30": {
+        "total": 4800,
+        "intervention": "charge_return_shipping",
+        "expected_delta_inr": 300
+      }
+    }
+  },
+  "extended": {
+    "orders_in_file": 28,
+    "orders_kept": 27,
+    "total": 7053,
+    "unknown": 1,
+    "dropped": 1,
+    "late_pending": {
+      "order_id": "S06",
+      "in_period": 350,
+      "recognised": -250,
+      "delta": -600
+    },
+    "rows": {
+      "S01": 680,
+      "S02": -96,
+      "S03": -664,
+      "S04": null,
+      "S06": 350,
+      "S07": 599,
+      "S08": 184
+    },
+    "channels": {
+      "web": 1279,
+      "marketplace": 254,
+      "instagram": -480,
+      "unassigned": 6000
+    },
+    "channel_spend": {
+      "web": 250,
+      "marketplace": 100,
+      "instagram": 140
+    },
+    "channels_before_spend": {
+      "web": 1529,
+      "marketplace": 354,
+      "instagram": -340,
+      "unassigned": 6000
+    },
+    "products_allocate": {
+      "P1": 680,
+      "P2": 438,
+      "P3": -65,
+      "unassigned": 6000
+    },
+    "products_channel_before_spend": {
+      "P1": 780,
+      "P2": 598,
+      "P3": 165,
+      "unassigned": 6000
+    },
+    "leaks_allocate": {
+      "full_return_partial_recovery": {
+        "count": 5,
+        "lost": 1384
+      },
+      "discount_exceeds_margin": {
+        "count": 1,
+        "lost": 96
+      },
+      "refund_unknown": {
+        "count": 1,
+        "lost": null
+      }
+    },
+    "recommendation": {
+      "intervention": "raise_recovery_via_inspection",
+      "expected_delta_inr": 390,
+      "confidence": "unknown"
+    }
+  },
+  "check3": {
+    "dataset": "null_refund",
+    "unknown_order": "O05",
+    "total": 6180,
+    "confidence": "unknown",
+    "before": "charge_return_shipping",
+    "before_delta": 150,
+    "after_recovery_50": "raise_recovery_via_inspection",
+    "after_delta": 480,
+    "scenario_total": 5730
+  },
+  "drills": {
+    "duplicate_order": {
+      "orders": 20,
+      "total": 6000,
+      "duplicate_flags": 1
+    },
+    "late_refund": {
+      "order_id": "O10",
+      "in_period": 420,
+      "recognised": -180,
+      "total": 6600,
+      "pending_delta": -600
+    },
+    "null_refund": {
+      "total": 6180,
+      "unknown": 1
+    },
+    "missing_fee": {
+      "unknown": 20,
+      "total": null
+    },
+    "refund_over_gross": {
+      "orders": 19,
+      "total": 5580,
+      "invalid": "O03"
+    },
+    "recovery_400": {
+      "returned": -130,
+      "total": 6200
+    },
+    "bad_schema": {
+      "status": 422,
+      "path": "product_cost_inr"
+    }
+  }
+}
