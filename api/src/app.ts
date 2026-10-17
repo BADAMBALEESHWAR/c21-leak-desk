@@ -4,14 +4,17 @@ import express, { Router } from 'express';
 import helmet from 'helmet';
 import pinoHttp from 'pino-http';
 import { config } from './config.js';
+import { authFromEnv, authMiddleware, type AuthSettings } from './auth.js';
 import { ENGINE_VERSION } from './engine/types.js';
 import { errorHandler, HttpError } from './errors.js';
 import { logger } from './logger.js';
 import { analysesRouter } from './routes/analyses.js';
+import { authRouter } from './routes/auth.js';
 import { checksRouter } from './routes/checks.js';
 import { datasetsRouter } from './routes/datasets.js';
 import { decisionsRouter } from './routes/decisions.js';
 import { healthRouter } from './routes/health.js';
+import { pulseRouter } from './routes/pulse.js';
 import { scenariosRouter } from './routes/scenarios.js';
 
 /** CORS: the CloudFront origin(s) in CORS_ORIGIN plus localhost for development (§17). */
@@ -23,8 +26,10 @@ function allowedOrigin(origin: string | undefined): string | null {
   return null;
 }
 
-export function createApp() {
+export function createApp(options: { auth?: AuthSettings } = {}) {
+  const auth = options.auth ?? authFromEnv();
   const app = express();
+  app.locals.auth = auth;
   app.disable('x-powered-by');
   app.use(helmet());
   // Large analyses (10,000 orders ≈ 16 MB of JSON) compress roughly tenfold.
@@ -52,7 +57,7 @@ export function createApp() {
     if (origin) {
       res.setHeader('Access-Control-Allow-Origin', origin);
       res.setHeader('Vary', 'Origin');
-      res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Request-Id');
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Request-Id, Authorization');
       res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
       res.setHeader('Access-Control-Expose-Headers', 'x-request-id, x-engine-version, Content-Disposition');
     }
@@ -61,14 +66,17 @@ export function createApp() {
   });
 
   app.use(express.json({ limit: config.maxBodyBytes }));
+  app.use(authMiddleware(auth));
 
   const api = Router();
   api.use(healthRouter);
+  api.use(authRouter(auth));
   api.use(checksRouter);
   api.use(datasetsRouter);
   api.use(analysesRouter);
   api.use(scenariosRouter);
   api.use(decisionsRouter);
+  api.use(pulseRouter);
   app.use('/api/v1', api);
 
   app.use((req, _res, next) => next(new HttpError(404, 'not_found', `No route for ${req.method} ${req.path}.`)));
