@@ -34,6 +34,12 @@ Suggested roles: M3 speaks, M2 drives the screen, M1 and M4 hold the terminal an
 
 If the Scenario screen is slow, use the API instead of the screen for check 3: `GET /api/v1/checks` returns the same values.
 
+**Fastest proof for a judge who wants all three at once:** sidebar → **Pack checks 3 of 3 pass** (or `#/ledger?checks=1`). The Public checks panel shows "25 of 25 points", each check's text, expected vs actual, and a **Show me** button that opens the exact screen: worked order (check 1), extended file in channel mode on By channel (check 2), missing refund with recovery ₹200 run (check 3).
+
+**If a judge asks "what makes it different?":** sidebar brand → **About Leak Desk** lists the MVP journey and six differentiators, each with a "See it" link (`docs/PRODUCT.md` has the proof for each).
+
+**If a judge brings their own file:** Import → **Download CSV template** shows the exact columns; common header names (cogs, sku, gateway_fee, refund, shipping) are mapped automatically. After the ledger loads, **Export CSV** gives them the per-order result to check in a spreadsheet. A **Handling per order (estimate)** box lets them try a handling cost; the column then carries an "estimated" tag (₹15 on the extended file gives ₹6,753, exactly ₹300 lower for the 20 rows without handling).
+
 ## The three checks, in printed order
 
 ### Check 1: reference order = ₹230
