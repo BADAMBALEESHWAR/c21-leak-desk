@@ -1,41 +1,36 @@
 import { useState } from 'react';
 import { toErrorInfo, type ErrorInfo } from '../api/client';
 import type { AttributionMode } from '../api/types';
+import { useAuth } from '../auth/AuthContext';
+import { BRAND } from '../brand';
 import { formatCount } from '../lib/format';
-import { ATTRIBUTION_LABEL } from '../lib/labels';
+import { ATTRIBUTION_LABEL, datasetName } from '../lib/labels';
 import { hrefFor, type Route } from '../lib/router';
 import { useStore } from '../state/store';
-import { Button } from './Button';
+import { Button, ButtonLink } from './Button';
 import { Icon } from './Icon';
 import { STEPS } from './Sidebar';
 import { AttributionSegmented, InfoTip } from './ui';
 
-const SOURCE_NAMES: Record<string, string> = {
-  fixture: 'C21 fixture',
-  extended: 'Extended sample',
-};
+const ATTRIBUTION_ROUTES: Route[] = ['ledger', 'leaks', 'scenario', 'pulse'];
 
-function sourceName(source: string | undefined, label: string | undefined): string {
-  if (!source) return 'Dataset';
-  if (SOURCE_NAMES[source]) return SOURCE_NAMES[source];
-  if (source.startsWith('upload:')) return source.slice('upload:'.length) || 'Upload';
-  return label ?? source.replace(/_/g, ' ');
-}
-
-const ATTRIBUTION_ROUTES: Route[] = ['ledger', 'leaks', 'scenario'];
+export const DEMO_PILL_TIP = 'Demo workspace: uploads are stored, but not tied to an account.';
 
 export function TopBar({ route, onError }: { route: Route; onError: (e: ErrorInfo | null) => void }) {
   const { dataset, analysis, samples, analysing, runAnalysis, openWorked, dbStatus } = useStore();
+  const auth = useAuth();
+  const account = auth.mode === 'account';
   const [switching, setSwitching] = useState(false);
   const step = STEPS.find((s) => s.route === route);
 
   const source = dataset?.source;
-  const name = sourceName(source, samples.find((s) => s.source === source)?.label);
+  const name = datasetName(source, dataset?.files, samples.find((s) => s.source === source)?.label);
   const orders = analysis ? analysis.totals.orders : dataset?.rows_kept ?? null;
   const synthetic = analysis ? analysis.orders.filter((o) => o.synthetic).length : dataset?.synthetic_rows ?? 0;
 
+  // What the API said when it was written; data opened from the saved list follows the database status.
   const persisted = analysis?.persisted ?? dataset?.persisted;
-  const saved = persisted === undefined ? dbStatus === 'ok' : persisted;
+  const saved = persisted ?? (dbStatus ? dbStatus === 'ok' : true);
 
   const onAttribution = async (mode: AttributionMode) => {
     if (!analysis || mode === analysis.attribution) return;
@@ -50,20 +45,22 @@ export function TopBar({ route, onError }: { route: Route; onError: (e: ErrorInf
     }
   };
 
+  const email = auth.user?.email ?? null;
+
   return (
     <header className="topbar">
       <nav className="crumbs" aria-label="Breadcrumb">
         <ol>
           <li>
-            <a href={hrefFor('import')}>Leak Desk</a>
+            <a href={hrefFor('import')}>{BRAND.name}</a>
           </li>
-          <li aria-current="page">{step?.label}</li>
+          <li aria-current="page">{step?.label ?? (route === 'pulse' ? 'Pulse' : '')}</li>
         </ol>
       </nav>
 
       <div className="topbar-actions">
         {orders !== null ? (
-          <span className="chip" title="Loaded dataset">
+          <span className="chip" title={`Loaded data: ${name}`}>
             <span className="chip-dot" aria-hidden="true" />
             <span className="chip-main">{name}</span>
             <span className="chip-extra">
@@ -80,19 +77,51 @@ export function TopBar({ route, onError }: { route: Route; onError: (e: ErrorInf
           </span>
         ) : null}
 
-        <Button variant="secondary" size="sm" icon="file" onClick={openWorked}>
+        <Button
+          variant="secondary"
+          size="sm"
+          icon="file"
+          onClick={openWorked}
+          className={account ? 'worked-btn is-compact' : 'worked-btn'}
+          title="Worked order: one order explained line by line"
+        >
           Worked order
         </Button>
 
-        {orders !== null || dbStatus ? (
-          <span
-            className={`status-pill ${saved ? 'is-saved' : 'is-memory'}`}
-            title={saved ? 'Results are saved to MongoDB.' : 'Not saved to the database — results are in memory only.'}
-          >
-            <Icon name="database" size={14} />
-            <span className="status-text">{saved ? 'Saved to MongoDB' : 'In memory'}</span>
+        {!auth.ready ? null : account ? (
+          orders !== null ? (
+            <span
+              className={`status-pill ${saved ? 'is-saved' : 'is-memory'}`}
+              title={saved ? 'This data is saved to your account.' : 'The database is not available: this data is in memory only and will not be kept.'}
+            >
+              <Icon name={saved ? 'check-circle' : 'database'} size={14} />
+              <span className="status-text">{saved ? 'Saved to your account' : 'In memory only'}</span>
+            </span>
+          ) : null
+        ) : (
+          <span className="status-pill is-demo" title={DEMO_PILL_TIP}>
+            <Icon name="info" size={14} />
+            <span className="status-text">Demo workspace</span>
           </span>
-        ) : null}
+        )}
+
+        {!auth.ready ? null : account && auth.user && !auth.sessionEnded ? (
+          <span className="user-chip">
+            <span className="avatar" aria-hidden="true">
+              {(email ?? auth.user.sub).charAt(0).toUpperCase()}
+            </span>
+            <span className="user-email" title={email ?? undefined}>
+              {email ?? 'Signed in'}
+            </span>
+            <Button variant="ghost" size="sm" icon="log-out" className="signout-btn" onClick={auth.signOut}>
+              Sign out
+            </Button>
+          </span>
+        ) : auth.hasSession ? null : (
+          <ButtonLink variant="secondary" size="sm" icon="user" className="signin-btn" href={auth.loginUrl}>
+            Sign in
+          </ButtonLink>
+        )}
       </div>
     </header>
   );
