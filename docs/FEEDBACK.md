@@ -59,7 +59,7 @@ No rupee value changes, so `data/expected.json` is unchanged and the engine vers
 
 | Data | Before the change | After the change |
 |---|---|---|
-| Fixture (`Load C21 fixture`, all facts known) | Contribution % 41.7% (₹6,000 of ₹14,400 net sales) | Contribution % **41.7%**, gate open |
+| Fixture (`Load sample orders`, all facts known) | Contribution % 41.7% (₹6,000 of ₹14,400 net sales) | Contribution % **41.7%**, gate open |
 | Extended file (S04 refund, recovery and return cost unknown) | A contribution % was shown, computed over the known orders only; S04 was left out of the base with no warning on the figure | Contribution % **hidden**: "Contribution % is hidden until refund and recovery facts are complete (1 order unknown)." Contribution ₹7,053 still shown, labelled partial (1 unknown) |
 | `null_refund.json` (O05 refund null) | A contribution % over 19 orders, with O05 left out | **Hidden**, 1 order unknown; ₹6,180 shown as partial |
 | `missing_fee.json` (fee missing on every row) | No usable figure, shown as unknown | **Hidden**, 20 orders unknown |

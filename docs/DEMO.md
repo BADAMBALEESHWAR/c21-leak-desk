@@ -1,20 +1,21 @@
 # Demo script and judge sheet
 
-Seven minutes: four to present, three for questions. Every number below is computed by the engine from `data/C21/fixture.json`, `data/C21_extended.json` or `data/negative_tests/`, and the totals are fixed in `data/expected.json`. The rules behind them are in `docs/RULES.md`.
+Seven minutes: four to present, three for questions. Every number below is computed by the engine from `data/C21/fixture.json`, `data/C21_extended.json` or `data/negative_tests/`, and the totals are fixed in `data/expected.json`. The rules behind them are in `docs/RULES.md`. The optional Pulse segment uses `data/demo_12m.json`, which is synthetic.
 
-Web: http://localhost:5173 (Node dev) or http://localhost:3000 (Docker Compose). API: http://localhost:8080/api/v1.
+App: http://localhost:5173/app/ (Node dev) or http://localhost:3000/app/ (Docker Compose). The Profyn landing page is at `/` on both, and old `/#/…` links redirect to `/app/#/…`. API: http://localhost:8080/api/v1. No sign-in is needed for anything below.
 
 ## Before the slot
 
 1. `npm run check` (or `make check`) prints `PASS` three times.
 2. `AI_DISABLED=1` (the default). `/api/v1/health` shows `"ai":"disabled"`.
 3. Open these tabs in order. Each link loads a sample and opens the right view by itself.
-   - Tab 1: `http://localhost:5173/#/ledger?load=fixture&worked=1` (worked order drawer)
-   - Tab 2: `http://localhost:5173/#/import` (to load the extended file and show the flag report)
-   - Tab 3: `http://localhost:5173/#/scenario?load=null_refund` (check 3)
+   - Tab 1: `http://localhost:5173/app/#/ledger?load=fixture&worked=1` (worked order drawer)
+   - Tab 2: `http://localhost:5173/app/#/import` (to load the extended file and show the flag report)
+   - Tab 3: `http://localhost:5173/app/#/scenario?load=null_refund` (check 3)
    - Tab 4: the "before" screenshot of the Ledger strip for the headline gate (`docs/FEEDBACK.md`)
+   - Tab 5 (optional Pulse segment): `http://localhost:5173/app/#/pulse?load=demo_12m`
    - Terminal: repository root, ready to run `npm run check`
-4. Phone: the CloudFront URL, if the AWS deploy is live. If not, skip that line in the close.
+4. Phone: `https://profyn.in`, if the AWS deploy is live. If not, skip that line in the close.
 
 Suggested roles: M3 speaks, M2 drives the screen, M1 and M4 hold the terminal and the drill files.
 
@@ -22,23 +23,37 @@ Suggested roles: M3 speaks, M2 drives the screen, M1 and M4 hold the terminal an
 
 | Time | Beat | Click | Say or point to |
 |---|---|---|---|
-| 0:00 | Opening | Tab 1, drawer closed | "A small D2C founder sees net sales, not contribution. Leak Desk finds the orders that lose money, puts refund and recovery facts before any headline, and saves one measurable decision. Every number is deterministic; AI only words it." |
+| 0:00 | Opening | Tab 1, drawer closed | "A small D2C founder sees net sales, not contribution. Profyn finds the orders that lose money, puts refund and recovery facts before any headline, and saves one measurable decision. Every number is deterministic; AI only words it." |
 | 0:25 | Check 1 | Tab 1: Ledger → **Worked order** | Six lines: revenue 1,000; refund −200; net product cost −400; shipping −50; ads −100; handling −20 = **₹230**. Point to the note: "Net product cost is after any recovered stock cost; recovery is not subtracted a second time." |
-| 0:55 | Journey | Tab 2: Import → **Load fixture + synthetic rows** | Flag report: **duplicate S05** (a second S01, dropped), **late refund S06** (refund dated 2026-10-05, after the 2026-09-30 period end), **unknown S04** (refund, recovery and return cost missing). Synthetic rows are labelled. **Continue to ledger** → contribution **₹7,053, partial (1 unknown)**; 1 late refund pending, **−₹600** if recognised. |
+| 0:55 | Journey | Tab 2: Import → **Load extended sample** | Flag report: **duplicate S05** (a second S01, dropped), **late refund S06** (refund dated 2026-10-05, after the 2026-09-30 period end), **unknown S04** (refund, recovery and return cost missing). Synthetic rows are labelled. **Continue to ledger** → contribution **₹7,053, partial (1 unknown)**; 1 late refund pending, **−₹600** if recognised. |
 | 1:30 | Check 2 | Ledger: reconciliation line, **By channel** tab, then top bar → **Channel spend** | "Σ orders = Σ channels = Σ products ✓" at ₹7,053. Channels: web 1,279, marketplace 254, instagram −480, unassigned 6,000. After the switch, the order rows read "to channel" for ads, the channel lines carry spend web 250, marketplace 100, instagram 140 (₹490), and every channel total and the ₹7,053 stay the same. Say "never both". |
 | 2:00 | Check 3 | Orders tab → click **S04**; then Tab 3 | S04: unknown chip, no contribution value. Tab 3 loads the printed check-3 file (O05 refund null): ledger **₹6,180 partial (1 unknown)**. Scenario baseline: **charge_return_shipping ₹150, confidence unknown**. Set recovery to ₹200 per return (50%) → **Run scenario** → total **₹5,730**, recommendation flips to **raise_recovery_via_inspection ₹480**, confidence unknown. Go to Decision → enter an owner → **Save decision** (the assumption snapshot and 30-day test are filled in) → **Export Markdown**. |
-| 2:45 | Deliberate failure | Import → Judge drills → **Load missing payment fee** | Payment fee removed from every row: **20 of 20 orders unknown**, contribution unknown and labelled partial, no error page. Then Leaks or Scenario: every explanation carries the **template** tag because `AI_DISABLED=1`; nothing else changes. |
+| 2:45 | Deliberate failure | Import → Data-quality drills → **Load missing payment fee** | Payment fee removed from every row: **20 of 20 orders unknown**, contribution unknown and labelled partial, no error page. Then Leaks or Scenario: every explanation carries the **template** tag because `AI_DISABLED=1`; nothing else changes. |
 | 3:15 | Business feedback | Tab 4 (before), then Ledger on the fixture and on the extended file (after) | The headline gate. Before: contribution % shown while S04's refund was unknown. After: fixture shows **41.7%** (facts complete); extended shows **hidden** with "Contribution % is hidden until refund and recovery facts are complete (1 order unknown)". This is the case's product change: refund and recovery semantics before a profit headline. |
-| 3:40 | Handoff | Terminal | `git clone … && make up && make check` → PASS ×3 (or `npm run check` on this laptop). CloudFront URL on the phone if live. `docs/SNAPSHOT.md` and `docs/mba/Venture_Brief.csv` for the MBA team. Close: "Operational contribution, not statutory profit." |
+| 3:40 | Handoff | Terminal | `git clone … && make up && make check` → PASS ×3 (or `npm run check` on this laptop). profyn.in on the phone if live. `docs/SNAPSHOT.md` and `docs/mba/Venture_Brief.csv` for the MBA team. Close: "Operational contribution, not statutory profit." |
 | 4:00–7:00 | Questions | — | Each member answers for their own track. Prepared answers below. |
 
 If the Scenario screen is slow, use the API instead of the screen for check 3: `GET /api/v1/checks` returns the same values.
 
-**Fastest proof for a judge who wants all three at once:** sidebar → **Pack checks 3 of 3 pass** (or `#/ledger?checks=1`). The Public checks panel shows "25 of 25 points", each check's text, expected vs actual, and a **Show me** button that opens the exact screen: worked order (check 1), extended file in channel mode on By channel (check 2), missing refund with recovery ₹200 run (check 3).
+**Fastest proof for a judge who wants all three at once:** sidebar → **All 3 checks pass** (or `/app/#/ledger?checks=1`). The Public checks panel shows "25 of 25 points", each check's text, expected vs actual, and a **Show me** button that opens the exact screen: worked order (check 1), extended file in channel mode on By channel (check 2), missing refund with recovery ₹200 run (check 3).
 
-**If a judge asks "what makes it different?":** sidebar brand → **About Leak Desk** lists the MVP journey and six differentiators, each with a "See it" link (`docs/PRODUCT.md` has the proof for each).
+**If a judge asks "what makes it different?":** sidebar brand → **About Profyn** lists the MVP journey and six differentiators, each with a "See it" link (`docs/PRODUCT.md` has the proof for each).
 
-**If a judge brings their own file:** Import → **Download CSV template** shows the exact columns; common header names (cogs, sku, gateway_fee, refund, shipping) are mapped automatically. After the ledger loads, **Export CSV** gives them the per-order result to check in a spreadsheet. A **Handling per order (estimate)** box lets them try a handling cost; the column then carries an "estimated" tag (₹15 on the extended file gives ₹6,753, exactly ₹300 lower for the 20 rows without handling).
+**If a judge brings their own file:** Import → **Download CSV template** shows the exact columns; common header names (cogs, sku, gateway_fee, refund, shipping) are mapped automatically. After the ledger loads, **Export CSV** gives them the per-order result to check in a spreadsheet. A **Handling per order (estimate)** box lets them try a handling cost; the column then carries an "estimated" tag (₹15 on the extended file gives ₹6,753, exactly ₹300 lower for the 20 rows without handling). Optional `payment_type`, `customer_id` and `units` columns fill the payment and repeat-customer views in Pulse.
+
+## Pulse segment (optional, about 45 seconds)
+
+Not part of the 4-minute script. Use it when a judge asks what an owner sees month to month, or after the close if time remains. The data is synthetic: 3,020 orders, Oct 2025–Sep 2026, every row `synthetic: true`, and the screen says so. Numbers below are from `GET /api/v1/analyses/:id/pulse/:view` on `demo_12m` in allocate mode; they match the screen.
+
+| Beat | Click | Say or point to |
+|---|---|---|
+| Load | Tab 5, or Import → **Load 12-month demo** | Pulse opens on Overview, Sep 2026. "Synthetic demo data" callout; "Partial · 5 unknown orders left out" (five returns with no refund or recovery fact). |
+| Sep vs Aug | Overview KPI cards | Against Aug 2026: orders 240 (−7.7%), net sales ₹2,86,984 (−15.1%), contribution ₹30,550 (−45.9%), return rate 25% (+8.5 pts). Sales fell 15%; contribution nearly halved. September is partial: all five unknown orders are September returns. |
+| Best and weakest months | **Best months** and **Weakest months** cards | Oct 2025 sold the most (₹4,01,558 net sales) and earned the least (−₹6,701, −₹16 per order): the festive peak lost money. Aug 2026 earned the most (₹56,418, ₹217 per order). Jan 2026 sold the least (₹2,42,020). |
+| The "fix" quadrant | **Products** tab | P2 sits in "fix": rank 1 on units (952), rank 6 on contribution (−₹48,713, −₹51 per unit); 37.5% of its orders come back. |
+| COD vs prepaid | **Channels & payments** tab | "COD orders return 2.8× as often as prepaid orders": 29.4% against 10.6%. Contribution per order: −₹18 COD, ₹251 prepaid. |
+| Top 3 actions | **Overview** → Top 3 actions | 1. Halve instagram ad spend per order, ₹1,73,790 (instagram: 779 orders, −₹1,48,425; ads are 40.3% of its net sales). 2. Cap discounts at 15%, ₹1,10,365. 3. Inspect P2 returns before restocking, ₹70,955. Each is a stated assumption, not a forecast. |
+| Simulate | Action 3 → **Simulate** | Scenario opens with recovery per return at 90% and runs: ₹3,85,157 → ₹4,89,617 (+₹1,04,460). It is more than ₹70,955 because Scenario sets 90% recovery on every returned order, not only P2. The recommendation stays Cap discount, ₹1,10,365, confidence unknown (5 orders have missing facts). |
 
 ## The three checks, in printed order
 
@@ -55,7 +70,7 @@ If the Scenario screen is slow, use the API instead of the screen for check 3: `
 
 | Item | Expected |
 |---|---|
-| Where | Import → Load C21 fixture (or the extended sample) → Ledger → reconciliation line; **By channel** and **By product** tabs; Attribution radio |
+| Where | Import → Load sample orders (or the extended sample) → Ledger → reconciliation line; **By channel** and **By product** tabs; Attribution radio |
 | Fixture | 16 kept orders at **+420**, O05, O10, O15, O20 at **−180**; gross ₹20,000, net sales ₹14,400, contribution **₹6,000**; Σ orders = Σ channels = Σ products = ₹6,000 in both modes |
 | Extended, allocate | **₹7,053** partial (1 unknown). Channels: web 1,279 · marketplace 254 · instagram −480 · unassigned 6,000. Products: P1 680 · P2 438 · P3 −65 · unassigned 6,000 |
 | Extended, channel | **₹7,053**. Channel spend web 250 · marketplace 100 · instagram 140 (₹490). Products "before channel spend": P1 780 · P2 598 · P3 165 · unassigned 6,000 |
@@ -65,7 +80,7 @@ If the Scenario screen is slow, use the API instead of the screen for check 3: `
 
 | Item | Expected |
 |---|---|
-| Where | Import → Judge drills → **Load missing refund** (or Tab 3) → Ledger → Scenario |
+| Where | Import → Data-quality drills → **Load missing refund** (or Tab 3) → Ledger → Scenario |
 | Unknown | O05 status unknown, no contribution value; total **₹6,180 partial (1 unknown)**; contribution % hidden |
 | Baseline recommendation | **charge_return_shipping, ₹150, confidence unknown** |
 | Recovery 50% (₹350 → ₹200 per return) | Scenario total **₹5,730**; recommendation **raise_recovery_via_inspection, ₹480**, confidence unknown |
@@ -75,7 +90,7 @@ If the Scenario screen is slow, use the API instead of the screen for check 3: `
 
 ## Changed-input drills
 
-The judge changes one input and keeps the rule. Write the expected result on the sheet before running it. Load each file from Import → Judge drills, or drop it from `data/negative_tests/` on the drop zone.
+The judge changes one input and keeps the rule. Write the expected result on the sheet before running it. Load each file from Import → Data-quality drills, or drop it from `data/negative_tests/` on the drop zone.
 
 | Drill | File | Expected on screen | Rule |
 |---|---|---|---|
@@ -118,5 +133,6 @@ Reserve questions:
 |---|---|---|
 | Why is handling ₹0 on the fixture? | M1 | The fixture has no handling column. A ₹20 default would make kept orders 400 and the total ₹5,600, contradicting the pack's +420. The default is ₹0 and labelled an estimate; rows that carry handling use it. |
 | Why hide contribution %? | M3 | A percentage over known orders only looks complete when it is not. Until every refund and recovery fact is in, the headline stays hidden and says why. |
-| What does the MBA team inherit? | M3 | A working five-screen journey, engine 1.0.0 with tested values, the snapshot (tests, gaps, backlog), and pre-filled Venture Brief, Unit Economics and Growth Plan with every business number marked as an assumption to test. |
+| What does the MBA team inherit? | M3 | A working five-step journey plus Pulse on a 12-month synthetic demo, engine 1.0.0 with tested values, the snapshot (tests, gaps, backlog), and pre-filled Venture Brief, Unit Economics and Growth Plan with every business number marked as an assumption to test. |
 | What if a judge adds a row with no channel? | M4 | It goes to `unassigned`, and reconciliation still balances. If a total ever differs, the rupee gap is shown in red rather than hidden. |
+| Does a judge need to sign in? | M1 | No. Sign-in (Amazon Cognito) is optional and off unless it is configured. Without it you are a guest in the demo workspace, and the journey, `/checks` and every deep link work. When it is on, a signed-in owner's datasets, analyses and decisions stay in their own account; a guest's decisions are kept in memory only. |
