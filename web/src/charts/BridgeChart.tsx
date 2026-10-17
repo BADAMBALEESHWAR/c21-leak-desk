@@ -1,4 +1,5 @@
 import type { BridgeLine } from '../api/types';
+import { Pill } from '../components/Badge';
 import { Money } from '../components/Money';
 import { formatInr } from '../lib/format';
 
@@ -6,13 +7,15 @@ interface Props {
   lines: BridgeLine[];
   /** The line to highlight: gross, net_sales or contribution. */
   focus: string;
+  /** Line keys that include an estimate (handling from the config default). */
+  estimated?: string[];
 }
 
 /**
  * Period waterfall from the engine's bridge. The start and subtotal bars run from zero,
  * deductions float from the running total, the total runs from zero. Every line is labelled.
  */
-export function BridgeChart({ lines, focus }: Props) {
+export function BridgeChart({ lines, focus, estimated = [] }: Props) {
   // Positions only; every amount shown comes straight from the bridge.
   let running = 0;
   const segs = lines.map((l) => {
@@ -51,7 +54,15 @@ export function BridgeChart({ lines, focus }: Props) {
             className={`wf-row bridge-${l.kind}${isFocus ? ' is-focus' : ''}${l.amount_inr === 0 && l.kind === 'deduction' ? ' is-zero' : ''}`}
             aria-current={isFocus ? 'true' : undefined}
           >
-            <span className="wf-label">{l.label}</span>
+            <span className="wf-label">
+              {l.label}
+              {estimated.includes(l.key) ? (
+                <>
+                  {' '}
+                  <Pill tone="warning">estimated</Pill>
+                </>
+              ) : null}
+            </span>
             <span className="wf-track">
               {min < 0 ? <span className="wf-zero" style={{ left: `${pct(0)}%` }} /> : null}
               {hi - lo > 1e-9 ? <span className={`wf-bar ${barClass(l)}`} style={{ left: `${pct(lo)}%`, width: `${Math.max(pct(hi) - pct(lo), 0.8)}%` }} /> : null}

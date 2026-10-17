@@ -400,12 +400,34 @@ export interface DecisionSummary {
   saved_at: string;
 }
 
+export interface CheckIntervention {
+  intervention: InterventionKey;
+  expected_delta_inr: number;
+}
+
 export interface Checks {
   check1?: { expected: number; actual: number; six_lines: boolean; pass: boolean };
-  check2?: { allocate_total: number; channel_total: number; fixture_total: number; reconciled: boolean; never_both: boolean; pass: boolean };
-  check3?: { unknown_labelled: boolean; confidence: Confidence; recommendation_changed: boolean; pass: boolean };
+  check2?: {
+    allocate_total: number;
+    channel_total: number;
+    expected_total?: number;
+    fixture_total: number;
+    reconciled: boolean;
+    never_both: boolean;
+    channel_spend?: Record<string, number>;
+    pass: boolean;
+  };
+  check3?: {
+    unknown_labelled: boolean;
+    confidence: Confidence;
+    before?: CheckIntervention;
+    after_recovery_50?: CheckIntervention;
+    recommendation_changed: boolean;
+    pass: boolean;
+  };
   all_pass?: boolean;
   engine_version?: string;
+  ms?: number;
   [key: string]: unknown;
 }
 

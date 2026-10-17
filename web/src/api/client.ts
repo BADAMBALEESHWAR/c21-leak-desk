@@ -134,6 +134,11 @@ export const api = {
 
   listDecisions: () => request<DecisionSummary[]>('GET', '/decisions'),
 
+  templateUrl: () => `${API_BASE}/template.csv`,
+
+  ledgerExportUrl: (analysisId: string, format: 'csv' | 'json' = 'csv') =>
+    `${API_BASE}/analyses/${encodeURIComponent(analysisId)}/export?format=${format}`,
+
   exportUrl: (decisionId: string, format: 'md' | 'json') =>
     `${API_BASE}/decisions/${encodeURIComponent(decisionId)}/export?format=${format}`,
 };

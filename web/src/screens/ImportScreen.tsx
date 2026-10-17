@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState, type DragEvent } from 'react';
-import { toErrorInfo, type DatasetInput, type ErrorInfo } from '../api/client';
+import { api, toErrorInfo, type DatasetInput, type ErrorInfo } from '../api/client';
 import type { AttributionMode, DatasetResponse, ValidationFlag } from '../api/types';
 import { Pill } from '../components/Badge';
-import { Button } from '../components/Button';
+import { Button, ButtonLink } from '../components/Button';
 import { Icon } from '../components/Icon';
 import { AttributionSegmented, Callout, Collapsible, ErrorCallout, InfoTip, revealElement, Skeleton, StatCard } from '../components/ui';
 import { compressIds, plural } from '../lib/format';
-import { ATTRIBUTION_LABEL, DRILL_TAGS } from '../lib/labels';
+import { ATTRIBUTION_LABEL, DRILL_TAGS, HEADER_ALIASES } from '../lib/labels';
 import { navigate } from '../lib/router';
 import { useStore } from '../state/store';
 
@@ -111,7 +111,7 @@ function Report({ dataset, reveal }: { dataset: DatasetResponse; reveal: boolean
           value={dataset.rows_kept}
           icon="check-circle"
           tone="success"
-          sub={compressIds(dataset.kept_ids)}
+          sub={dataset.kept_ids.length > 60 ? `${compressIds(dataset.kept_ids.slice(0, 60))} …` : compressIds(dataset.kept_ids)}
           actionIcon="arrow-right"
           onClick={toKept}
           actionLabel={`Kept ${dataset.rows_kept} rows — show the kept order ids`}
@@ -147,11 +147,12 @@ function Report({ dataset, reveal }: { dataset: DatasetResponse; reveal: boolean
             <span className="muted small">{dataset.kept_ids.length} rows go into the analysis</span>
           </div>
           <div className="id-chips">
-            {dataset.kept_ids.map((id) => (
+            {dataset.kept_ids.slice(0, 300).map((id) => (
               <span key={id} className="pill pill-outline">
                 {id}
               </span>
             ))}
+            {dataset.kept_ids.length > 300 ? <span className="muted small">and {dataset.kept_ids.length - 300} more</span> : null}
           </div>
         </div>
       ) : null}
@@ -187,7 +188,7 @@ function Report({ dataset, reveal }: { dataset: DatasetResponse; reveal: boolean
                 </tr>
               </thead>
               <tbody>
-                {shownFlags.map((f, i) => (
+                {shownFlags.slice(0, 100).map((f, i) => (
                   <tr key={`${f.line}-${f.reason}-${f.field ?? ''}-${i}`}>
                     <th scope="row" className="cell-stack">
                       <span>{f.order_id ?? '—'}</span>
@@ -207,6 +208,7 @@ function Report({ dataset, reveal }: { dataset: DatasetResponse; reveal: boolean
               </tbody>
             </table>
           </div>
+          {shownFlags.length > 100 ? <p className="table-foot">Showing the first 100 of {shownFlags.length} flags.</p> : null}
         </div>
       ) : (
         <Callout tone="success" title="No rows flagged." />
@@ -252,6 +254,7 @@ export function ImportScreen() {
   const [attribution, setAttribution] = useState<AttributionMode>(analysis?.attribution ?? 'allocate');
   const [periodEnd, setPeriodEnd] = useState<string>(dataset?.period_end ?? analysis?.period_end ?? '');
   const [continueError, setContinueError] = useState<ErrorInfo | null>(null);
+  const [handling, setHandling] = useState<string>(analysis && analysis.config.handling_default_inr > 0 ? String(analysis.config.handling_default_inr) : '0');
   const [dragOver, setDragOver] = useState(false);
   const [loadedHere, setLoadedHere] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -264,6 +267,7 @@ export function ImportScreen() {
     if (!dataset && analysis) {
       setPeriodEnd(analysis.period_end);
       setAttribution(analysis.attribution);
+      setHandling(String(analysis.config.handling_default_inr ?? 0));
     }
   }, [dataset, analysis]);
 
@@ -304,8 +308,13 @@ export function ImportScreen() {
     const id = dataset?.dataset_id ?? datasetId;
     if (!id) return;
     setContinueError(null);
+    const h = handling.trim() === '' ? 0 : Number(handling);
+    if (!Number.isFinite(h) || h < 0) {
+      setContinueError({ message: 'Handling per order must be a rupee amount of 0 or more.', hint: 'Leave it at 0 when rows carry their own handling_inr.', issues: [] });
+      return;
+    }
     try {
-      await runAnalysis(attribution, periodEnd || undefined, id);
+      await runAnalysis(attribution, periodEnd || undefined, id, h);
       navigate('ledger');
     } catch (err) {
       setContinueError(toErrorInfo(err));
@@ -368,9 +377,14 @@ export function ImportScreen() {
             </span>
             <p className="dropzone-title">Drag and drop a JSON or CSV file</p>
             <p className="dropzone-sub">Fixture-format JSON or CSV with the C21 column names · up to 5 MB</p>
-            <Button variant="secondary" icon="file" onClick={() => fileRef.current?.click()} disabled={busy}>
-              Browse files
-            </Button>
+            <span className="dropzone-actions">
+              <Button variant="secondary" icon="file" onClick={() => fileRef.current?.click()} disabled={busy}>
+                Browse files
+              </Button>
+              <ButtonLink variant="ghost" icon="download" href={api.templateUrl()} download="c21-template.csv">
+                Download CSV template
+              </ButtonLink>
+            </span>
             <input
               ref={fileRef}
               type="file"
@@ -384,6 +398,9 @@ export function ImportScreen() {
               }}
             />
           </div>
+          <p className="alias-note" title={HEADER_ALIASES.map(([a, b]) => `${a} → ${b}`).join(', ')}>
+            Header aliases accepted: {HEADER_ALIASES.map(([a]) => a).join(', ')} …
+          </p>
           <ErrorCallout error={loadError} className="error-under-drop" />
         </div>
 
@@ -403,6 +420,18 @@ export function ImportScreen() {
               <InfoTip text="Refunds dated after this day stay in the period as kept orders and are shown as pending." label="About the period date" />
             </label>
             <input id="period-end" type="date" className="input input-date" value={periodEnd} onChange={(e) => setPeriodEnd(e.target.value)} />
+          </div>
+          <div className="field">
+            <label className="field-label" htmlFor="handling-default">
+              Handling per order (estimate){' '}
+              <InfoTip text="Used only for rows without handling_inr. Labelled as an estimate everywhere." label="About handling per order" />
+            </label>
+            <span className="num-field num-field-wide">
+              <span className="num-affix" aria-hidden="true">
+                ₹
+              </span>
+              <input id="handling-default" type="number" inputMode="decimal" min={0} step={1} value={handling} onChange={(e) => setHandling(e.target.value)} />
+            </span>
           </div>
           <Button variant="primary" size="lg" className="btn-block" iconRight="arrow-right" onClick={() => void onContinue()} disabled={!canContinue}>
             {analysing ? 'Analysing…' : 'Continue to ledger'}

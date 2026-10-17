@@ -28,6 +28,29 @@ export const OVERRIDE_LABELS: Record<OverrideKey | 'assume_unknown_refund', stri
 
 export const ATTRIBUTION_LABEL = 'Attribution is allocation, not causation.';
 
+export const INTERVENTION_LABELS: Record<string, string> = {
+  raise_recovery_via_inspection: 'Raise recovery via inspection',
+  charge_return_shipping: 'Charge return shipping',
+  cap_discount: 'Cap discount',
+  add_handling_to_price: 'Add handling to price',
+  none: 'No change',
+};
+
+/** Header variants the importer maps to schema names (api/src/schema/orders.ts). */
+export const HEADER_ALIASES: Array<[string, string]> = [
+  ['cogs', 'product_cost_inr'],
+  ['sku', 'product_id'],
+  ['refund', 'refund_inr'],
+  ['shipping', 'shipping_inr'],
+  ['gateway_fee', 'payment_fee_inr'],
+  ['order date', 'date'],
+  ['net sales', 'net_sales_inr'],
+  ['recovered_cost', 'recovered_product_cost_inr'],
+  ['is_returned', 'returned'],
+  ['ad_spend', 'ads_inr'],
+  ['handling', 'handling_inr'],
+];
+
 /** Judge drills: a short tag and its tone for each negative-test sample. */
 export const DRILL_TAGS: Record<string, { tag: string; tone: 'primary' | 'warning' | 'danger' | 'teal' }> = {
   duplicate_order: { tag: 'Duplicate', tone: 'primary' },

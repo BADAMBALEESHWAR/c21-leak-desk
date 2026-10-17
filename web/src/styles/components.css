@@ -3138,3 +3138,346 @@
     border-left: 0;
   }
 }
+
+/* ---- Sidebar entry points, checks and about drawers ----------------------------------- */
+
+button.brand {
+  width: calc(100% + 0px);
+  border: 0;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 10px;
+  margin: -6px -8px 0;
+  padding: 8px 8px 22px;
+  width: calc(100% + 16px);
+  transition: background-color var(--t-fast);
+}
+
+button.brand:hover .brand-name {
+  color: var(--primary);
+}
+
+button.checks-card {
+  width: 100%;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color var(--t-fast), box-shadow var(--t-fast);
+}
+
+button.checks-card:hover,
+button.checks-card:focus-visible {
+  border-color: var(--success);
+  box-shadow: var(--shadow-hover);
+}
+
+.foot-link {
+  border: 0;
+  padding: 0;
+  background: none;
+  color: var(--primary);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.foot-link:hover {
+  text-decoration: underline;
+}
+
+.drawer-hero-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.check-card {
+  display: grid;
+  gap: 10px;
+  padding: 16px 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-card);
+  background: var(--surface);
+}
+
+.check-card.is-failing {
+  border-color: var(--danger-border);
+  background: var(--danger-bg);
+}
+
+.check-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.check-title {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.check-status {
+  margin-left: auto;
+}
+
+.check-text {
+  font-size: var(--fs-body);
+  line-height: 1.5;
+  color: var(--text);
+}
+
+.check-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.about-text {
+  font-size: var(--fs-body);
+  line-height: 1.6;
+  color: var(--text-2);
+}
+
+.about-steps {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+  font-size: var(--fs-sm);
+  color: var(--text-2);
+}
+
+.about-steps li {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.about-steps strong {
+  color: var(--text);
+}
+
+.about-step-n {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--primary-50);
+  color: var(--primary);
+  font-size: var(--fs-xs);
+  font-weight: 700;
+}
+
+.usp-list {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.usp {
+  display: flex;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-card);
+  background: var(--surface);
+}
+
+.usp-icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: var(--primary-50);
+  color: var(--primary);
+}
+
+.usp-body {
+  display: grid;
+  gap: 4px;
+  font-size: var(--fs-body);
+}
+
+.usp-text {
+  font-size: var(--fs-sm);
+  color: var(--text-2);
+  line-height: 1.5;
+}
+
+.see-it {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  justify-self: start;
+  margin-top: 2px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--primary);
+  font: inherit;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.see-it:hover {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.about-foot {
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  font-size: var(--fs-xs);
+  color: var(--text-3);
+}
+
+/* ---- Import extras ------------------------------------------------------------------- */
+
+.dropzone-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+}
+
+.alias-note {
+  overflow: hidden;
+  font-size: var(--fs-xs);
+  color: var(--text-3);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* ---- Ledger extras ----------------------------------------------------------------- */
+
+.th-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.th-pill .pill {
+  height: 18px;
+  padding: 0 6px;
+  font-size: 10.5px;
+}
+
+.toolbar-export {
+  margin-left: auto;
+}
+
+.table-foot-pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+}
+
+.pager {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.pager-btn {
+  display: grid;
+  place-items: center;
+  min-width: 32px;
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: var(--text-2);
+  font: inherit;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition: border-color var(--t-fast), background-color var(--t-fast), color var(--t-fast);
+}
+
+.pager-btn:hover:not(:disabled) {
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+
+.pager-btn.is-current {
+  border-color: var(--cta);
+  background: var(--cta);
+  color: var(--on-dark);
+}
+
+.pager-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.pager-gap {
+  padding: 0 4px;
+  color: var(--text-3);
+}
+
+@media (max-width: 1199px) {
+  button.brand {
+    margin: -6px 0 0;
+    width: 100%;
+    padding: 8px 0 22px;
+  }
+
+  .foot-link {
+    display: none;
+  }
+
+  button.brand,
+  button.checks-card {
+    position: relative;
+  }
+
+  button.brand:hover::after,
+  button.brand:focus-visible::after,
+  button.checks-card:hover::after,
+  button.checks-card:focus-visible::after {
+    content: attr(data-tip);
+    position: absolute;
+    left: calc(100% + 12px);
+    top: 50%;
+    z-index: 30;
+    transform: translateY(-50%);
+    padding: 6px 10px;
+    border-radius: var(--r-sm);
+    background: var(--cta);
+    color: var(--on-dark);
+    font-size: var(--fs-xs);
+    font-weight: 500;
+    white-space: nowrap;
+    box-shadow: var(--shadow-m);
+    pointer-events: none;
+  }
+}
+
+.check-card .kv dd,
+.check-card .kv dd.num {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.see-it {
+  text-align: left;
+}
