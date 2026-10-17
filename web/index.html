@@ -3,18 +3,32 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="description" content="Order contribution and profit leak desk for the C21 order economics." />
-    <title>Leak Desk — C21</title>
+    <script>
+      // Old links pointed at the app on the root (/#/ledger?load=extended). The app now lives at /app/.
+      (function () {
+        function toApp() {
+          var h = window.location.hash;
+          if (h && h.indexOf('#/') === 0) window.location.replace('/app/' + window.location.search + h);
+        }
+        toApp();
+        window.addEventListener('hashchange', toApp);
+      })();
+    </script>
+    <meta
+      name="description"
+      content="__BRAND_DESCRIPTION__"
+    />
+    <title>__BRAND_NAME__ — __BRAND_TAGLINE__</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
       rel="stylesheet"
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400..700&display=swap"
     />
   </head>
   <body>
     <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
+    <script type="module" src="/src/landing/main.tsx"></script>
   </body>
 </html>
