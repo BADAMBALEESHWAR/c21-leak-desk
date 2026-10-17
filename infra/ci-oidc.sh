@@ -9,7 +9,14 @@ load_state
 REPO=${REPO:-BADAMBALEESHWAR/c21-leak-desk}
 : "${DIST_ID:?run infra/aws-up.sh first}"
 ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
-fill() { sed -e "s/__ACCOUNT__/$ACCOUNT/g" -e "s#__REPO__#$REPO#g" -e "s/__WEB_BUCKET__/$WEB_BUCKET/g" "$1"; }
+if [ -z "${GH_TOKEN:-}" ] && [ -f .env.git ]; then
+  GH_TOKEN=$(grep -E '^GIT_PAT_TRACK1=' .env.git | cut -d= -f2- | tr -d '\r "')
+fi
+# Newer repos sign OIDC tokens with an immutable subject (owner and repo ids), e.g.
+# repo:OWNER@123/NAME@456:ref:refs/heads/main. Trust that form as well as the classic one, main branch only.
+SUB_PREFIX=$(GH_TOKEN=${GH_TOKEN:-} gh api "repos/$REPO/actions/oidc/customization/sub" --jq .sub_claim_prefix 2>/dev/null || true)
+SUB_PREFIX=${SUB_PREFIX:-repo:$REPO}
+fill() { sed -e "s/__ACCOUNT__/$ACCOUNT/g" -e "s#__REPO__#$REPO#g" -e "s#__SUB_PREFIX__#$SUB_PREFIX#g" -e "s/__WEB_BUCKET__/$WEB_BUCKET/g" "$1"; }
 
 say "OIDC provider token.actions.githubusercontent.com"
 PROVIDER=arn:aws:iam::$ACCOUNT:oidc-provider/token.actions.githubusercontent.com
@@ -28,9 +35,6 @@ ROLE_ARN=$(aws iam get-role --role-name leakdesk-ci --query Role.Arn --output te
 save_state CI_ROLE_ARN "$ROLE_ARN"
 
 say "GitHub secrets and variable on $REPO"
-if [ -z "${GH_TOKEN:-}" ] && [ -f .env.git ]; then
-  GH_TOKEN=$(grep -E '^GIT_PAT_TRACK1=' .env.git | cut -d= -f2- | tr -d '\r "')
-fi
 set_all() {
   GH_TOKEN=$GH_TOKEN gh secret set AWS_ROLE_ARN -R "$REPO" --body "$ROLE_ARN" &&
   GH_TOKEN=$GH_TOKEN gh secret set WEB_BUCKET -R "$REPO" --body "$WEB_BUCKET" &&

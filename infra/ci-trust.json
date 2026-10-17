@@ -3,12 +3,17 @@
   "Statement": [
     {
       "Effect": "Allow",
-      "Principal": { "Federated": "arn:aws:iam::__ACCOUNT__:oidc-provider/token.actions.githubusercontent.com" },
+      "Principal": {
+        "Federated": "arn:aws:iam::__ACCOUNT__:oidc-provider/token.actions.githubusercontent.com"
+      },
       "Action": "sts:AssumeRoleWithWebIdentity",
       "Condition": {
         "StringEquals": {
           "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
-          "token.actions.githubusercontent.com:sub": "repo:__REPO__:ref:refs/heads/main"
+          "token.actions.githubusercontent.com:sub": [
+            "repo:__REPO__:ref:refs/heads/main",
+            "__SUB_PREFIX__:ref:refs/heads/main"
+          ]
         }
       }
     }
