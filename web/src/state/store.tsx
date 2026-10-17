@@ -25,6 +25,8 @@ export type DrawerContent =
   | { kind: 'order'; order: OrderResult }
   | { kind: 'bridge'; focus: BridgeFocus }
   | { kind: 'margin' }
+  | { kind: 'checks' }
+  | { kind: 'about' }
   | { kind: 'worked'; data: WorkedOrderResult | null; error: string | null }
   | { kind: 'missing'; orderId: string };
 
@@ -79,6 +81,9 @@ interface StoreValue {
   engineVersion: string | null;
   dbStatus: string | null;
   checks: PackChecks | null;
+  checksRaw: Checks | null;
+  checksLoading: boolean;
+  refreshChecks: () => Promise<void>;
   samples: Sample[];
 
   dataset: DatasetResponse | null;
@@ -101,7 +106,8 @@ interface StoreValue {
   setOverrides: (o: ScenarioOverrides) => void;
 
   importDataset: (input: DatasetInput) => Promise<DatasetResponse>;
-  runAnalysis: (attribution: AttributionMode, periodEnd?: string, datasetId?: string) => Promise<AnalysisResponse>;
+  /** handling: ₹ per order for rows without handling_inr (config.handling_default_inr). */
+  runAnalysis: (attribution: AttributionMode, periodEnd?: string, datasetId?: string, handling?: number) => Promise<AnalysisResponse>;
   runScenario: (overrides: ScenarioOverrides) => Promise<void>;
 
   drawer: DrawerContent | null;
@@ -111,6 +117,8 @@ interface StoreValue {
   openWorked: () => void;
   openBridge: (focus: BridgeFocus) => void;
   openMargin: () => void;
+  openChecks: () => void;
+  openAbout: () => void;
   closeDrawer: () => void;
 
   /** Ledger table view, shared so cards and drawers can filter it. */
@@ -152,6 +160,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [dbStatus, setDbStatus] = useState<string | null>(null);
   const [samples, setSamples] = useState<Sample[] | null>(null);
   const [checks, setChecks] = useState<PackChecks | null>(null);
+  const [checksRaw, setChecksRaw] = useState<Checks | null>(null);
+  const [checksLoading, setChecksLoading] = useState(false);
 
   const [dataset, setDataset] = useState<DatasetResponse | null>(null);
   const [datasetId, setDatasetId] = useState<string | null>(null);
@@ -221,16 +231,27 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         if (!cancelled && Array.isArray(list) && list.length > 0) setSamples(list);
       })
       .catch(() => undefined);
-    api
-      .checks()
-      .then((raw) => {
-        if (!cancelled) setChecks(summariseChecks(raw));
-      })
-      .catch(() => undefined);
     return () => {
       cancelled = true;
     };
   }, [apiStatus]);
+
+  const refreshChecks = useCallback(async () => {
+    setChecksLoading(true);
+    try {
+      const raw = await api.checks();
+      setChecksRaw(raw);
+      setChecks(summariseChecks(raw));
+    } catch {
+      // The sidebar card simply stays hidden; the drawer shows its own state.
+    } finally {
+      setChecksLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (apiStatus === 'up') void refreshChecks();
+  }, [apiStatus, refreshChecks]);
 
   // Restore the last analysis after a reload, unless a deep link is about to load a sample.
   useEffect(() => {
@@ -320,13 +341,17 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     return ds;
   }, []);
 
-  const runAnalysis = useCallback(async (attribution: AttributionMode, periodEnd?: string, dsId?: string) => {
+  const runAnalysis = useCallback(async (attribution: AttributionMode, periodEnd?: string, dsId?: string, handling?: number) => {
     const id = dsId ?? datasetIdRef.current;
     if (!id) throw new Error('Load a dataset first.');
     const seq = ++analysisSeq.current;
     setAnalysing(true);
     try {
-      const a = await api.createAnalysis(id, { attribution, ...(periodEnd ? { period_end: periodEnd } : {}) });
+      const a = await api.createAnalysis(id, {
+        attribution,
+        ...(periodEnd ? { period_end: periodEnd } : {}),
+        ...(handling !== undefined && handling > 0 ? { config: { handling_default_inr: handling } } : {}),
+      });
       if (seq === analysisSeq.current) {
         setAnalysis(a);
         setDatasetId(a.dataset_id ?? id);
@@ -400,6 +425,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setDrawerOpen(true);
   }, []);
 
+  const openChecks = useCallback(() => {
+    setDrawer({ kind: 'checks' });
+    setDrawerOpen(true);
+  }, []);
+
+  const openAbout = useCallback(() => {
+    setDrawer({ kind: 'about' });
+    setDrawerOpen(true);
+  }, []);
+
   const closeDrawer = useCallback(() => setDrawerOpen(false), []);
 
   const showToast = useCallback((text: string) => setToast({ id: Date.now(), text }), []);
@@ -418,6 +453,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       engineVersion,
       dbStatus,
       checks,
+      checksRaw,
+      checksLoading,
+      refreshChecks,
       samples: samples ?? FALLBACK_SAMPLES,
       dataset,
       datasetId,
@@ -445,6 +483,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       openWorked,
       openBridge,
       openMargin,
+      openChecks,
+      openAbout,
       closeDrawer,
       ledgerTab,
       setLedgerTab,
@@ -462,6 +502,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       engineVersion,
       dbStatus,
       checks,
+      checksRaw,
+      checksLoading,
+      refreshChecks,
       samples,
       dataset,
       datasetId,
@@ -487,6 +530,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       openWorked,
       openBridge,
       openMargin,
+      openChecks,
+      openAbout,
       closeDrawer,
       ledgerTab,
       ledgerFilter,
