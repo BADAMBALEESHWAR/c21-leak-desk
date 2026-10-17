@@ -111,6 +111,19 @@ const summary = (d: DatasetRecord) => ({
 
 /** Adding to saved data: the later of two ISO dates. */
 const later = (a: string, b: string) => (a > b ? a : b);
+/** An upload aimed at an older version (a second tab, a quick double upload) goes onto the newest one instead. */
+async function newestVersion(start: DatasetRecord, account: string): Promise<DatasetRecord> {
+  const versions = await datasets.summaries(account, 'created_at', '_id supersedes created_at');
+  let current = start;
+  for (let hop = 0; hop < 50; hop++) {
+    const next = versions.find((v) => v.supersedes === current._id);
+    const record = next ? await datasets.get(next._id) : null;
+    if (!record) break;
+    current = record;
+  }
+  return current;
+}
+
 /** End of the month of the latest dated order in an upload, or null when none is dated. */
 const newPeriodEnd = (orders: unknown[]) => {
   const dated = orders.filter((o): o is { date: string } => typeof (o as { date?: unknown })?.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test((o as { date: string }).date));
@@ -126,8 +139,9 @@ datasetsRouter.post(
     const started = Date.now();
     // append_to: add this upload to an existing dataset; orders whose id is already saved are ignored, never counted twice.
     const appendTo = typeof req.query.append_to === 'string' ? req.query.append_to : typeof req.body?.append_to === 'string' ? req.body.append_to : '';
-    const base = appendTo ? await datasets.get(appendTo) : null;
-    if (appendTo && (!base || !canSee(base.account, req.user))) throw notFound('Dataset', appendTo);
+    const first = appendTo ? await datasets.get(appendTo) : null;
+    if (appendTo && (!first || !canSee(first.account, req.user))) throw notFound('Dataset', appendTo);
+    const base = first ? await newestVersion(first, accountOf(req.user)) : null;
     const incoming = await readIncoming(req);
     const existing = base ? new Set(base.rows.map((r) => r.order_id)) : undefined;
     const v = validateRows(incoming.ingested.orders, {
