@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { AnalysisResponse, Candidate, Observed, OrderDelta, OverrideKey, Recommendation, ScenarioColumn, ScenarioOverrides, ScenarioResponse } from '../api/types';
 import { BarRows, type BarRow } from '../charts/BarRows';
 import { ChartCard } from '../charts/ChartCard';
@@ -12,6 +13,7 @@ import { Change, Money } from '../components/Money';
 import { NumberInput, SliderField } from '../components/SliderField';
 import { Table, type Column } from '../components/Table';
 import { Callout, Collapsible, InfoTip, revealElement, Skeleton, StatCard } from '../components/ui';
+import { lower } from '../i18n';
 import { formatCount, formatInr, formatPct, formatSignedDecimal, formatSignedInr, plural } from '../lib/format';
 import { OVERRIDE_LABELS } from '../lib/labels';
 import { hrefFor, navigate } from '../lib/router';
@@ -32,11 +34,11 @@ function sliderMax(avg: number | null): number {
 }
 
 const CHOICES: Array<{ key: OverrideKey; title: string }> = [
-  { key: 'return_rate_pct', title: 'Return rate' },
-  { key: 'recovery_pct', title: 'Recovery per return' },
-  { key: 'shipping_inr', title: 'Shipping per order' },
-  { key: 'refund_policy', title: 'Refund policy' },
-  { key: 'ads_per_order', title: 'Ads per order' },
+  { key: 'return_rate_pct', title: 'scenario.returnRate' },
+  { key: 'recovery_pct', title: 'scenario.recoveryPerReturn' },
+  { key: 'shipping_inr', title: 'scenario.shippingCost' },
+  { key: 'refund_policy', title: 'scenario.refundPolicy' },
+  { key: 'ads_per_order', title: 'scenario.adsPerOrder' },
 ];
 
 function observedText(key: OverrideKey, obs: Observed): string {
@@ -181,6 +183,7 @@ function ChoiceBody({ k, obs, overrides, onChange }: { k: OverrideKey; obs: Obse
 
 function Controls({ obs, overrides, onChange }: { obs: Observed; overrides: ScenarioOverrides; onChange: (o: ScenarioOverrides) => void }) {
   const groupName = useId();
+  const { t } = useTranslation();
   const active = OVERRIDE_KEYS.find((k) => overrides[k] !== undefined) ?? null;
   const [selected, setSelected] = useState<OverrideKey | null>(active);
 
@@ -196,7 +199,7 @@ function Controls({ obs, overrides, onChange }: { obs: Observed; overrides: Scen
 
   return (
     <fieldset className="choice-list">
-      <legend className="visually-hidden">Change one assumption</legend>
+      <legend className="visually-hidden">{t('scenario.changeOne')}</legend>
       {CHOICES.map((c) => {
         const isSel = selected === c.key;
         const value = overrideValueText(c.key, overrides, obs);
@@ -204,7 +207,7 @@ function Controls({ obs, overrides, onChange }: { obs: Observed; overrides: Scen
           <div key={c.key} className={`choice${isSel ? ' is-selected' : ''}${value ? ' is-changed' : ''}`}>
             <label className="choice-head">
               <input type="radio" name={groupName} checked={isSel} onChange={() => select(c.key)} />
-              <span className="choice-title">{c.title}</span>
+              <span className="choice-title">{t(c.title)}</span>
               <span className="choice-meta">{value ? <Pill tone="primary">{value}</Pill> : observedText(c.key, obs)}</span>
             </label>
             {isSel ? (
@@ -222,6 +225,8 @@ function Controls({ obs, overrides, onChange }: { obs: Observed; overrides: Scen
 interface CompareRow {
   id: string;
   label: string;
+  /** Translation key, where the line has one; otherwise the English label shows. */
+  labelKey?: string;
   key: keyof Omit<ScenarioColumn, 'by_channel'>;
   goodWhen: 'up' | 'down';
   money: boolean;
@@ -231,14 +236,14 @@ interface CompareRow {
 const ROWS: CompareRow[] = [
   { id: 'computed', label: 'Orders computed', key: 'computed', goodWhen: 'up', money: false },
   { id: 'returns', label: 'Returns', key: 'returns', goodWhen: 'down', money: false },
-  { id: 'net', label: 'Net sales', key: 'net_sales_inr', goodWhen: 'up', money: true },
+  { id: 'net', label: 'Net sales', labelKey: 'ledger.netSales', key: 'net_sales_inr', goodWhen: 'up', money: true },
   { id: 'npc', label: 'Net product cost', key: 'net_product_cost_inr', goodWhen: 'down', money: true },
-  { id: 'ship', label: 'Shipping', key: 'shipping_inr', goodWhen: 'down', money: true },
+  { id: 'ship', label: 'Shipping', labelKey: 'ledger.shipping', key: 'shipping_inr', goodWhen: 'down', money: true },
   { id: 'fee', label: 'Payment fee', key: 'payment_fee_inr', goodWhen: 'down', money: true },
-  { id: 'ret', label: 'Return cost', key: 'return_cost_inr', goodWhen: 'down', money: true },
-  { id: 'hand', label: 'Handling', key: 'handling_inr', goodWhen: 'down', money: true },
-  { id: 'ads', label: 'Ads', key: 'ads_inr', goodWhen: 'down', money: true },
-  { id: 'contribution', label: 'Contribution', key: 'contribution_inr', goodWhen: 'up', money: true, strong: true },
+  { id: 'ret', label: 'Return cost', labelKey: 'ledger.returnCost', key: 'return_cost_inr', goodWhen: 'down', money: true },
+  { id: 'hand', label: 'Handling', labelKey: 'ledger.handling', key: 'handling_inr', goodWhen: 'down', money: true },
+  { id: 'ads', label: 'Ads', labelKey: 'ledger.ads', key: 'ads_inr', goodWhen: 'down', money: true },
+  { id: 'contribution', label: 'Contribution', labelKey: 'ledger.contribution', key: 'contribution_inr', goodWhen: 'up', money: true, strong: true },
 ];
 
 function cellValue(col: ScenarioColumn | ScenarioResponse['delta'], r: CompareRow, isDelta: boolean) {
@@ -250,11 +255,12 @@ function cellValue(col: ScenarioColumn | ScenarioResponse['delta'], r: CompareRo
 }
 
 function Comparison({ s }: { s: ScenarioResponse }) {
+  const { t } = useTranslation();
   const columns: Column<CompareRow>[] = [
-    { id: 'line', header: 'Line', rowHeader: true, cell: (r) => r.label },
-    { id: 'base', header: 'Baseline', align: 'right', cell: (r) => cellValue(s.baseline, r, false) },
-    { id: 'scenario', header: 'Scenario', align: 'right', cell: (r) => cellValue(s.scenario, r, false) },
-    { id: 'change', header: 'Change', align: 'right', cell: (r) => cellValue(s.delta, r, true) },
+    { id: 'line', header: t('scenario.line'), rowHeader: true, cell: (r) => (r.labelKey ? t(r.labelKey) : r.label) },
+    { id: 'base', header: t('scenario.baseline'), align: 'right', cell: (r) => cellValue(s.baseline, r, false) },
+    { id: 'scenario', header: t('scenario.scenario'), align: 'right', cell: (r) => cellValue(s.scenario, r, false) },
+    { id: 'change', header: t('scenario.delta'), align: 'right', cell: (r) => cellValue(s.delta, r, true) },
   ];
   return (
     <Table
@@ -269,11 +275,12 @@ function Comparison({ s }: { s: ScenarioResponse }) {
 }
 
 function OrderDeltas({ rows }: { rows: OrderDelta[] }) {
+  const { t } = useTranslation();
   const columns: Column<OrderDelta>[] = [
-    { id: 'order', header: 'Order', rowHeader: true, cell: (d) => d.order_id },
-    { id: 'base', header: 'Baseline', align: 'right', cell: (d) => <Money value={d.baseline_inr} tone="contribution" /> },
-    { id: 'scenario', header: 'Scenario', align: 'right', cell: (d) => <Money value={d.scenario_inr} tone="contribution" /> },
-    { id: 'delta', header: 'Change', align: 'right', cell: (d) => (d.delta_inr === null ? <Unknown /> : <Change value={d.delta_inr} goodWhen="up" />) },
+    { id: 'order', header: t('ledger.order'), rowHeader: true, cell: (d) => d.order_id },
+    { id: 'base', header: t('scenario.baseline'), align: 'right', cell: (d) => <Money value={d.baseline_inr} tone="contribution" /> },
+    { id: 'scenario', header: t('scenario.scenario'), align: 'right', cell: (d) => <Money value={d.scenario_inr} tone="contribution" /> },
+    { id: 'delta', header: t('scenario.delta'), align: 'right', cell: (d) => (d.delta_inr === null ? <Unknown /> : <Change value={d.delta_inr} goodWhen="up" />) },
   ];
   return <Table caption="Per-order change, top 10 by size" columns={columns} rows={rows.slice(0, 10)} rowKey={(d) => d.order_id} emptyText="No order changes." />;
 }
@@ -291,6 +298,7 @@ function ContributionCards({
   onCompare: () => void;
   onControls: () => void;
 }) {
+  const { t } = useTranslation();
   const base = s ? s.baseline.contribution_inr : a.totals.contribution_inr;
   const scen = s ? s.scenario.contribution_inr : null;
   const delta = s ? s.delta.contribution_inr : null;
@@ -298,13 +306,13 @@ function ContributionCards({
   return (
     <div className="kpi-grid kpi-grid-2">
       <StatCard
-        label="Baseline contribution"
+        label={t('scenario.baselineContribution')}
         large
         value={<Money value={base} tone="contribution" />}
         sub={
           a.totals.partial ? (
             <Pill tone="warning" dot>
-              Partial · {a.totals.unknown_count} unknown
+              {t('status.partial')} · {a.totals.unknown_count} {lower(t('status.unknown'))}
             </Pill>
           ) : (
             'Observed, as in the ledger'
@@ -316,7 +324,7 @@ function ContributionCards({
       />
       {s ? (
         <StatCard
-          label="Scenario contribution"
+          label={t('scenario.scenarioContribution')}
           large
           tone="primary"
           value={<Money value={scen} tone="contribution" />}
@@ -333,14 +341,14 @@ function ContributionCards({
       ) : loading ? (
         <div className="card kpi kpi-large kpi-primary" aria-busy="true">
           <span className="kpi-head">
-            <span className="kpi-label">Scenario contribution</span>
+            <span className="kpi-label">{t('scenario.scenarioContribution')}</span>
           </span>
           <Skeleton width="60%" height={30} className="skeleton-gap" />
           <Skeleton width="40%" height={14} className="skeleton-gap" />
         </div>
       ) : (
         <StatCard
-          label="Scenario contribution"
+          label={t('scenario.scenarioContribution')}
           large
           tone="primary"
           value={<span className="kpi-none">—</span>}
@@ -355,13 +363,14 @@ function ContributionCards({
 }
 
 function RecommendationCard({ rec, scenario, why, whySource }: { rec: Recommendation; scenario: ScenarioResponse | null; why: string; whySource: 'template' | 'ai' }) {
+  const { t } = useTranslation();
   const before = scenario?.baseline_recommendation;
   return (
     <section className="card rec-card" aria-labelledby="rec-title">
       <div className="rec-top">
         <span className="pill pill-ai">
           <Icon name="sparkles" size={12} strokeWidth={2} />
-          Recommendation
+          {t('scenario.recommendation')}
         </span>
         <span className="muted small">{scenario ? 'under this scenario' : 'at the observed baseline'}</span>
       </div>
@@ -392,20 +401,21 @@ function RecommendationCard({ rec, scenario, why, whySource }: { rec: Recommenda
         </div>
       </div>
       <p className="rec-confidence">
-        <ConfidenceBadge confidence={rec.confidence} prefix="confidence" />
+        <ConfidenceBadge confidence={rec.confidence} prefix={lower(t('scenario.confidence'))} />
         <span>{rec.confidence_reason}</span>
       </p>
       <p className="rec-why">
         {why} <SourceTag source={whySource} />
       </p>
       <ButtonLink variant="primary" href={hrefFor('decision')} iconRight="arrow-right">
-        Use this in a decision
+        {t('actions.useInDecision')}
       </ButtonLink>
     </section>
   );
 }
 
 function CandidatesChart({ rec, candidates }: { rec: Recommendation; candidates: Candidate[] }) {
+  const { t } = useTranslation();
   const rows: BarRow[] = candidates.map((c) => ({
     key: c.intervention,
     label: c.label,
@@ -418,13 +428,13 @@ function CandidatesChart({ rec, candidates }: { rec: Recommendation; candidates:
       <caption className="visually-hidden">Candidates with rule, change and driving orders</caption>
       <thead>
         <tr>
-          <th scope="col">Intervention</th>
-          <th scope="col">Rule</th>
+          <th scope="col">{t('decision.intervention')}</th>
+          <th scope="col">{t('scenario.rule')}</th>
           <th scope="col" className="r">
-            Change
+            {t('scenario.delta')}
           </th>
           <th scope="col" className="r">
-            Orders
+            {t('ledger.orders')}
           </th>
         </tr>
       </thead>
@@ -457,6 +467,7 @@ export function ScenarioScreen() {
   const current = analysis && scenario && scenario.analysis_id === analysis.analysis_id ? scenario : null;
   const [compareOpen, setCompareOpen] = useState(false);
   const controlsRef = useRef<HTMLElement>(null);
+  const { t } = useTranslation();
 
   const openCompare = () => {
     setCompareOpen(true);
@@ -482,7 +493,7 @@ export function ScenarioScreen() {
   if (!analysis) {
     return (
       <div className="page">
-        <PageHeader title="Compare a scenario" subtitle="Change one assumption and watch the recommendation move." />
+        <PageHeader title={t('scenario.pageTitle')} subtitle="Change one assumption and watch the recommendation move." />
         <NeedsAnalysis sentence="No analysis yet. Load the sample orders to compare a scenario against the observed baseline." icon="sliders" />
       </div>
     );
@@ -498,7 +509,7 @@ export function ScenarioScreen() {
 
   return (
     <div className="page">
-      <PageHeader title="Compare a scenario" subtitle="Change one assumption at a time; the baseline is the observed ledger." />
+      <PageHeader title={t('scenario.pageTitle')} subtitle="Change one assumption at a time; the baseline is the observed ledger." />
 
       {refundGaps > 0 ? (
         <Callout tone="warning" title={`${refundGaps} ${plural(refundGaps, 'order has', 'orders have')} missing refund facts — results below are a labelled scenario.`} />
@@ -510,7 +521,7 @@ export function ScenarioScreen() {
         <section className="card controls-card" aria-labelledby="controls-title" ref={controlsRef}>
           <div className="card-head">
             <h2 id="controls-title" className="card-title">
-              Change one assumption
+              {t('scenario.changeOne')}
             </h2>
             <InfoTip text="A controlled scenario changes one thing. Picking another assumption resets the previous one to observed." label="Why one at a time" />
           </div>
@@ -551,10 +562,10 @@ export function ScenarioScreen() {
 
           <div className="card-actions">
             <Button variant="primary" icon="refresh" onClick={() => void runScenario(overrides)} disabled={!isRunnable(overrides) || scenarioLoading}>
-              Run scenario
+              {t('actions.runScenario')}
             </Button>
             <Button variant="secondary" onClick={() => setOverrides({})} disabled={!hasAny}>
-              Reset
+              {t('actions.reset')}
             </Button>
           </div>
           <ErrorNote error={scenarioError} />

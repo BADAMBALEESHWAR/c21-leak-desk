@@ -1,15 +1,16 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { toErrorInfo, type ErrorInfo } from '../api/client';
 import type { AttributionMode } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
 import { BRAND } from '../brand';
+import { lower } from '../i18n';
 import { formatCount } from '../lib/format';
 import { ATTRIBUTION_LABEL, datasetName } from '../lib/labels';
 import { hrefFor, type Route } from '../lib/router';
 import { useStore } from '../state/store';
 import { Button, ButtonLink } from './Button';
 import { Icon } from './Icon';
-import { STEPS } from './Sidebar';
 import { AttributionSegmented, InfoTip } from './ui';
 
 const ATTRIBUTION_ROUTES: Route[] = ['ledger', 'leaks', 'scenario', 'pulse'];
@@ -21,7 +22,7 @@ export function TopBar({ route, onError }: { route: Route; onError: (e: ErrorInf
   const auth = useAuth();
   const account = auth.mode === 'account';
   const [switching, setSwitching] = useState(false);
-  const step = STEPS.find((s) => s.route === route);
+  const { t } = useTranslation();
 
   const source = dataset?.source;
   const name = datasetName(source, dataset?.files, samples.find((s) => s.source === source)?.label);
@@ -54,7 +55,7 @@ export function TopBar({ route, onError }: { route: Route; onError: (e: ErrorInf
           <li>
             <a href={hrefFor('import')}>{BRAND.name}</a>
           </li>
-          <li aria-current="page">{step?.label ?? (route === 'pulse' ? 'Pulse' : '')}</li>
+          <li aria-current="page">{t(`nav.${route}`)}</li>
         </ol>
       </nav>
 
@@ -65,7 +66,8 @@ export function TopBar({ route, onError }: { route: Route; onError: (e: ErrorInf
             <span className="chip-main">{name}</span>
             <span className="chip-extra">
               {' '}
-              · {formatCount(orders)} orders{synthetic > 0 ? ` · ${formatCount(synthetic)} synthetic` : ''}
+              · {formatCount(orders)} {lower(t('ledger.orders'))}
+              {synthetic > 0 ? ` · ${formatCount(synthetic)} ${lower(t('status.syntheticTag'))}` : ''}
             </span>
           </span>
         ) : null}
@@ -85,7 +87,7 @@ export function TopBar({ route, onError }: { route: Route; onError: (e: ErrorInf
           className={account ? 'worked-btn is-compact' : 'worked-btn'}
           title="Worked order: one order explained line by line"
         >
-          Worked order
+          {t('actions.workedOrder')}
         </Button>
 
         {!auth.ready ? null : account ? (
@@ -95,13 +97,13 @@ export function TopBar({ route, onError }: { route: Route; onError: (e: ErrorInf
               title={saved ? 'This data is saved to your account.' : 'The database is not available: this data is in memory only and will not be kept.'}
             >
               <Icon name={saved ? 'check-circle' : 'database'} size={14} />
-              <span className="status-text">{saved ? 'Saved to your account' : 'In memory only'}</span>
+              <span className="status-text">{saved ? t('topbar.savedToAccount') : t('topbar.inMemory')}</span>
             </span>
           ) : null
         ) : (
           <span className="status-pill is-demo" title={DEMO_PILL_TIP}>
             <Icon name="info" size={14} />
-            <span className="status-text">Demo workspace</span>
+            <span className="status-text">{t('topbar.demoWorkspace')}</span>
           </span>
         )}
 
@@ -111,15 +113,15 @@ export function TopBar({ route, onError }: { route: Route; onError: (e: ErrorInf
               {(email ?? auth.user.sub).charAt(0).toUpperCase()}
             </span>
             <span className="user-email" title={email ?? undefined}>
-              {email ?? 'Signed in'}
+              {email ?? t('topbar.signedIn')}
             </span>
             <Button variant="ghost" size="sm" icon="log-out" className="signout-btn" onClick={auth.signOut}>
-              Sign out
+              {t('actions.signOut')}
             </Button>
           </span>
         ) : auth.hasSession ? null : (
           <ButtonLink variant="secondary" size="sm" icon="user" className="signin-btn" href={auth.loginUrl}>
-            Sign in
+            {t('actions.signIn')}
           </ButtonLink>
         )}
       </div>

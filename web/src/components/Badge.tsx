@@ -1,5 +1,7 @@
 import type { ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { Confidence } from '../api/types';
+import { lower } from '../i18n';
 import { Icon, type IconName } from './Icon';
 
 export type PillTone = 'gain' | 'loss' | 'unknown' | 'success' | 'danger' | 'warning' | 'primary' | 'neutral' | 'teal' | 'outline';
@@ -48,15 +50,20 @@ export function Badge({ variant, children, title }: { variant: 'gain' | 'loss' |
 
 /** Shown wherever a value is null. Never rendered as 0. */
 export function Unknown({ title }: { title?: string }) {
+  const { t } = useTranslation();
   return (
     <Pill tone="unknown" title={title ?? 'Not in the source data'}>
-      unknown
+      {lower(t('status.unknown'))}
     </Pill>
   );
 }
 
+export const CONFIDENCE_KEY: Record<Confidence, string> = { high: 'scenario.high', low: 'scenario.low', unknown: 'status.unknown' };
+
 export function ConfidenceBadge({ confidence, prefix }: { confidence: Confidence; prefix?: string }) {
-  const text = prefix ? `${prefix} ${confidence}` : confidence;
+  const { t } = useTranslation();
+  const word = CONFIDENCE_KEY[confidence] ? lower(t(CONFIDENCE_KEY[confidence])) : confidence;
+  const text = prefix ? `${prefix} ${word}` : word;
   if (confidence === 'high') return <Pill tone="success">{text}</Pill>;
   if (confidence === 'low') return <Pill tone="warning">{text}</Pill>;
   return (
@@ -68,13 +75,14 @@ export function ConfidenceBadge({ confidence, prefix }: { confidence: Confidence
 
 /** Where narrative text came from: the deterministic template or AI wording. */
 export function SourceTag({ source }: { source: 'template' | 'ai' }) {
+  const { t } = useTranslation();
   if (source === 'ai') {
     return (
       <span className="pill pill-ai">
         <Icon name="sparkles" size={12} strokeWidth={2} />
-        AI
+        {t('status.ai')}
       </span>
     );
   }
-  return <span className="pill pill-outline pill-xs">template</span>;
+  return <span className="pill pill-outline pill-xs">{lower(t('status.template'))}</span>;
 }

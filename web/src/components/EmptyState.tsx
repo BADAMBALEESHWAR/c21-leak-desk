@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { toErrorInfo, type ErrorInfo } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import { hrefFor } from '../lib/router';
@@ -11,6 +12,7 @@ import { EmptyPanel, ErrorCallout, SkeletonCards } from './ui';
 export function NeedsAnalysis({ sentence, icon = 'table' }: { sentence: string; icon?: IconName }) {
   const { importDataset, runAnalysis, restoring, analysing, importing, workspace } = useStore();
   const { mode } = useAuth();
+  const { t } = useTranslation();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<ErrorInfo | null>(null);
 
@@ -62,10 +64,10 @@ export function NeedsAnalysis({ sentence, icon = 'table' }: { sentence: string; 
         actions={
           <>
             <Button variant="primary" onClick={loadFixture} disabled={busy}>
-              {busy ? 'Loading…' : 'Load sample orders'}
+              {busy ? t('actions.loading') : t('actions.loadFixture')}
             </Button>
             <ButtonLink variant="secondary" href={hrefFor('import')} icon="upload-cloud">
-              Go to import
+              {t('actions.goToImport')}
             </ButtonLink>
           </>
         }
