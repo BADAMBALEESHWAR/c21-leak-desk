@@ -68,6 +68,8 @@ History of this snapshot, kept so the baseline is honest:
 
 UI smoke (`npm run ui:smoke`, Edge driving the real app at 20:00): 7 of 7 steps pass — load fixture, ₹ 6,000 reconciled, worked order ₹ 230, O05 drawer −₹ 180, channel mode still reconciled, check 3 flip ₹ 150 → ₹ 480, decision saved.
 
+- 21:20, after the product additions (CSV template, ledger export, editable handling estimate, 10,000-order performance test): `Tests  134 passed (134)` across 8 files; the full Docker stack (nginx, API, MongoDB) then passed `make check` PASS ×3 and the 8-step UI smoke. On this laptop 10,000 orders validate in 83 ms and analyse in 214 ms (Blueprint target: 2 s); a 3.1 MB upload of 10,000 orders is accepted and analysed through the API.
+
 Re-run before the business team joins and paste the result here if anything changed: `[time and summary lines]`
 
 ## 4. Check harness output
