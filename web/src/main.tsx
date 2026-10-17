@@ -1,5 +1,6 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
+import './i18n';
 import { App } from './App';
 import { AuthProvider } from './auth/AuthContext';
 import { BRAND } from './brand';

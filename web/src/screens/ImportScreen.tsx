@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type DragEvent, type ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
 import { api, toErrorInfo, type DatasetInput, type DatasetOptions, type ErrorInfo } from '../api/client';
 import type { AttributionMode, DatasetResponse, ValidationFlag, WorkspaceDataset } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
@@ -43,14 +44,15 @@ const OPTIONAL_FIELDS: Array<[string, string]> = [
   ['refund_date', 'YYYY-MM-DD; after period end is pending'],
 ];
 
+/** Translation keys for the reason pills. */
 const REASON_TAG: Record<ValidationFlag['reason'], string> = {
-  duplicate: 'Duplicate',
-  late_refund: 'Late refund',
-  mismatch: 'Mismatch',
-  unknown: 'Unknown',
-  invalid: 'Invalid',
-  schema: 'Schema',
-  rounded: 'Rounded',
+  duplicate: 'status.duplicate',
+  late_refund: 'status.lateRefund',
+  mismatch: 'status.mismatch',
+  unknown: 'status.unknown',
+  invalid: 'status.invalid',
+  schema: 'status.schema',
+  rounded: 'status.rounded',
 };
 
 const REASON_TONE: Record<ValidationFlag['reason'], 'primary' | 'warning' | 'danger' | 'neutral'> = {
@@ -90,6 +92,7 @@ function noteFor(ds: DatasetResponse, target: string | null): UploadNote | null 
 }
 
 function Report({ dataset, reveal, name, note }: { dataset: DatasetResponse; reveal: boolean; name: string; note: UploadNote | null }) {
+  const { t } = useTranslation();
   const appended = Boolean(dataset.appended_to);
   const dropped = Math.max(0, dataset.rows_in - dataset.rows_kept - dataset.rows_rejected);
   const ref = useRef<HTMLElement>(null);
@@ -122,7 +125,7 @@ function Report({ dataset, reveal, name, note }: { dataset: DatasetResponse; rev
     <section ref={ref} className="stack report" aria-labelledby="report-title">
       <div className="section-head">
         <h2 id="report-title" className="section-title">
-          Validation report
+          {t('import.report')}
         </h2>
         <span className="section-meta">
           {name} · period end {formatDate(dataset.period_end)}
@@ -245,9 +248,9 @@ function Report({ dataset, reveal, name, note }: { dataset: DatasetResponse; rev
             <div className="chips" role="group" aria-label="Filter flagged rows">
               {(
                 [
-                  ['all', 'All flags', dataset.flags.length],
-                  ['removed', 'Dropped or rejected', removedFlags.length],
-                  ['kept', 'Kept with a flag', keptFlags.length],
+                  ['all', t('import.allFlags'), dataset.flags.length],
+                  ['removed', t('import.removedFlags'), removedFlags.length],
+                  ['kept', t('import.keptFlags'), keptFlags.length],
                 ] as Array<['all' | 'removed' | 'kept', string, number]>
               ).map(([id, label, n]) => (
                 <button key={id} type="button" className={`chip-filter${flagView === id ? ' is-on' : ''}`} aria-pressed={flagView === id} onClick={() => setFlagView(id)}>
@@ -262,10 +265,10 @@ function Report({ dataset, reveal, name, note }: { dataset: DatasetResponse; rev
               <caption className="visually-hidden">Validation flags with line, detail, reason and action</caption>
               <thead>
                 <tr>
-                  <th scope="col">Order</th>
-                  <th scope="col">Detail</th>
-                  <th scope="col">Reason</th>
-                  <th scope="col">Action</th>
+                  <th scope="col">{t('ledger.order')}</th>
+                  <th scope="col">{t('import.detail')}</th>
+                  <th scope="col">{t('import.reason')}</th>
+                  <th scope="col">{t('import.action')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -278,7 +281,7 @@ function Report({ dataset, reveal, name, note }: { dataset: DatasetResponse; rev
                     <td className="cell-wrap">{f.detail}</td>
                     <td>
                       <Pill tone={REASON_TONE[f.reason] ?? 'neutral'} dot>
-                        {REASON_TAG[f.reason] ?? f.reason}
+                        {REASON_TAG[f.reason] ? t(REASON_TAG[f.reason]) : f.reason}
                       </Pill>
                     </td>
                     <td>
@@ -346,6 +349,7 @@ const savedKind = (d: WorkspaceDataset) =>
 function SavedData({ onOpened }: { onOpened: () => void }) {
   const { workspace, workspaceStatus, workspaceError, refreshWorkspace, openSaved, openingId, datasetId } = useStore();
   const [error, setError] = useState<ErrorInfo | null>(null);
+  const { t } = useTranslation();
   const list = workspace?.datasets ?? [];
 
   const open = async (d: WorkspaceDataset) => {
@@ -362,7 +366,7 @@ function SavedData({ onOpened }: { onOpened: () => void }) {
     return (
       <section className="card saved-data saved-data-error" aria-labelledby="saved-data-title">
         <h2 id="saved-data-title" className="card-title">
-          Your saved data
+          {t('import.savedData')}
         </h2>
         <ErrorCallout error={workspaceError} />
         <Button variant="secondary" size="sm" icon="refresh" onClick={() => void refreshWorkspace()}>
@@ -378,7 +382,7 @@ function SavedData({ onOpened }: { onOpened: () => void }) {
       <div className="table-card-head">
         <div>
           <h2 id="saved-data-title" className="card-title">
-            Your saved data
+            {t('import.savedData')}
           </h2>
           <p className="card-sub">Newest first. Open one to see its ledger and owner dashboard.</p>
         </div>
@@ -391,17 +395,17 @@ function SavedData({ onOpened }: { onOpened: () => void }) {
           <caption className="visually-hidden">Your saved datasets, newest first</caption>
           <thead>
             <tr>
-              <th scope="col">Data</th>
+              <th scope="col">{t('import.data')}</th>
               <th scope="col" className="r">
-                Orders
+                {t('ledger.orders')}
               </th>
-              <th scope="col">Period end</th>
-              <th scope="col">Saved</th>
+              <th scope="col">{t('common.periodEnd')}</th>
+              <th scope="col">{t('common.saved')}</th>
               <th scope="col" className="r">
-                Contribution
+                {t('ledger.contribution')}
               </th>
               <th scope="col">
-                <span className="visually-hidden">Open</span>
+                <span className="visually-hidden">{t('actions.open')}</span>
               </th>
             </tr>
           </thead>
@@ -429,11 +433,11 @@ function SavedData({ onOpened }: { onOpened: () => void }) {
                   <td className="saved-action">
                     {current ? (
                       <Pill tone="success" dot>
-                        Open now
+                        {t('status.openNow')}
                       </Pill>
                     ) : (
                       <Button variant="secondary" size="sm" iconRight="arrow-right" onClick={() => void open(d)} disabled={openingId !== null} aria-label={`Open ${name}`}>
-                        {busy ? 'Opening…' : 'Open'}
+                        {busy ? t('actions.opening') : t('actions.open')}
                       </Button>
                     )}
                   </td>
@@ -469,6 +473,7 @@ export function ImportScreen() {
   const [appendOn, setAppendOn] = useState(true);
   const [uploadNote, setUploadNote] = useState<UploadNote | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const { t } = useTranslation();
 
   useEffect(() => {
     if (dataset) setPeriodEnd(dataset.period_end);
@@ -583,29 +588,29 @@ export function ImportScreen() {
     <section className="hero card" aria-labelledby="import-title">
       <div className="hero-text">
         <span className="pill pill-outline hero-kicker">
-          <Icon name="upload-cloud" size={14} /> Step 1 of 5
+          <Icon name="upload-cloud" size={14} /> {t('import.kicker')}
         </span>
         <h1 id="import-title" className="hero-title">
-          Import order economics
+          {t('import.title')}
         </h1>
         <p className="hero-sub">Load demo data or drop your own files. Every row is validated before anything is counted.</p>
         <div className="demo-data" role="group" aria-labelledby="demo-data-title">
           <h2 id="demo-data-title" className="demo-data-title">
-            Demo data
+            {t('status.synthetic')}
           </h2>
           <div className="hero-actions">
             <Button variant="primary" size="lg" onClick={() => void load({ source: 'fixture' }, 'fixture')} disabled={busy}>
-              {validating === 'fixture' ? 'Loading…' : 'Load sample orders'}
+              {validating === 'fixture' ? t('actions.loading') : t('actions.loadFixture')}
             </Button>
             <Button variant="secondary" size="lg" onClick={() => void load({ source: 'extended' }, 'extended')} disabled={busy}>
-              {validating === 'extended' ? 'Loading…' : 'Load extended sample'}
+              {validating === 'extended' ? t('actions.loading') : t('actions.loadExtended')}
             </Button>
           </div>
           <div className="demo12-row">
             <Button variant="ghost" icon="bar-chart" onClick={() => void loadDemo12m()} disabled={busy} className="demo12-btn">
-              {validating === 'demo_12m' ? 'Loading 3,020 orders…' : 'Load 12-month demo'}
+              {validating === 'demo_12m' ? t('actions.loadingDemo12m') : t('actions.loadDemo12m')}
             </Button>
-            <Pill tone="neutral">synthetic, labelled</Pill>
+            <Pill tone="neutral">{t('status.syntheticLabelled')}</Pill>
             <span className="demo12-note">Opens Pulse owner analytics on a year of orders.</span>
           </div>
         </div>
@@ -624,10 +629,10 @@ export function ImportScreen() {
     <section className="hero card hero-first" aria-labelledby="import-title">
       <div className="hero-text">
         <span className="pill pill-outline hero-kicker">
-          <Icon name="database" size={14} /> Your workspace
+          <Icon name="database" size={14} /> {t('import.yourWorkspace')}
         </span>
         <h1 id="import-title" className="hero-title">
-          Upload your first orders
+          {t('import.titleFirst')}
         </h1>
         <p className="hero-sub">
           Drop a CSV or JSON export of your orders: one file, or up to {MAX_FILES} monthly files at once. Every row is validated and saved to your
@@ -635,10 +640,10 @@ export function ImportScreen() {
         </p>
         <div className="hero-actions">
           <Button variant="primary" size="lg" icon="upload-cloud" onClick={browse} disabled={busy}>
-            Choose files
+            {t('actions.chooseFiles')}
           </Button>
           <ButtonLink variant="secondary" size="lg" icon="download" href={api.templateUrl()} download="profyn-orders-template.csv">
-            CSV template
+            {t('actions.csvTemplate')}
           </ButtonLink>
         </div>
       </div>
@@ -654,10 +659,10 @@ export function ImportScreen() {
     <section className="hero card" aria-labelledby="import-title">
       <div className="hero-text">
         <span className="pill pill-outline hero-kicker">
-          <Icon name="database" size={14} /> Your workspace
+          <Icon name="database" size={14} /> {t('import.yourWorkspace')}
         </span>
         <h1 id="import-title" className="hero-title">
-          Import orders
+          {t('import.titleWorkspace')}
         </h1>
         <p className="hero-sub">Add this month&rsquo;s export or open saved data. Every row is validated before anything is counted, and orders already saved are skipped.</p>
       </div>
@@ -701,14 +706,14 @@ export function ImportScreen() {
             <span className="dropzone-icon" aria-hidden="true">
               <Icon name="upload-cloud" size={24} />
             </span>
-            <p className="dropzone-title">{target && appendOn ? `Drop new orders to add to ${target.name}` : 'Drag and drop JSON or CSV files'}</p>
+            <p className="dropzone-title">{target && appendOn ? `Drop new orders to add to ${target.name}` : t('actions.dropFile')}</p>
             <p className="dropzone-sub">One file, or up to {MAX_FILES} at once (e.g. one per month), merged into one dataset · template column names · 50 MB each, 1,00,000 orders in total</p>
             <span className="dropzone-actions">
               <Button variant="secondary" icon="file" onClick={browse} disabled={busy}>
-                Browse files
+                {t('actions.browseFiles')}
               </Button>
               <ButtonLink variant="ghost" icon="download" href={api.templateUrl()} download="profyn-orders-template.csv">
-                Download CSV template
+                {t('actions.downloadTemplate')}
               </ButtonLink>
             </span>
             <input
@@ -743,7 +748,7 @@ export function ImportScreen() {
                   Go back to your workspace
                 </a>
               ) : (
-                <a href={auth.loginUrl}>Sign in</a>
+                <a href={auth.loginUrl}>{t('actions.signIn')}</a>
               )}{' '}
               to keep your data together.
             </p>
@@ -756,7 +761,7 @@ export function ImportScreen() {
 
         <section className="card options-card" aria-labelledby="options-title">
           <h2 id="options-title" className="card-title">
-            Analysis options
+            {t('import.options')}
           </h2>
           <div className="field">
             <span className="field-label" id="attr-label">
@@ -784,7 +789,7 @@ export function ImportScreen() {
             </span>
           </div>
           <Button variant="primary" size="lg" className="btn-block" iconRight="arrow-right" onClick={() => void onContinue()} disabled={!canContinue}>
-            {analysing ? 'Analysing…' : 'Continue to ledger'}
+            {analysing ? t('actions.analysing') : t('actions.continueLedger')}
           </Button>
           {!dataset && !datasetId ? <p className="muted small">{account ? 'Upload a file or open saved data first.' : 'Load a sample or a file first.'}</p> : null}
           <ErrorCallout error={continueError} />
@@ -821,22 +826,22 @@ export function ImportScreen() {
         <section className="stack" aria-labelledby="drills-title">
           <div className="section-head">
             <h2 id="drills-title" className="section-title">
-              Data-quality drills
+              {t('import.drills')}
             </h2>
             <span className="section-meta">Negative tests; each one loads a sample and shows how the checks react.</span>
           </div>
           <div className="drill-grid">
             {drills.map((s) => {
-              const tag = DRILL_TAGS[s.source] ?? { tag: 'Drill', tone: 'primary' as const };
+              const tag = DRILL_TAGS[s.source] ?? { tag: 'Drill', key: undefined, tone: 'primary' as const };
               return (
                 <button key={s.source} type="button" className="card drill" onClick={() => void load({ source: s.source }, s.source)} disabled={busy}>
                   <span className="drill-top">
                     <Pill tone={tag.tone} dot>
-                      {tag.tag}
+                      {tag.key ? t(tag.key) : tag.tag}
                     </Pill>
                     <Icon name="arrow-up-right" size={18} className="drill-arrow" />
                   </span>
-                  <span className="drill-title">{validating === s.source ? 'Loading…' : s.label}</span>
+                  <span className="drill-title">{validating === s.source ? t('actions.loading') : s.label}</span>
                   <span className="drill-text">{s.description}</span>
                 </button>
               );

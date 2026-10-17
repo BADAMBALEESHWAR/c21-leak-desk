@@ -1,11 +1,32 @@
 // Number and date formatting. Indian digit grouping, U+2212 minus, no-break space after ₹.
+import { i18n, localeFor } from '../i18n';
 
 export const MINUS = '−';
 export const NBSP = ' ';
 
-const moneyFmt = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 2 });
-const countFmt = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 });
-const oneDecimalFmt = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 1 });
+interface Formatters {
+  money: Intl.NumberFormat;
+  count: Intl.NumberFormat;
+  oneDecimal: Intl.NumberFormat;
+}
+
+const formatters = new Map<string, Formatters>();
+
+/** Number formatters for the UI language, made once per locale. Latin digits ("-u-nu-latn") in every language. */
+function fmt(): Formatters {
+  const locale = localeFor(i18n.language);
+  let f = formatters.get(locale);
+  if (!f) {
+    const tag = `${locale}-u-nu-latn`;
+    f = {
+      money: new Intl.NumberFormat(tag, { maximumFractionDigits: 2 }),
+      count: new Intl.NumberFormat(tag, { maximumFractionDigits: 0 }),
+      oneDecimal: new Intl.NumberFormat(tag, { maximumFractionDigits: 1 }),
+    };
+    formatters.set(locale, f);
+  }
+  return f;
+}
 
 function isZero(n: number, places: number): boolean {
   return Math.round(Math.abs(n) * 10 ** places) === 0;
@@ -13,7 +34,7 @@ function isZero(n: number, places: number): boolean {
 
 /** ₹ 1,84,000 · −₹ 180 · ₹ 0 */
 export function formatInr(n: number): string {
-  const body = `₹${NBSP}${moneyFmt.format(Math.abs(n))}`;
+  const body = `₹${NBSP}${fmt().money.format(Math.abs(n))}`;
   return n < 0 && !isZero(n, 2) ? `${MINUS}${body}` : body;
 }
 
@@ -25,7 +46,7 @@ export function formatSignedInr(n: number): string {
 
 /** Percent with one decimal at most: 20% · 87.5% · −3.2% */
 export function formatPct(n: number): string {
-  const body = `${oneDecimalFmt.format(Math.abs(n))}%`;
+  const body = `${fmt().oneDecimal.format(Math.abs(n))}%`;
   return n < 0 && !isZero(n, 1) ? `${MINUS}${body}` : body;
 }
 
@@ -35,13 +56,13 @@ export function formatSignedPct(n: number): string {
 }
 
 export function formatCount(n: number): string {
-  const body = countFmt.format(Math.abs(n));
+  const body = fmt().count.format(Math.abs(n));
   return n < 0 ? `${MINUS}${body}` : body;
 }
 
 /** Up to one decimal, signed with U+2212 when negative. */
 export function formatDecimal(n: number): string {
-  const body = oneDecimalFmt.format(Math.abs(n));
+  const body = fmt().oneDecimal.format(Math.abs(n));
   return n < 0 && !isZero(n, 1) ? `${MINUS}${body}` : body;
 }
 

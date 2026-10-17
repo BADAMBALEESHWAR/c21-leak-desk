@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useId, useState, type FormEvent } from 'react';
+import { useTranslation } from 'react-i18next';
 import { api, ApiError, authDownload, toErrorInfo, type ErrorInfo } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import type { AnalysisResponse, Candidate, DecisionRequest, DecisionSaved, DecisionSummary, OverrideKey, Recommendation, ScenarioResponse, TextSource } from '../api/types';
-import { ConfidenceBadge, Pill, SourceTag } from '../components/Badge';
+import { CONFIDENCE_KEY, ConfidenceBadge, Pill, SourceTag } from '../components/Badge';
 import { Button, ButtonLink } from '../components/Button';
 import { NeedsAnalysis } from '../components/EmptyState';
 import { ErrorNote } from '../components/ErrorNote';
@@ -11,6 +12,7 @@ import { Money } from '../components/Money';
 import { PageHeader } from '../components/Page';
 import { Table, type Column } from '../components/Table';
 import { Callout } from '../components/ui';
+import { lower } from '../i18n';
 import { capitalise, formatDateTime, formatInr, formatPct, formatSignedInr } from '../lib/format';
 import { OVERRIDE_LABELS } from '../lib/labels';
 import { hrefFor, navigate } from '../lib/router';
@@ -36,6 +38,7 @@ function FieldError({ id, message }: { id: string; message?: string }) {
 
 function DecisionsList({ version }: { version: number }) {
   const { showToast } = useStore();
+  const { t } = useTranslation();
   const onDownloadError = (e: ErrorInfo) => showToast(e.message, 'info');
   const [rows, setRows] = useState<DecisionSummary[] | null>(null);
   const [error, setError] = useState<ErrorInfo | null>(null);
@@ -56,26 +59,26 @@ function DecisionsList({ version }: { version: number }) {
   }, [refresh, version]);
 
   const columns: Column<DecisionSummary>[] = [
-    { id: 'saved', header: 'Saved', rowHeader: true, className: 'col-nowrap', cell: (d) => <span className="num">{formatDateTime(d.saved_at)}</span> },
-    { id: 'intervention', header: 'Intervention', cell: (d) => d.intervention_label || d.intervention },
-    { id: 'expected', header: 'Expected ₹', align: 'right', cell: (d) => <Money value={d.expected_delta_inr} tone="contribution" /> },
+    { id: 'saved', header: t('common.saved'), rowHeader: true, className: 'col-nowrap', cell: (d) => <span className="num">{formatDateTime(d.saved_at)}</span> },
+    { id: 'intervention', header: t('decision.intervention'), cell: (d) => d.intervention_label || d.intervention },
+    { id: 'expected', header: t('decision.expectedInr'), align: 'right', cell: (d) => <Money value={d.expected_delta_inr} tone="contribution" /> },
     {
       id: 'confidence',
-      header: 'Confidence',
+      header: t('scenario.confidence'),
       cell: (d) => (d.confidence === 'custom' ? <Pill tone="neutral">custom</Pill> : <ConfidenceBadge confidence={d.confidence} />),
     },
-    { id: 'owner', header: 'Owner', cell: (d) => d.owner },
+    { id: 'owner', header: t('decision.owner'), cell: (d) => d.owner },
     {
       id: 'export',
-      header: 'Export',
+      header: t('actions.export'),
       className: 'col-nowrap',
       cell: (d) => (
         <span className="export-links">
           <ButtonLink variant="secondary" size="sm" icon="download" href={api.exportUrl(d.decision_id, 'md')} download onClick={authDownload(api.exportUrl(d.decision_id, 'md'), `decision-${d.decision_id}.md`, onDownloadError)}>
-            Export Markdown
+            {t('actions.exportMd')}
           </ButtonLink>
           <ButtonLink variant="secondary" size="sm" icon="download" href={api.exportUrl(d.decision_id, 'json')} download onClick={authDownload(api.exportUrl(d.decision_id, 'json'), `decision-${d.decision_id}.json`, onDownloadError)}>
-            Export JSON
+            {t('actions.exportJson')}
           </ButtonLink>
         </span>
       ),
@@ -86,7 +89,7 @@ function DecisionsList({ version }: { version: number }) {
     <section className="card table-card" aria-labelledby="decisions-title">
       <div className="table-card-head">
         <h2 id="decisions-title" className="card-title">
-          Saved decisions
+          {t('decision.savedList')}
         </h2>
         {rows ? <span className="muted small">{rows.length} saved</span> : null}
       </div>
@@ -116,15 +119,16 @@ function overrideText(o: Record<string, unknown> | undefined | null): string {
 
 function Snapshot({ a, s }: { a: AnalysisResponse; s: ScenarioResponse | null }) {
   const { focusLedgerTable } = useStore();
+  const { t } = useTranslation();
   const contributionText = a.totals.contribution_inr === null ? 'unknown' : formatInr(a.totals.contribution_inr);
   return (
     <section className="card snapshot-card" aria-labelledby="snapshot-title">
       <h2 id="snapshot-title" className="card-title">
-        Assumptions snapshot
+        {t('decision.snapshot')}
       </h2>
       <div className="mini-kpis">
         <button type="button" className="card-action" onClick={() => navigate('ledger')} aria-label={`Contribution ${contributionText} — open the ledger`}>
-          <span>Contribution</span>
+          <span>{t('ledger.contribution')}</span>
           <strong>
             <Money value={a.totals.contribution_inr} tone="contribution" />
           </strong>
@@ -214,6 +218,7 @@ function snapshotValue(k: string, v: unknown): string {
 
 function SavedSnapshot({ saved }: { saved: DecisionSaved }) {
   const account = useAuth().mode === 'account';
+  const { t } = useTranslation();
   const entries = Object.entries({ ...saved.assumptions, engine_version: saved.engine_version }).filter(([k]) => k in SNAPSHOT_KEYS);
   return (
     <section className="card saved-card" aria-labelledby="saved-title">
@@ -223,7 +228,7 @@ function SavedSnapshot({ saved }: { saved: DecisionSaved }) {
         </span>
         <div>
           <h2 id="saved-title" className="card-title">
-            Decision saved
+            {t('decision.saved')}
           </h2>
           <p className="card-sub">
             {formatDateTime(saved.saved_at)} · {saved.persisted === false ? (account ? 'not saved: the database is unavailable' : 'demo workspace, not kept') : account ? 'saved to your account' : 'saved'}
@@ -252,6 +257,7 @@ interface FormProps {
 
 function DecisionForm({ a, s, rec, candidates, onSaved }: FormProps) {
   const { showToast, markDecisionSaved } = useStore();
+  const { t } = useTranslation();
   const groupName = useId();
   const [choice, setChoice] = useState<string>(rec.preselect ? rec.intervention : '');
   const [custom, setCustom] = useState('');
@@ -320,7 +326,7 @@ function DecisionForm({ a, s, rec, candidates, onSaved }: FormProps) {
     setSaving(true);
     try {
       const saved = await api.createDecision(a.analysis_id, body);
-      showToast('Decision saved');
+      showToast(t('decision.saved'));
       markDecisionSaved(a.analysis_id);
       onSaved(saved);
     } catch (err) {
@@ -344,11 +350,12 @@ function DecisionForm({ a, s, rec, candidates, onSaved }: FormProps) {
 
   const describedBy = (f: Field, hint?: string) => [hint, errors[f] ? `${f}-error` : undefined].filter(Boolean).join(' ') || undefined;
   const draftedFor = options.find((o) => o.key === rec.intervention)?.label ?? rec.label;
+  const confidenceWord = CONFIDENCE_KEY[rec.confidence] ? lower(t(CONFIDENCE_KEY[rec.confidence])) : rec.confidence;
 
   return (
     <form className="card form-card" onSubmit={onSubmit} noValidate>
       <fieldset className="field choice-list" aria-describedby={describedBy('intervention', 'd-intervention-hint')}>
-        <legend className="field-label">Intervention</legend>
+        <legend className="field-label">{t('decision.intervention')}</legend>
         <p id="d-intervention-hint" className="field-hint">
           {rec.preselect ? 'Pre-selected: the recommendation has high confidence.' : `Not pre-selected: confidence is ${rec.confidence}. ${rec.confidence_reason}`}
         </p>
@@ -362,7 +369,7 @@ function DecisionForm({ a, s, rec, candidates, onSaved }: FormProps) {
                   {o.label}
                   {isRec ? (
                     <Pill tone={rec.preselect ? 'success' : 'primary'} className="choice-rec">
-                      {rec.preselect ? 'Recommended' : `Recommended · confidence ${rec.confidence}`}
+                      {rec.preselect ? t('decision.recommended') : `${t('decision.recommended')} · ${lower(t('scenario.confidence'))} ${confidenceWord}`}
                     </Pill>
                   ) : null}
                 </span>
@@ -426,7 +433,7 @@ function DecisionForm({ a, s, rec, candidates, onSaved }: FormProps) {
 
       <div className="draft-row">
         <Button variant="ai" icon="sparkles" onClick={() => void draft()} disabled={drafting}>
-          {drafting ? 'Drafting…' : 'Draft 30-day test'}
+          {drafting ? t('actions.drafting') : t('actions.draftTest')}
         </Button>
         <span className="field-hint">
           {draftSource ? (
@@ -442,7 +449,7 @@ function DecisionForm({ a, s, rec, candidates, onSaved }: FormProps) {
 
       <div className="field">
         <label htmlFor="d-test" className="field-label">
-          30-day test {draftSource ? <SourceTag source={draftSource} /> : null}
+          {t('decision.test30')} {draftSource ? <SourceTag source={draftSource} /> : null}
         </label>
         <textarea
           id="d-test"
@@ -458,7 +465,7 @@ function DecisionForm({ a, s, rec, candidates, onSaved }: FormProps) {
 
       <div className="field">
         <label htmlFor="d-stop" className="field-label">
-          Stop rule {draftSource ? <SourceTag source={draftSource} /> : null}
+          {t('decision.stopRule')} {draftSource ? <SourceTag source={draftSource} /> : null}
         </label>
         <textarea
           id="d-stop"
@@ -475,7 +482,7 @@ function DecisionForm({ a, s, rec, candidates, onSaved }: FormProps) {
       <div className="field-row">
         <div className="field">
           <label htmlFor="d-owner" className="field-label">
-            Owner
+            {t('decision.owner')}
           </label>
           <input
             id="d-owner"
@@ -510,7 +517,7 @@ function DecisionForm({ a, s, rec, candidates, onSaved }: FormProps) {
 
       <div className="card-actions">
         <Button variant="primary" size="lg" type="submit" icon="check" disabled={saving}>
-          {saving ? 'Saving…' : 'Save decision'}
+          {saving ? t('actions.saving') : t('actions.saveDecision')}
         </Button>
       </div>
     </form>
@@ -520,6 +527,7 @@ function DecisionForm({ a, s, rec, candidates, onSaved }: FormProps) {
 export function DecisionScreen() {
   const { analysis, scenario } = useStore();
   const [version, setVersion] = useState(0);
+  const { t } = useTranslation();
   const [saved, setSaved] = useState<DecisionSaved | null>(null);
   const current = analysis && scenario && scenario.analysis_id === analysis.analysis_id ? scenario : null;
 
@@ -529,7 +537,7 @@ export function DecisionScreen() {
 
   return (
     <div className="page">
-      <PageHeader title="Save the decision" subtitle="Record what to try, who owns it, and when to stop — with the numbers it was based on." />
+      <PageHeader title={t('decision.pageTitle')} subtitle="Record what to try, who owns it, and when to stop — with the numbers it was based on." />
 
       {!analysis || !rec ? (
         <NeedsAnalysis sentence="No analysis yet. Load the sample orders, compare a scenario, then save the decision here." icon="check-circle" />

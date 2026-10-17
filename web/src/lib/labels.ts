@@ -28,6 +28,14 @@ export const OVERRIDE_LABELS: Record<OverrideKey | 'assume_unknown_refund', stri
 
 export const ATTRIBUTION_LABEL = 'Attribution is allocation, not causation.';
 
+/**
+ * True only when the handling estimate was applied: a default above zero and at least one row without handling_inr.
+ * The engine adds "Handling ₹… per order where the row has none (estimate)." to the labels in exactly that case.
+ */
+export function handlingEstimateUsed(a: { config: { handling_default_inr: number }; labels: string[] }): boolean {
+  return a.config.handling_default_inr > 0 && a.labels.some((l) => l.startsWith('Handling') && l.includes('(estimate)'));
+}
+
 export const INTERVENTION_LABELS: Record<string, string> = {
   raise_recovery_via_inspection: 'Raise recovery via inspection',
   charge_return_shipping: 'Charge return shipping',
@@ -51,15 +59,15 @@ export const HEADER_ALIASES: Array<[string, string]> = [
   ['handling', 'handling_inr'],
 ];
 
-/** Data-quality drills: a short tag and its tone for each negative-test sample. */
-export const DRILL_TAGS: Record<string, { tag: string; tone: 'primary' | 'warning' | 'danger' | 'teal' }> = {
-  duplicate_order: { tag: 'Duplicate', tone: 'primary' },
-  late_refund: { tag: 'Late refund', tone: 'warning' },
-  null_refund: { tag: 'Unknown', tone: 'warning' },
-  missing_fee: { tag: 'Unknown', tone: 'warning' },
-  refund_over_gross: { tag: 'Invalid', tone: 'danger' },
-  recovery_400: { tag: 'Recovery', tone: 'teal' },
-  bad_schema: { tag: 'Schema', tone: 'danger' },
+/** Data-quality drills: a short tag (with its translation key) and its tone for each negative-test sample. */
+export const DRILL_TAGS: Record<string, { tag: string; key?: string; tone: 'primary' | 'warning' | 'danger' | 'teal' }> = {
+  duplicate_order: { tag: 'Duplicate', key: 'status.duplicate', tone: 'primary' },
+  late_refund: { tag: 'Late refund', key: 'status.lateRefund', tone: 'warning' },
+  null_refund: { tag: 'Unknown', key: 'status.unknown', tone: 'warning' },
+  missing_fee: { tag: 'Unknown', key: 'status.unknown', tone: 'warning' },
+  refund_over_gross: { tag: 'Invalid', key: 'status.invalid', tone: 'danger' },
+  recovery_400: { tag: 'Recovery', key: 'scenario.recovery', tone: 'teal' },
+  bad_schema: { tag: 'Schema', key: 'status.schema', tone: 'danger' },
 };
 
 /** Plain names for the built-in samples. */

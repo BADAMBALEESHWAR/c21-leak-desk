@@ -1,9 +1,11 @@
+import { useTranslation } from 'react-i18next';
 import type { Reconciliation } from '../api/types';
 import { formatInr } from '../lib/format';
 import { Icon } from './Icon';
 
 /** Banner card: Σ orders = Σ channels = Σ products, or the gap. */
 export function ReconciliationLine({ rec }: { rec: Reconciliation }) {
+  const { t } = useTranslation();
   const { orders_inr: o, channels_inr: c, products_inr: p } = rec;
   if (o === null || c === null || p === null) {
     return (
@@ -20,7 +22,7 @@ export function ReconciliationLine({ rec }: { rec: Reconciliation }) {
       <div className="banner banner-success recon" role="status" title={`Reconciled within ±${formatInr(rec.tolerance_inr)}`}>
         <Icon name="check-circle" size={20} />
         <p>
-          <strong>Reconciled</strong>
+          <strong>{t('ledger.reconciledShort')}</strong>
           <span className="banner-sep" aria-hidden="true">
             —
           </span>

@@ -1,4 +1,5 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { AnalysisResponse, GroupRow, LineKey, OrderResult } from '../api/types';
 import { BarRows, type BarRow } from '../charts/BarRows';
 import { ChartCard } from '../charts/ChartCard';
@@ -16,8 +17,9 @@ import { ReconciliationLine } from '../components/Reconciliation';
 import { Table, type Column } from '../components/Table';
 import { panelId, tabId, Tabs } from '../components/Tabs';
 import { Callout, InfoTip, revealElement, StatCard } from '../components/ui';
+import { lower } from '../i18n';
 import { formatCount, formatInr, formatPct, plural } from '../lib/format';
-import { ATTRIBUTION_LABEL } from '../lib/labels';
+import { ATTRIBUTION_LABEL, handlingEstimateUsed } from '../lib/labels';
 import { useStore, type LedgerFilter } from '../state/store';
 
 type Filter = LedgerFilter;
@@ -49,13 +51,14 @@ function KeyCell({ value }: { value: string }) {
 
 const Kpis = memo(function Kpis({ a }: { a: AnalysisResponse }) {
   const { openBridge, openMargin, focusLedgerTable } = useStore();
+  const { t: tr } = useTranslation();
   const t = a.totals;
   const gateOpen = a.headline_gate.open && t.headline_ready !== false && t.contribution_pct !== null;
   const lateText = t.late_refund_count > 0 ? formatInr(t.late_refund_pending_inr) : 'none';
   return (
     <div className="kpi-grid kpi-grid-6">
       <StatCard
-        label="Gross sales"
+        label={tr('ledger.gross')}
         value={<Money value={t.gross_inr} tone="plain" />}
         icon="file"
         sub="Before discounts"
@@ -63,7 +66,7 @@ const Kpis = memo(function Kpis({ a }: { a: AnalysisResponse }) {
         actionLabel={`Gross sales ${formatInr(t.gross_inr)} — open period waterfall`}
       />
       <StatCard
-        label="Net sales"
+        label={tr('ledger.netSales')}
         value={<Money value={t.net_sales_inr} tone="plain" />}
         icon="table"
         sub="After discounts and refunds"
@@ -71,32 +74,32 @@ const Kpis = memo(function Kpis({ a }: { a: AnalysisResponse }) {
         actionLabel={`Net sales ${formatInr(t.net_sales_inr)} — open period waterfall`}
       />
       <StatCard
-        label="Contribution"
+        label={tr('ledger.contribution')}
         large
         tone="primary"
         icon="trending-down"
         value={<Money value={t.contribution_inr} tone="contribution" />}
         onClick={() => openBridge('contribution')}
-        actionLabel={`Contribution ${t.contribution_inr === null ? 'unknown' : formatInr(t.contribution_inr)}${t.partial ? `, partial, ${t.unknown_count} unknown` : ''} — open period waterfall`}
+        actionLabel={`Contribution ${t.contribution_inr === null ? 'unknown' : formatInr(t.contribution_inr)}${t.partial ? `, partial, ${formatCount(t.unknown_count)} unknown` : ''} — open period waterfall`}
         sub={
           <>
             {t.partial ? (
               <Pill tone="warning" dot>
-                Partial · {t.unknown_count} unknown
+                {tr('status.partial')} · {formatCount(t.unknown_count)} {lower(tr('status.unknown'))}
               </Pill>
             ) : (
               <Pill tone="success" dot>
-                Complete
+                {tr('status.complete')}
               </Pill>
             )}
             {a.attribution === 'channel' && t.channel_spend_inr ? <span className="kpi-note">after {formatInr(t.channel_spend_inr)} channel spend</span> : null}
-            {a.config.handling_default_inr > 0 ? <span className="kpi-note">incl. estimated handling {formatInr(a.config.handling_default_inr)}/order</span> : null}
+            {handlingEstimateUsed(a) ? <span className="kpi-note">incl. estimated handling {formatInr(a.config.handling_default_inr)}/order</span> : null}
           </>
         }
       />
       {gateOpen ? (
         <StatCard
-          label="Margin"
+          label={tr('ledger.margin')}
           value={<span className="num">{formatPct(t.contribution_pct as number)}</span>}
           icon="check-circle"
           tone="success"
@@ -106,7 +109,7 @@ const Kpis = memo(function Kpis({ a }: { a: AnalysisResponse }) {
         />
       ) : (
         <StatCard
-          label="Margin"
+          label={tr('ledger.margin')}
           icon="lock"
           tone="warning"
           value={
@@ -120,21 +123,21 @@ const Kpis = memo(function Kpis({ a }: { a: AnalysisResponse }) {
         />
       )}
       <StatCard
-        label="Orders"
+        label={tr('ledger.orders')}
         value={formatCount(t.orders)}
         icon="table"
         actionIcon="arrow-right"
         onClick={() => focusLedgerTable('losing')}
-        actionLabel={`Orders ${t.orders}, ${t.negative_count} losing money — filter the table to losing orders`}
-        sub={t.negative_count > 0 ? <span className="t-loss">{t.negative_count} losing money</span> : 'None losing money'}
+        actionLabel={`Orders ${formatCount(t.orders)}, ${formatCount(t.negative_count)} losing money — filter the table to losing orders`}
+        sub={t.negative_count > 0 ? <span className="t-loss">{formatCount(t.negative_count)} losing money</span> : 'None losing money'}
       />
       <StatCard
-        label="Late refunds"
+        label={tr('ledger.lateRefunds')}
         icon="alert-triangle"
         actionIcon="arrow-right"
         tone={t.late_refund_count > 0 ? 'warning' : 'default'}
         value={t.late_refund_count > 0 ? <Money value={t.late_refund_pending_inr} /> : <span className="kpi-none">None</span>}
-        sub={t.late_refund_count > 0 ? `Pending if recognised · ${t.late_refund_count} ${plural(t.late_refund_count, 'order', 'orders')}` : 'All refunds fall in the period'}
+        sub={t.late_refund_count > 0 ? `Pending if recognised · ${formatCount(t.late_refund_count)} ${plural(t.late_refund_count, 'order', 'orders')}` : 'All refunds fall in the period'}
         onClick={() => focusLedgerTable('late')}
         actionLabel={`Late refunds ${lateText} pending if recognised — filter the table to late refunds`}
       />
@@ -143,11 +146,12 @@ const Kpis = memo(function Kpis({ a }: { a: AnalysisResponse }) {
 });
 
 const ChannelChart = memo(function ChannelChart({ a }: { a: AnalysisResponse }) {
+  const { t } = useTranslation();
   const channelMode = a.attribution === 'channel';
   const rows: BarRow[] = a.groups.channel.map((g) => ({
     key: g.key,
     label: g.key,
-    sub: `${g.orders} ${plural(g.orders, 'order', 'orders')}${g.unknown_count ? ` · ${g.unknown_count} unknown` : ''}`,
+    sub: `${formatCount(g.orders)} ${plural(g.orders, 'order', 'orders')}${g.unknown_count ? ` · ${formatCount(g.unknown_count)} unknown` : ''}`,
     values: [
       { series: 'Contribution', value: g.contribution_inr, tone: 'series-1', text: g.contribution_inr === null ? 'unknown' : formatInr(g.contribution_inr) },
       ...(channelMode
@@ -160,13 +164,13 @@ const ChannelChart = memo(function ChannelChart({ a }: { a: AnalysisResponse }) 
       <caption className="visually-hidden">Contribution by channel</caption>
       <thead>
         <tr>
-          <th scope="col">Channel</th>
+          <th scope="col">{t('ledger.channel')}</th>
           <th scope="col" className="r">
-            Contribution
+            {t('ledger.contribution')}
           </th>
           {channelMode ? (
             <th scope="col" className="r">
-              Channel spend
+              {t('ledger.channelSpend')}
             </th>
           ) : null}
         </tr>
@@ -219,10 +223,11 @@ function sumInr(rows: GroupRow[], pick: (r: GroupRow) => number | null): number 
 
 function OrdersTable({ orders, handlingEstimate }: { orders: OrderResult[]; handlingEstimate: number }) {
   const { openOrderResult } = useStore();
+  const { t } = useTranslation();
   const columns: Column<OrderResult>[] = [
     {
       id: 'order',
-      header: 'Order',
+      header: t('ledger.order'),
       rowHeader: true,
       className: 'col-order',
       cell: (o) => (
@@ -236,7 +241,7 @@ function OrdersTable({ orders, handlingEstimate }: { orders: OrderResult[]; hand
     },
     {
       id: 'channel',
-      header: 'Channel / product',
+      header: t('ledger.channelProduct'),
       cell: (o) => (
         <span className="cell-stack">
           <span>
@@ -250,7 +255,7 @@ function OrdersTable({ orders, handlingEstimate }: { orders: OrderResult[]; hand
     },
     {
       id: 'status',
-      header: 'Status',
+      header: t('ledger.status'),
       className: 'col-status',
       cell: (o) => (
         <span className="pill-row">
@@ -258,28 +263,28 @@ function OrdersTable({ orders, handlingEstimate }: { orders: OrderResult[]; hand
         </span>
       ),
     },
-    { id: 'net', header: 'Net sales', align: 'right', cell: (o) => <Money value={o.net_sales_inr} /> },
-    { id: 'npc', header: 'Product cost', align: 'right', cell: (o) => <Deduction order={o} k="net_product_cost" /> },
-    { id: 'ship', header: 'Shipping', align: 'right', cell: (o) => <Deduction order={o} k="shipping" /> },
-    { id: 'fee', header: 'Fee', align: 'right', cell: (o) => <Deduction order={o} k="payment_fee" /> },
-    { id: 'ret', header: 'Return', align: 'right', cell: (o) => <Deduction order={o} k="return_cost" /> },
+    { id: 'net', header: t('ledger.netSales'), align: 'right', cell: (o) => <Money value={o.net_sales_inr} /> },
+    { id: 'npc', header: t('ledger.productCost'), align: 'right', cell: (o) => <Deduction order={o} k="net_product_cost" /> },
+    { id: 'ship', header: t('ledger.shipping'), align: 'right', cell: (o) => <Deduction order={o} k="shipping" /> },
+    { id: 'fee', header: t('ledger.fee'), align: 'right', cell: (o) => <Deduction order={o} k="payment_fee" /> },
+    { id: 'ret', header: t('ledger.return'), align: 'right', cell: (o) => <Deduction order={o} k="return_cost" /> },
     {
       id: 'hand',
       header:
         handlingEstimate > 0 ? (
           <span className="th-pill" title={`Rows without handling_inr use ${formatInr(handlingEstimate)} per order (estimate).`}>
-            Handling <Pill tone="warning">estimated</Pill>
+            {t('ledger.handling')} <Pill tone="warning">{lower(t('status.estimated'))}</Pill>
           </span>
         ) : (
-          'Handling'
+          t('ledger.handling')
         ),
       align: 'right',
       cell: (o) => <Deduction order={o} k="handling" />,
     },
-    { id: 'ads', header: 'Ads', align: 'right', cell: (o) => <Deduction order={o} k="ads" /> },
+    { id: 'ads', header: t('ledger.ads'), align: 'right', cell: (o) => <Deduction order={o} k="ads" /> },
     {
       id: 'contribution',
-      header: 'Contribution',
+      header: t('ledger.contribution'),
       align: 'right',
       className: 'col-strong',
       cell: (o) => <Money value={o.contribution_inr} tone="contribution" />,
@@ -301,34 +306,35 @@ function OrdersTable({ orders, handlingEstimate }: { orders: OrderResult[]; hand
 
 function ChannelTable({ a }: { a: AnalysisResponse }) {
   const rows = a.groups.channel;
+  const { t } = useTranslation();
   const columns: Column<GroupRow>[] = [
-    { id: 'key', header: 'Channel', rowHeader: true, cell: (r) => <KeyCell value={r.key} />, footer: 'Total' },
-    { id: 'orders', header: 'Orders', align: 'right', cell: (r) => <span className="num">{r.orders}</span>, footer: <span className="num">{rows.reduce((s, r) => s + r.orders, 0)}</span> },
+    { id: 'key', header: t('ledger.channel'), rowHeader: true, cell: (r) => <KeyCell value={r.key} />, footer: t('common.total') },
+    { id: 'orders', header: t('ledger.orders'), align: 'right', cell: (r) => <span className="num">{formatCount(r.orders)}</span>, footer: <span className="num">{formatCount(rows.reduce((s, r) => s + r.orders, 0))}</span> },
     {
       id: 'unknown',
-      header: 'Unknown',
+      header: t('status.unknown'),
       align: 'right',
-      cell: (r) => (r.unknown_count > 0 ? <Pill tone="warning">{r.unknown_count}</Pill> : <span className="cell-muted">0</span>),
-      footer: <span className="num">{rows.reduce((s, r) => s + r.unknown_count, 0)}</span>,
+      cell: (r) => (r.unknown_count > 0 ? <Pill tone="warning">{formatCount(r.unknown_count)}</Pill> : <span className="cell-muted">0</span>),
+      footer: <span className="num">{formatCount(rows.reduce((s, r) => s + r.unknown_count, 0))}</span>,
     },
-    { id: 'net', header: 'Net sales', align: 'right', cell: (r) => <Money value={r.net_sales_inr} />, footer: <Money value={sumInr(rows, (r) => r.net_sales_inr)} /> },
+    { id: 'net', header: t('ledger.netSales'), align: 'right', cell: (r) => <Money value={r.net_sales_inr} />, footer: <Money value={sumInr(rows, (r) => r.net_sales_inr)} /> },
     {
       id: 'before',
-      header: 'Before spend',
+      header: t('ledger.beforeSpend'),
       align: 'right',
       cell: (r) => <Money value={r.contribution_before_spend_inr} />,
       footer: <Money value={sumInr(rows, (r) => r.contribution_before_spend_inr)} />,
     },
     {
       id: 'spend',
-      header: 'Channel spend',
+      header: t('ledger.channelSpend'),
       align: 'right',
       cell: (r) => <Money value={r.channel_spend_inr} tone="plain" muteZero />,
       footer: <Money value={sumInr(rows, (r) => r.channel_spend_inr)} tone="plain" muteZero />,
     },
     {
       id: 'contribution',
-      header: 'Contribution',
+      header: t('ledger.contribution'),
       align: 'right',
       className: 'col-strong',
       cell: (r) => <Money value={r.contribution_inr} tone="contribution" />,
@@ -343,20 +349,21 @@ function ProductTable({ a }: { a: AnalysisResponse }) {
   const unallocated = a.groups.product_unallocated_spend_inr;
   const channelMode = a.attribution === 'channel';
   const label = a.groups.product_label;
+  const { t } = useTranslation();
   const columns: Column<GroupRow>[] = [
-    { id: 'key', header: 'Product', rowHeader: true, cell: (r) => <KeyCell value={r.key} />, footer: 'Total' },
-    { id: 'orders', header: 'Orders', align: 'right', cell: (r) => <span className="num">{r.orders}</span>, footer: <span className="num">{rows.reduce((s, r) => s + r.orders, 0)}</span> },
+    { id: 'key', header: t('ledger.product'), rowHeader: true, cell: (r) => <KeyCell value={r.key} />, footer: t('common.total') },
+    { id: 'orders', header: t('ledger.orders'), align: 'right', cell: (r) => <span className="num">{formatCount(r.orders)}</span>, footer: <span className="num">{formatCount(rows.reduce((s, r) => s + r.orders, 0))}</span> },
     {
       id: 'unknown',
-      header: 'Unknown',
+      header: t('status.unknown'),
       align: 'right',
-      cell: (r) => (r.unknown_count > 0 ? <Pill tone="warning">{r.unknown_count}</Pill> : <span className="cell-muted">0</span>),
-      footer: <span className="num">{rows.reduce((s, r) => s + r.unknown_count, 0)}</span>,
+      cell: (r) => (r.unknown_count > 0 ? <Pill tone="warning">{formatCount(r.unknown_count)}</Pill> : <span className="cell-muted">0</span>),
+      footer: <span className="num">{formatCount(rows.reduce((s, r) => s + r.unknown_count, 0))}</span>,
     },
-    { id: 'net', header: 'Net sales', align: 'right', cell: (r) => <Money value={r.net_sales_inr} />, footer: <Money value={sumInr(rows, (r) => r.net_sales_inr)} /> },
+    { id: 'net', header: t('ledger.netSales'), align: 'right', cell: (r) => <Money value={r.net_sales_inr} />, footer: <Money value={sumInr(rows, (r) => r.net_sales_inr)} /> },
     {
       id: 'contribution',
-      header: label ? `Contribution, ${label}` : 'Contribution',
+      header: label ? `${t('ledger.contribution')}, ${label}` : t('ledger.contribution'),
       align: 'right',
       className: 'col-strong',
       cell: (r) => <Money value={r.contribution_inr} tone="contribution" />,
@@ -382,7 +389,7 @@ function LateRefunds({ a }: { a: AnalysisResponse }) {
   if (late.orders.length === 0) return null;
   const n = late.orders.length;
   return (
-    <Callout tone="warning" title={`${n} ${plural(n, 'refund', 'refunds')} dated after the period end (${late.period_end}) ${plural(n, 'is', 'are')} pending`}>
+    <Callout tone="warning" title={`${formatCount(n)} ${plural(n, 'refund', 'refunds')} dated after the period end (${late.period_end}) ${plural(n, 'is', 'are')} pending`}>
       <p>Counted in this period as kept. If recognised, contribution changes by {formatInr(late.pending_delta_inr)}.</p>
       <ul className="late-list">
         {late.orders.slice(0, 5).map((o) => (
@@ -397,7 +404,7 @@ function LateRefunds({ a }: { a: AnalysisResponse }) {
           </li>
         ))}
       </ul>
-      {n > 5 ? <p className="muted small">and {n - 5} more — use the Late refund filter to see them all.</p> : null}
+      {n > 5 ? <p className="muted small">and {formatCount(n - 5)} more — use the Late refund filter to see them all.</p> : null}
       <p>
         Total if recognised <Money value={late.total_if_recognised_inr} tone="contribution" />
       </p>
@@ -407,6 +414,7 @@ function LateRefunds({ a }: { a: AnalysisResponse }) {
 
 export function LedgerScreen() {
   const { analysis, ledgerTab: tab, setLedgerTab: setTab, ledgerFilter: filter, setLedgerFilter: setFilter, tableFocus, openOrderResult, showToast } = useStore();
+  const { t } = useTranslation();
   const [query, setQuery] = useState('');
   const [page, setPage] = useState(1);
   const tableRef = useRef<HTMLElement>(null);
@@ -458,23 +466,24 @@ export function LedgerScreen() {
   if (!analysis) {
     return (
       <div className="page">
-        <PageHeader title="Contribution ledger" subtitle="Per-order contribution after every cost, reconciled to channels and products." />
+        <PageHeader title={t('ledger.title')} subtitle="Per-order contribution after every cost, reconciled to channels and products." />
         <NeedsAnalysis sentence="No ledger yet. Load the sample orders to see contribution per order." icon="table" />
       </div>
     );
   }
 
   const tabs = [
-    { id: 'orders' as const, label: 'Orders', count: analysis.orders.length },
-    { id: 'channel' as const, label: 'By channel', count: analysis.groups.channel.length },
-    { id: 'product' as const, label: 'By product', count: analysis.groups.product.length },
+    { id: 'orders' as const, label: t('ledger.orders'), count: analysis.orders.length },
+    { id: 'channel' as const, label: t('ledger.byChannel'), count: analysis.groups.channel.length },
+    { id: 'product' as const, label: t('ledger.byProduct'), count: analysis.groups.product.length },
   ];
-  const filters: Array<{ id: Filter; label: string }> = [
-    { id: 'all', label: 'All' },
-    { id: 'losing', label: 'Losing' },
-    { id: 'unknown', label: 'Unknown' },
-    { id: 'late', label: 'Late refund' },
-    { id: 'synthetic', label: 'Synthetic' },
+  // noun: the English word in the filter note sentence, which stays English.
+  const filters: Array<{ id: Filter; label: string; noun: string }> = [
+    { id: 'all', label: t('common.all'), noun: 'all' },
+    { id: 'losing', label: t('ledger.losing'), noun: 'losing' },
+    { id: 'unknown', label: t('status.unknown'), noun: 'unknown' },
+    { id: 'late', label: t('status.lateRefund'), noun: 'late refund' },
+    { id: 'synthetic', label: t('status.syntheticTag'), noun: 'synthetic' },
   ];
   const notes = analysis.labels.filter((l) => !SHOWN_ELSEWHERE.includes(l));
   const pageCount = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
@@ -490,7 +499,7 @@ export function LedgerScreen() {
   return (
     <div className="page">
       <PageHeader
-        title="Contribution ledger"
+        title={t('ledger.title')}
         subtitle={
           <>
             Per-order contribution after every cost, reconciled to channels and products.
@@ -546,14 +555,14 @@ export function LedgerScreen() {
             onClick={authDownload(api.ledgerExportUrl(analysis.analysis_id, 'csv'), `ledger-${analysis.analysis_id}.csv`, (e) => showToast(e.message, 'info'))}
             className="toolbar-export"
           >
-            Export CSV
+            {t('actions.exportCsv')}
           </ButtonLink>
         </div>
         {tab === 'orders' && filter !== 'all' ? (
           <div className="filter-note" role="status">
             <Icon name="info" size={16} />
             <span>
-              Showing {visible.length} {filters.find((f) => f.id === filter)?.label.toLowerCase()} {visible.length === 1 ? 'order' : 'orders'}.
+              Showing {formatCount(visible.length)} {filters.find((f) => f.id === filter)?.noun} {visible.length === 1 ? 'order' : 'orders'}.
             </span>
             {visible.length === 1 && (filter === 'late' || filter === 'unknown') ? (
               <LinkButton onClick={() => openOrderResult(visible[0])}>Open {visible[0].order_id}</LinkButton>
@@ -564,7 +573,7 @@ export function LedgerScreen() {
         <div role="tabpanel" id={panelId('ledger', tab)} aria-labelledby={tabId('ledger', tab)} className="tabpanel">
           {tab === 'orders' ? (
             <>
-              <OrdersTable orders={pageRows} handlingEstimate={analysis.config.handling_default_inr} />
+              <OrdersTable orders={pageRows} handlingEstimate={handlingEstimateUsed(analysis) ? analysis.config.handling_default_inr : 0} />
               <div className="table-foot table-foot-pager">
                 <span>
                   {visible.length === 0
@@ -585,9 +594,9 @@ export function LedgerScreen() {
 
       <LateRefunds a={analysis} />
 
-      <NextStep route="leaks" label="Review leaks">
+      <NextStep route="leaks" label={t('actions.reviewLeaks')}>
         {analysis.totals.negative_count > 0
-          ? `${analysis.totals.negative_count} ${plural(analysis.totals.negative_count, 'order loses', 'orders lose')} money. See why, grouped by cause.`
+          ? `${formatCount(analysis.totals.negative_count)} ${plural(analysis.totals.negative_count, 'order loses', 'orders lose')} money. See why, grouped by cause.`
           : 'See whether any order loses money, grouped by cause.'}
       </NextStep>
     </div>

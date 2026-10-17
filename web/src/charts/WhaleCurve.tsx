@@ -1,6 +1,6 @@
 import { memo, useState, type KeyboardEvent, type PointerEvent } from 'react';
 import type { WhalePoint } from '../api/types';
-import { formatInr, formatSignedInr, plural } from '../lib/format';
+import { formatCount, formatInr, formatSignedInr, plural } from '../lib/format';
 import { ChartCard, ChartTip, useWidth, type TipState } from './ChartCard';
 
 const H = 200;
@@ -16,9 +16,11 @@ function niceTicks(lo: number, hi: number, count = 4): number[] {
   return out;
 }
 
+/** Axis labels the Indian way: ₹50K, ₹15L, ₹1.5Cr. */
 function compactInr(v: number): string {
   const a = Math.abs(v);
-  const s = a >= 1000 ? `${(a / 1000).toFixed(a % 1000 === 0 ? 0 : 1)}K` : `${a}`;
+  const short = (n: number, unit: string) => `${Number.isInteger(n) ? n : n.toFixed(1).replace(/\.0$/, '')}${unit}`;
+  const s = a >= 1e7 ? short(a / 1e7, 'Cr') : a >= 1e5 ? short(a / 1e5, 'L') : a >= 1000 ? short(a / 1000, 'K') : `${a}`;
   return `${v < 0 ? '−' : ''}₹${s}`;
 }
 
@@ -105,14 +107,14 @@ export const WhaleCurve = memo(function WhaleCurve({ points, unknownCount, chann
   };
 
   const summary =
-    `Running total peaks at ${formatInr(peak.cumulative_inr)} after ${peak.rank} ${plural(peak.rank, 'order', 'orders')} ` +
-    `and ends at ${formatInr(last.cumulative_inr)} after ${n} orders. Use the arrow keys to read each order.`;
+    `Running total peaks at ${formatInr(peak.cumulative_inr)} after ${formatCount(peak.rank)} ${plural(peak.rank, 'order', 'orders')} ` +
+    `and ends at ${formatInr(last.cumulative_inr)} after ${formatCount(last.rank)} orders. Use the arrow keys to read each order.`;
 
   const subtitle = (
     <>
       Orders ranked from most to least profitable; the line is the running total.
       {channelSpend ? ` Values are before ${formatInr(channelSpend)} channel spend.` : ''}
-      {unknownCount > 0 ? ` ${unknownCount} unknown ${plural(unknownCount, 'order is', 'orders are')} left out.` : ''}
+      {unknownCount > 0 ? ` ${formatCount(unknownCount)} unknown ${plural(unknownCount, 'order is', 'orders are')} left out.` : ''}
     </>
   );
 
@@ -173,7 +175,7 @@ export const WhaleCurve = memo(function WhaleCurve({ points, unknownCount, chann
             Highest
           </text>
           <text className="axis-text" x={W - PAD.right} y={H - 6} textAnchor="end">
-            Lowest ({n})
+            Lowest ({formatCount(last.rank)})
           </text>
           <path className="whale-area" d={area} />
           {fallArea ? <path className="whale-fall" d={fallArea} /> : null}
@@ -183,7 +185,7 @@ export const WhaleCurve = memo(function WhaleCurve({ points, unknownCount, chann
           ) : null}
           <circle className="whale-dot" cx={peakX} cy={y(peak.cumulative_inr)} r={4.5} />
           <text className="whale-label" x={peakX} y={y(peak.cumulative_inr) - 10} textAnchor={peakAnchor}>
-            Peak {formatInr(peak.cumulative_inr)} · top {peak.rank} {plural(peak.rank, 'order', 'orders')}
+            Peak {formatInr(peak.cumulative_inr)} · top {formatCount(peak.rank)} {plural(peak.rank, 'order', 'orders')}
           </text>
           {peakIdx !== n - 1 ? (
             <>

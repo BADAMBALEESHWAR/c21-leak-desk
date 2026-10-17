@@ -1,7 +1,10 @@
+import { useTranslation } from 'react-i18next';
 import { BRAND } from '../brand';
+import { LANGS, setLanguage, type Lang } from '../i18n';
 import { hrefFor, type Route } from '../lib/router';
 import { useStore } from '../state/store';
 import { Icon, type IconName } from './Icon';
+import { LogoMark } from './LogoMark';
 
 export const STEPS: Array<{ route: Route; label: string; icon: IconName; hint: string }> = [
   { route: 'import', label: 'Import', icon: 'upload-cloud', hint: 'Load orders' },
@@ -11,7 +14,36 @@ export const STEPS: Array<{ route: Route; label: string; icon: IconName; hint: s
   { route: 'decision', label: 'Decision', icon: 'check-circle', hint: 'Record what to do' },
 ];
 
+/** Shown in the collapsed sidebar, where the full names do not fit; the full name stays the accessible name. */
+const LANG_SHORT: Record<Lang, string> = { en: 'EN', hi: 'हि', te: 'తె' };
+
+/** English, हिन्दी, తెలుగు: each name in its own script. */
+function LanguageSwitch() {
+  const { t, i18n } = useTranslation();
+  const current = i18n.resolvedLanguage ?? i18n.language;
+  return (
+    <div className="lang-switch" role="group" aria-label={t('lang.label')}>
+      {LANGS.map((l) => (
+        <button
+          key={l}
+          type="button"
+          lang={l}
+          className={`lang-btn${current === l ? ' is-current' : ''}`}
+          aria-pressed={current === l}
+          onClick={() => setLanguage(l)}
+        >
+          <span className="lang-long">{t(`lang.${l}`)}</span>
+          <span className="lang-short" aria-hidden="true">
+            {LANG_SHORT[l]}
+          </span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export function Sidebar({ route }: { route: Route }) {
+  const { t } = useTranslation();
   const { datasetId, analysis, scenario, decisionSavedFor, engineVersion, checks, openChecks, openAbout } = useStore();
 
   const done: Record<Route, boolean> = {
@@ -29,11 +61,11 @@ export function Sidebar({ route }: { route: Route }) {
     <nav className="sidebar" aria-label="Steps">
       <button type="button" className="brand" onClick={openAbout} aria-label={`About ${BRAND.name}`} data-tip={`About ${BRAND.name}`}>
         <span className="brand-mark" aria-hidden="true">
-          <Icon name="drop" size={18} strokeWidth={2} />
+          <LogoMark size={34} />
         </span>
         <span className="brand-text">
           <span className="brand-name">{BRAND.name}</span>
-          <span className="brand-sub">{BRAND.tagline}</span>
+          <span className="brand-sub">{t('tagline')}</span>
         </span>
       </button>
 
@@ -41,19 +73,20 @@ export function Sidebar({ route }: { route: Route }) {
         {STEPS.map((s, i) => {
           const current = s.route === route;
           const state = current ? 'is-active' : done[s.route] ? 'is-done' : 'is-future';
+          const label = t(`nav.${s.route}`);
           return (
             <li key={s.route}>
               <a
                 href={hrefFor(s.route)}
                 className={`nav-item ${state}`}
                 aria-current={current ? 'step' : undefined}
-                aria-label={`Step ${i + 1}: ${s.label}${done[s.route] ? ', done' : ''}`}
-                data-tip={s.label}
+                aria-label={`${t('nav.step', { n: i + 1, label })}${done[s.route] ? t('nav.done') : ''}`}
+                data-tip={label}
               >
                 <Icon name={s.icon} size={19} />
                 <span className="nav-text">
-                  <span className="nav-label">{s.label}</span>
-                  <span className="nav-hint">{s.hint}</span>
+                  <span className="nav-label">{label}</span>
+                  <span className="nav-hint">{t(`nav.hint.${s.route}`)}</span>
                 </span>
                 {done[s.route] && !current ? (
                   <span className="nav-check" aria-hidden="true">
@@ -68,19 +101,19 @@ export function Sidebar({ route }: { route: Route }) {
 
       <div className="nav-group" role="group" aria-labelledby="nav-group-owner">
         <span id="nav-group-owner" className="nav-group-label">
-          Owner analytics
+          {t('nav.ownerAnalytics')}
         </span>
         <a
           href={hrefFor('pulse')}
           className={`nav-item ${pulseCurrent ? 'is-active' : analysis ? 'is-done-quiet' : 'is-future'}`}
           aria-current={pulseCurrent ? 'page' : undefined}
-          aria-label="Pulse: owner analytics"
-          data-tip="Pulse"
+          aria-label={t('nav.pulseAria')}
+          data-tip={t('nav.pulse')}
         >
           <Icon name="bar-chart" size={19} />
           <span className="nav-text">
-            <span className="nav-label">Pulse</span>
-            <span className="nav-hint">Months, products, channels</span>
+            <span className="nav-label">{t('nav.pulse')}</span>
+            <span className="nav-hint">{t('nav.hint.pulse')}</span>
           </span>
         </a>
       </div>
@@ -106,11 +139,12 @@ export function Sidebar({ route }: { route: Route }) {
           </button>
         ) : null}
         <p className="foot-note">
-          Operational contribution, not statutory profit.{' '}
+          {t('footer.note')}{' '}
           <button type="button" className="foot-link" onClick={openAbout}>
-            About
+            {t('actions.about')}
           </button>
         </p>
+        <LanguageSwitch />
       </div>
     </nav>
   );

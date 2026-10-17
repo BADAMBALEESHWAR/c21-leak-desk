@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { BRAND } from '../brand';
 import { FAQ, FEATURES, HERO, SOURCES, STEPS } from './content';
 import { HeroDashboard } from './HeroDashboard';
@@ -6,16 +7,18 @@ import { Icon } from './icons';
 import { Pricing } from './Pricing';
 import { LINKS, Wordmark } from './shared';
 
+/** Section links; label is a translation key. */
 const NAV = [
-  { href: '#features', label: 'Product' },
-  { href: '#how', label: 'How it works' },
-  { href: '#pricing', label: 'Pricing' },
-  { href: '#faq', label: 'FAQ' },
+  { href: '#features', label: 'landing.product' },
+  { href: '#how', label: 'landing.how' },
+  { href: '#pricing', label: 'landing.pricing' },
+  { href: '#faq', label: 'landing.faq' },
 ];
 
 /** The tagline as the headline, with its second sentence in the accent colour. */
 function Tagline() {
-  const [first, ...rest] = BRAND.tagline.split(/(?<=\.)\s+/);
+  const { t } = useTranslation();
+  const [first, ...rest] = t('tagline').split(/(?<=[.।])\s+/);
   return (
     <h1 id="hero-title" className="l-h1">
       {first} <span className="l-accent">{rest.join(' ')}</span>
@@ -25,6 +28,7 @@ function Tagline() {
 
 function Header() {
   const [open, setOpen] = useState(false);
+  const { t } = useTranslation();
 
   useEffect(() => {
     if (!open) return undefined;
@@ -49,16 +53,16 @@ function Header() {
         <nav className="l-nav-links" aria-label="Sections">
           {NAV.map((n) => (
             <a key={n.href} href={n.href}>
-              {n.label}
+              {t(n.label)}
             </a>
           ))}
         </nav>
         <div className="l-nav-actions">
           <a className="l-btn l-btn-ghost l-hide-sm" href={LINKS.signIn}>
-            Sign in
+            {t('actions.signIn')}
           </a>
           <a className="l-btn l-btn-primary l-btn-sm" href={LINKS.demo}>
-            Try the demo
+            {t('actions.tryDemo')}
           </a>
           <button
             type="button"
@@ -78,7 +82,7 @@ function Header() {
             {NAV.map((n) => (
               <li key={n.href}>
                 <a href={n.href} onClick={() => setOpen(false)}>
-                  {n.label}
+                  {t(n.label)}
                   <Icon name="arrow-right" size={16} />
                 </a>
               </li>
@@ -86,7 +90,7 @@ function Header() {
           </ul>
           <div className="l-menu-cta">
             <a className="l-btn l-btn-secondary l-btn-block" href={LINKS.signIn}>
-              Sign in
+              {t('actions.signIn')}
             </a>
             <a className="l-btn l-btn-primary l-btn-block" href={LINKS.signUp}>
               Create account
@@ -111,6 +115,7 @@ function SectionHead({ kicker, title, lead, id, center = false }: { kicker: stri
 }
 
 export function Landing() {
+  const { t } = useTranslation();
   return (
     <>
       <a className="l-skip" href="#main">
@@ -136,7 +141,7 @@ export function Landing() {
               <p className="l-hero-body">{HERO.body}</p>
               <div className="l-cta">
                 <a className="l-btn l-btn-primary l-btn-lg" href={LINKS.demo}>
-                  Try the demo
+                  {t('actions.tryDemo')}
                   <Icon name="arrow-right" size={18} />
                 </a>
                 <a className="l-btn l-btn-secondary l-btn-lg" href={LINKS.signUp}>
@@ -278,7 +283,7 @@ export function Landing() {
               </div>
               <div className="l-cta-actions">
                 <a className="l-btn l-btn-on-dark l-btn-lg" href={LINKS.demo}>
-                  Try the demo
+                  {t('actions.tryDemo')}
                   <Icon name="arrow-right" size={18} />
                 </a>
                 <a className="l-btn l-btn-outline-dark l-btn-lg" href={LINKS.signUp}>
@@ -295,7 +300,7 @@ export function Landing() {
           <div className="l-foot-grid">
             <div className="l-foot-brand">
               <Wordmark />
-              <p className="l-foot-tag">{BRAND.tagline}</p>
+              <p className="l-foot-tag">{t('tagline')}</p>
               <p>Contribution and profit-leak analytics for Indian D2C brands.</p>
             </div>
             <nav aria-labelledby="foot-explore">
@@ -305,7 +310,7 @@ export function Landing() {
               <ul className="l-foot-links">
                 {NAV.map((n) => (
                   <li key={n.href}>
-                    <a href={n.href}>{n.label}</a>
+                    <a href={n.href}>{t(n.label)}</a>
                   </li>
                 ))}
               </ul>
@@ -316,20 +321,20 @@ export function Landing() {
               </h2>
               <ul className="l-foot-links">
                 <li>
-                  <a href={LINKS.demo}>Try the demo</a>
+                  <a href={LINKS.demo}>{t('actions.tryDemo')}</a>
                 </li>
                 <li>
                   <a href={LINKS.signUp}>Start free</a>
                 </li>
                 <li>
-                  <a href={LINKS.signIn}>Sign in</a>
+                  <a href={LINKS.signIn}>{t('actions.signIn')}</a>
                 </li>
               </ul>
             </nav>
           </div>
           <div className="l-foot-bottom">
             <p>© 2026 {BRAND.name}</p>
-            <p>Demo numbers are computed by the engine on labelled sample and synthetic data. Contribution is operational, not statutory net profit.</p>
+            <p>{t('landing.footNote')}</p>
           </div>
         </div>
       </footer>
