@@ -2,6 +2,7 @@ import express, { Router, type Request } from 'express';
 import multer from 'multer';
 import { config } from '../config.js';
 import { validateRows } from '../engine/validate.js';
+import { templateCsv } from '../export/csv.js';
 import { ah, HttpError, notFound } from '../errors.js';
 import { parseCsv, parseJsonPayload, parseJsonText, type Ingested } from '../ingest.js';
 import { datasets, newId, type DatasetRecord } from '../repo.js';
@@ -11,6 +12,11 @@ import { put, readSample, safeName, SAMPLES } from '../storage.js';
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: config.maxBodyBytes, files: 1 } });
 
 export const datasetsRouter = Router();
+
+datasetsRouter.get('/template.csv', (_req, res) => {
+  res.setHeader('Content-Disposition', 'attachment; filename="c21-orders-template.csv"');
+  res.type('text/csv; charset=utf-8').send(templateCsv());
+});
 
 datasetsRouter.get('/samples', (_req, res) => {
   res.json(Object.entries(SAMPLES).map(([source, s]) => ({ source, label: s.label, description: s.description, file: `data/${s.file}` })));

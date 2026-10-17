@@ -17,6 +17,8 @@ Types: `api/src/engine/types.ts`. Request schemas (Zod): `api/src/schema/orders.
 | `POST /datasets/:id/analyses` | `{attribution: "allocate"\|"channel", period_end?, config?: {handling_default_inr?}, channel_spend?: {channel: inr}}` | 201 `AnalysisResult & {analysis_id, dataset_id, persisted}` | 404, 409, 422 |
 | `GET /analyses/:id` | — | as above | 404 |
 | `GET /analyses/:id/orders/:order_id` | — | `{row, computed, waterfall:[{label, inr, note?}], status, flags}` | 404 |
+| `GET /analyses/:id/export?format=csv\|json` | — | per-order ledger file (CSV for spreadsheets; empty cell = unknown) with totals and reconciliation rows | 404 |
+| `GET /template.csv` | — | C21 CSV template: header plus a kept order, a return and a return with unknown refund facts | — |
 | `POST /analyses/:id/narrate` | — | `{ai, leaks:[{cause, why, why_source}], recommendation:{why, why_source}}` — optional AI rewording; template on any failure | 404 |
 | `POST /analyses/:id/scenarios` | `{overrides: exactly one of {return_rate_pct, recovery_pct, shipping_inr, refund_policy: "full"\|"partial", ads_per_order}, optionally with assume_unknown_refund: true}` | 201 `{scenario_id, changed, overrides, baseline, scenario, delta:{…, by_order[≤10]}, recommendation, baseline_recommendation, candidates[], assumptions[], observed, persisted}` | 404, 422 `override_invalid` |
 | `GET /scenarios/:id` | — | stored scenario | 404 |

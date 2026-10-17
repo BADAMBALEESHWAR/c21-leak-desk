@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { aiStatus, MAX_CALLS_PER_ANALYSIS, narrate } from '../ai/client.js';
 import { analyze } from '../engine/analyze.js';
 import { ah, notFound } from '../errors.js';
+import { ledgerCsv } from '../export/csv.js';
 import { analyses, datasets, newId, type AnalysisRecord, type DatasetRecord } from '../repo.js';
 import { AnalysisRequestSchema } from '../schema/orders.js';
 
@@ -65,6 +66,18 @@ analysesRouter.get(
   ah(async (req, res) => {
     const { analysis } = await loadAnalysis(req.params.id);
     res.json(view(analysis));
+  }),
+);
+
+/** Per-order ledger as a file: CSV for spreadsheets, JSON for tools. */
+analysesRouter.get(
+  '/analyses/:id/export',
+  ah(async (req, res) => {
+    const { analysis } = await loadAnalysis(req.params.id);
+    const format = req.query.format === 'json' ? 'json' : 'csv';
+    res.setHeader('Content-Disposition', `attachment; filename="ledger-${analysis._id}.${format}"`);
+    if (format === 'json') res.type('application/json').send(JSON.stringify(view(analysis), null, 2));
+    else res.type('text/csv; charset=utf-8').send(ledgerCsv(analysis.result));
   }),
 );
 
