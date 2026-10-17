@@ -13,7 +13,9 @@
     "build": "npm --prefix api run build && npm --prefix web run build"
   },
   "devDependencies": {
+    "@testing-library/react": "^16.3.3",
     "@types/supertest": "^6.0.2",
+    "jsdom": "^29.1.1",
     "playwright-core": "^1.64.1",
     "supertest": "^7.0.0",
     "vitest": "^2.1.9"
