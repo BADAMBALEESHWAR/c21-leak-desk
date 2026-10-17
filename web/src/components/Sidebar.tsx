@@ -11,7 +11,7 @@ export const STEPS: Array<{ route: Route; label: string; icon: IconName; hint: s
 ];
 
 export function Sidebar({ route }: { route: Route }) {
-  const { datasetId, analysis, scenario, decisionSavedFor, engineVersion, checks } = useStore();
+  const { datasetId, analysis, scenario, decisionSavedFor, engineVersion, checks, openChecks, openAbout } = useStore();
 
   const done: Record<Route, boolean> = {
     import: datasetId !== null,
@@ -24,7 +24,7 @@ export function Sidebar({ route }: { route: Route }) {
 
   return (
     <nav className="sidebar" aria-label="Steps">
-      <a className="brand" href={hrefFor('import')} aria-label="Leak Desk, profit leak desk for C21">
+      <button type="button" className="brand" onClick={openAbout} aria-label="About Leak Desk" data-tip="About Leak Desk">
         <span className="brand-mark" aria-hidden="true">
           <Icon name="drop" size={18} strokeWidth={2} />
         </span>
@@ -32,7 +32,7 @@ export function Sidebar({ route }: { route: Route }) {
           <span className="brand-name">Leak Desk</span>
           <span className="brand-sub">Profit leak desk · C21</span>
         </span>
-      </a>
+      </button>
 
       <ol className="nav">
         {STEPS.map((s, i) => {
@@ -65,7 +65,13 @@ export function Sidebar({ route }: { route: Route }) {
 
       <div className="sidebar-foot">
         {checks ? (
-          <div className={`checks-card${allPass ? '' : ' is-failing'}`} title="Worked order, reconciliation in both attribution modes, scenario sensitivity">
+          <button
+            type="button"
+            className={`checks-card${allPass ? '' : ' is-failing'}`}
+            onClick={openChecks}
+            aria-label={`Pack checks ${checks.passed} of ${checks.total} pass — open the public checks`}
+            data-tip="Public checks"
+          >
             <span className="checks-icon" aria-hidden="true">
               <Icon name={allPass ? 'check-circle' : 'alert-triangle'} size={18} />
             </span>
@@ -73,11 +79,16 @@ export function Sidebar({ route }: { route: Route }) {
               <strong>
                 Pack checks {checks.passed} of {checks.total} pass
               </strong>
-              {engineVersion ? <span>Engine {engineVersion}</span> : null}
+              {engineVersion ? <span>Engine {engineVersion} · view details</span> : null}
             </span>
-          </div>
+          </button>
         ) : null}
-        <p className="foot-note">Operational contribution, not statutory profit.</p>
+        <p className="foot-note">
+          Operational contribution, not statutory profit.{' '}
+          <button type="button" className="foot-link" onClick={openAbout}>
+            About
+          </button>
+        </p>
       </div>
     </nav>
   );

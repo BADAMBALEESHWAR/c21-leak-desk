@@ -23,14 +23,14 @@ const SCREENS: Record<Route, () => JSX.Element> = {
   decision: DecisionScreen,
 };
 
-type PendingDrawer = { order: string | null; worked: boolean };
+type PendingDrawer = { order: string | null; worked: boolean; checks?: boolean; about?: boolean };
 
 /**
  * Deep links for demos and screenshots, on any route:
- *   ?load=<sample>&attribution=channel&period_end=YYYY-MM-DD&order=O05&worked=1
+ *   ?load=<sample>&attribution=channel&period_end=YYYY-MM-DD&order=O05&worked=1&checks=1&about=1
  */
 function useDeepLink(loc: Location) {
-  const { importDataset, runAnalysis, analysis, openOrder, openWorked } = useStore();
+  const { importDataset, runAnalysis, analysis, openOrder, openWorked, openChecks, openAbout } = useStore();
   const handled = useRef<Location | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   // fromImport: the dataset load failed; the import step shows that one under its drop zone.
@@ -44,12 +44,14 @@ function useDeepLink(loc: Location) {
     const load = p.get('load');
     const order = p.get('order');
     const worked = p.get('worked') === '1';
-    if (!load && !order && !worked) return;
+    const checks = p.get('checks') === '1';
+    const about = p.get('about') === '1';
+    if (!load && !order && !worked && !checks && !about) return;
     replaceWithBareRoute(loc.route);
     setError(null);
 
     if (!load) {
-      setPending({ order, worked });
+      setPending({ order, worked, checks, about });
       return;
     }
     if (!isSampleSource(load)) {
@@ -65,7 +67,7 @@ function useDeepLink(loc: Location) {
         const ds = await importDataset({ source: load });
         imported = true;
         await runAnalysis(attribution, periodEnd, ds.dataset_id);
-        if (order || worked) setPending({ order, worked });
+        if (order || worked || checks || about) setPending({ order, worked, checks, about });
       } catch (err) {
         setError({ info: toErrorInfo(err), fromImport: !imported });
       } finally {
@@ -76,6 +78,16 @@ function useDeepLink(loc: Location) {
 
   useEffect(() => {
     if (!pending || busy) return;
+    if (pending.checks) {
+      setPending(null);
+      openChecks();
+      return;
+    }
+    if (pending.about) {
+      setPending(null);
+      openAbout();
+      return;
+    }
     if (pending.worked) {
       setPending(null);
       openWorked();
@@ -85,7 +97,7 @@ function useDeepLink(loc: Location) {
       setPending(null);
       openOrder(pending.order);
     }
-  }, [pending, busy, analysis, openOrder, openWorked]);
+  }, [pending, busy, analysis, openOrder, openWorked, openChecks, openAbout]);
 
   return { busy, error };
 }
