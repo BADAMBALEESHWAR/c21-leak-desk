@@ -12,6 +12,7 @@ export type ErrorCode =
   | 'not_found'
   | 'attribution_conflict'
   | 'db_unavailable'
+  | 'unauthorized'
   | 'internal';
 
 export interface Issue {
