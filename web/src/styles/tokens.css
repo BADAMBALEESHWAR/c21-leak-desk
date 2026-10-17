@@ -1,5 +1,5 @@
 /*
- * Leak Desk design tokens, after Fynd's Nitrozen system.
+ * Profyn design tokens, after Fynd's Nitrozen system.
  * This is the only file that defines colour; everything else refers to these properties.
  */
 :root {
@@ -68,6 +68,18 @@
   --loss-wash: rgba(245, 0, 49, 0.1);
   --grid: #E6E7EB;
 
+  /*
+   * Categorical slots (Pulse leak causes), assigned in a fixed cause order, never by rank.
+   * Checked as adjacent pairs in a stack; cat-3, cat-4 and cat-5 are below 3:1 on white,
+   * so the stacked chart always ships with a legend, tooltips and the month table.
+   */
+  --cat-1: #3535F3;
+  --cat-2: #EB6834;
+  --cat-3: #1BAF7A;
+  --cat-4: #EDA100;
+  --cat-5: #E87BA4;
+  --chart-hover: rgba(53, 53, 243, 0.06);
+
   /* Elevation */
   --shadow-s: 0 1px 2px rgba(16, 24, 40, 0.04), 0 4px 16px rgba(16, 24, 40, 0.06);
   --shadow-m: 0 12px 32px rgba(16, 24, 40, 0.14);
@@ -114,4 +126,20 @@
   /* Motion */
   --t-fast: 150ms;
   --t-med: 200ms;
+
+  /* Public pages (landing, sign-in): dark bands, the frosted nav and large cards */
+  --ink: #0F1015;
+  --ink-2: #1A1C23;
+  --ink-border: #2C2F38;
+  /* Text on --ink: secondary 11:1, muted 7.4:1 */
+  --on-dark-2: #C4C7D0;
+  --on-dark-3: #9EA2AD;
+  --nav-glass: rgba(255, 255, 255, 0.82);
+  --primary-glow: rgba(53, 53, 243, 0.1);
+  --shadow-l: 0 24px 64px rgba(16, 24, 40, 0.16), 0 4px 12px rgba(16, 24, 40, 0.06);
+  --r-xl: 20px;
+  /* Signed results on --ink (>= 7:1) and the glow behind the dark CTA panel */
+  --danger-on-dark: #FF8FA3;
+  --success-on-dark: #7BE0A0;
+  --primary-glow-dark: rgba(53, 53, 243, 0.35);
 }
