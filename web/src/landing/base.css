@@ -128,21 +128,14 @@ main:focus {
 .l-mark {
   display: grid;
   place-items: center;
-  width: 30px;
-  height: 30px;
-  border-radius: 9px;
-  background: var(--cta);
-  color: var(--on-dark);
+  width: 32px;
+  height: 32px;
 }
 
 .l-wordmark.on-dark {
   color: var(--on-dark);
 }
 
-.l-wordmark.on-dark .l-mark {
-  background: var(--on-dark);
-  color: var(--cta);
-}
 
 /* ---- Buttons ---------------------------------------------------------------------------- */
 

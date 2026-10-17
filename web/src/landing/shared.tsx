@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type RefObject } from 'react';
 import { loginHref } from '../auth/auth';
 import { BRAND, DEMO_URL } from '../brand';
-import { Icon } from './icons';
+import { LogoMark } from '../components/LogoMark';
 
 /** Where the public pages send people. No API calls: these are plain links. */
 export const LINKS = {
@@ -14,7 +14,7 @@ export function Wordmark({ onDark = false, label = `${BRAND.name} home` }: { onD
   return (
     <a className={`l-wordmark${onDark ? ' on-dark' : ''}`} href="/" aria-label={label}>
       <span className="l-mark" aria-hidden="true">
-        <Icon name="drop" size={16} strokeWidth={2} />
+        <LogoMark size={32} onDark={onDark} />
       </span>
       <span>{BRAND.name}</span>
     </a>
