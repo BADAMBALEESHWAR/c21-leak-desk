@@ -1,6 +1,7 @@
 import express, { Router, type Request } from 'express';
 import multer from 'multer';
 import { config } from '../config.js';
+import { dbState } from '../db.js';
 import { defaultPeriodEnd, validateRows, type SourceFile } from '../engine/validate.js';
 import { templateCsv } from '../export/csv.js';
 import { canSee, accountOf } from '../auth.js';
@@ -105,6 +106,7 @@ const summary = (d: DatasetRecord) => ({
   warnings: d.warnings,
   period_end: d.period_end,
   schema_version: d.schema_version,
+  ...(d.files ? { files: d.files } : {}),
 });
 
 /** Adding to saved data: the later of two ISO dates. */
@@ -142,12 +144,13 @@ datasetsRouter.post(
         ...summary(base),
         flags: v.flags,
         rows_in: v.rows_in,
+        rows_rejected: v.rows_rejected,
         rows_added: 0,
         duplicates_ignored: ignored,
         appended_to: base._id,
         unchanged: true,
         message: `Nothing new: all ${ignored.toLocaleString('en-IN')} orders were already saved.`,
-        persisted: true,
+        persisted: dbState() === 'connected',
       });
     }
     if (v.rows_kept === 0) {
@@ -227,12 +230,13 @@ datasetsRouter.get(
         latest_analysis: a ? { analysis_id: a._id, attribution: a.attribution, created_at: a.created_at, contribution_inr: a.result?.totals?.contribution_inr ?? null } : null,
       };
     });
-    const latest = list.find((d) => d.latest_analysis) ?? null;
+    // The newest saved data is what the owner last worked on; its analysis may not exist yet (analysis_id null).
+    const latest = list[0] ?? null;
     res.json({
       workspace: 'account',
       user: req.user,
       datasets: list,
-      latest: latest ? { dataset_id: latest.dataset_id, analysis_id: latest.latest_analysis!.analysis_id } : null,
+      latest: latest ? { dataset_id: latest.dataset_id, analysis_id: latest.latest_analysis?.analysis_id ?? null } : null,
     });
   }),
 );
