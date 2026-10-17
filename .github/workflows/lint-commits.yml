@@ -1,0 +1,24 @@
+name: lint-commits
+
+on:
+  pull_request:
+
+jobs:
+  commits:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Subjects ≤ 50 chars with an area prefix; no tool attribution
+        run: |
+          range="origin/${{ github.base_ref }}..HEAD"
+          bad=0
+          while IFS= read -r subject; do
+            if [ ${#subject} -gt 50 ]; then echo "Too long (${#subject}): $subject"; bad=1; fi
+            if ! echo "$subject" | grep -qE '^(api|engine|web|data|tests|infra|docs|ci): '; then echo "Missing area prefix: $subject"; bad=1; fi
+          done < <(git log --no-merges --format='%s' "$range")
+          if git log --format='%an <%ae>%n%cn <%ce>%n%B' "$range" | grep -iE 'claude|copilot|gpt|openai|anthropic|co-authored-by'; then
+            echo "Tool attribution found in commits (GIT_RULES Rule 1)"; bad=1
+          fi
+          exit $bad

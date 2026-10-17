@@ -1,0 +1,21 @@
+{
+  "name": "c21-leak-desk",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Order Contribution and Profit Leak Desk (Fynd x NMIMS case C21)",
+  "scripts": {
+    "setup": "npm install && npm --prefix api install && npm --prefix web install",
+    "test": "vitest run",
+    "check": "node scripts/check.mjs",
+    "ui:smoke": "node scripts/ui-smoke.mjs",
+    "dev:api": "npm --prefix api run dev",
+    "dev:web": "npm --prefix web run dev",
+    "build": "npm --prefix api run build && npm --prefix web run build"
+  },
+  "devDependencies": {
+    "@types/supertest": "^6.0.2",
+    "playwright-core": "^1.64.1",
+    "supertest": "^7.0.0",
+    "vitest": "^2.1.9"
+  }
+}

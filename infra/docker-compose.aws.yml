@@ -1,0 +1,33 @@
+# Runs on the EC2 instance: api (image from ECR) + mongo. Secrets come from SSM via /opt/leakdesk/.env.
+services:
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  api:
+    image: ${API_IMAGE}
+    restart: unless-stopped
+    env_file: /opt/leakdesk/.env
+    environment:
+      PORT: 8080
+    ports:
+      - "8080:8080"
+    depends_on:
+      mongo:
+        condition: service_healthy
+    logging:
+      driver: awslogs
+      options:
+        awslogs-region: ${AWS_REGION}
+        awslogs-group: /leakdesk/api
+        awslogs-create-group: "true"
+
+volumes:
+  mongo-data:

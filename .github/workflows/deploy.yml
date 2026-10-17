@@ -1,0 +1,49 @@
+name: deploy
+
+# main → test → web build → S3 sync + CloudFront invalidation → API image → ECR → SSM deploy (Blueprint §19.4).
+# Needs repository secrets AWS_ROLE_ARN (OIDC role with infra/ci-policy.json), WEB_BUCKET, DIST_ID, INSTANCE_ID; variable AWS_REGION.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency: deploy-main
+
+jobs:
+  deploy:
+    if: ${{ vars.AWS_REGION != '' }}
+    runs-on: ubuntu-latest
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci && npm ci --prefix api && npm test
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+      - name: Web to S3 and CloudFront
+        run: |
+          npm ci --prefix web && npm run build --prefix web
+          aws s3 sync web/dist "s3://${{ secrets.WEB_BUCKET }}/releases/${GITHUB_SHA::7}/" --delete
+          aws s3 sync web/dist "s3://${{ secrets.WEB_BUCKET }}/" --delete --exclude "releases/*"
+          aws cloudfront create-invalidation --distribution-id "${{ secrets.DIST_ID }}" --paths "/*"
+      - uses: aws-actions/amazon-ecr-login@v2
+        id: ecr
+      - name: API image to ECR
+        run: |
+          IMAGE=${{ steps.ecr.outputs.registry }}/leakdesk-api
+          docker build -f api/Dockerfile -t "$IMAGE:${GITHUB_SHA::7}" -t "$IMAGE:latest" .
+          docker push "$IMAGE:${GITHUB_SHA::7}" && docker push "$IMAGE:latest"
+      - name: Deploy on EC2 via SSM
+        run: |
+          CMD=$(aws ssm send-command --instance-ids "${{ secrets.INSTANCE_ID }}" --document-name AWS-RunShellScript \
+            --parameters "commands=[\"/opt/leakdesk/refresh.sh ${GITHUB_SHA::7}\"]" --query Command.CommandId --output text)
+          aws ssm wait command-executed --command-id "$CMD" --instance-id "${{ secrets.INSTANCE_ID }}"
