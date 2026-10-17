@@ -1150,6 +1150,8 @@
   flex-direction: column;
   padding: 16px 18px;
   transition: opacity var(--t-med);
+  /* The value scales to the card (cqi below), so crore-sized amounts fit the 6-card row. */
+  container-type: inline-size;
 }
 
 .kpi-head {
@@ -1199,7 +1201,7 @@
 
 .kpi-value {
   margin-top: 12px;
-  font-size: 24px;
+  font-size: clamp(16px, 13cqi, 24px);
   font-weight: 700;
   line-height: 1.15;
   letter-spacing: -0.02em;
@@ -1211,7 +1213,7 @@
 }
 
 .kpi-large .kpi-value {
-  font-size: var(--fs-kpi);
+  font-size: clamp(18px, 15cqi, var(--fs-kpi));
 }
 
 .kpi-primary {

@@ -1,9 +1,10 @@
+import { useTranslation } from 'react-i18next';
 import type { AnalysisResponse, OrderResult, WorkedOrderResult } from '../api/types';
 import { BridgeChart } from '../charts/BridgeChart';
 import { WaterfallChart, WaterfallNotes } from '../charts/WaterfallChart';
 import { BRAND } from '../brand';
 import { formatInr, formatPct, plural } from '../lib/format';
-import { LEAK_LABELS } from '../lib/labels';
+import { handlingEstimateUsed, LEAK_LABELS } from '../lib/labels';
 import { useStore, type BridgeFocus } from '../state/store';
 import { Pill } from './Badge';
 import { Button } from './Button';
@@ -15,29 +16,30 @@ import { Money } from './Money';
 import { Callout, Skeleton } from './ui';
 
 export function OrderPills({ order }: { order: OrderResult }) {
+  const { t } = useTranslation();
   return (
     <>
       {order.status === 'unknown' ? (
         <Pill tone="unknown" dot>
-          Unknown
+          {t('status.unknown')}
         </Pill>
       ) : order.returned ? (
         <Pill tone="neutral" dot>
-          Returned
+          {t('status.returned')}
         </Pill>
       ) : (
         <Pill tone="success" dot>
-          Kept
+          {t('status.kept')}
         </Pill>
       )}
       {order.late_refund ? (
         <Pill tone="warning" dot>
-          Late refund
+          {t('status.lateRefund')}
         </Pill>
       ) : null}
       {order.synthetic ? (
         <Pill tone="teal" dot>
-          Synthetic
+          {t('status.syntheticTag')}
         </Pill>
       ) : null}
     </>
@@ -164,6 +166,7 @@ function BridgeDetail({ a, focus }: { a: AnalysisResponse; focus: BridgeFocus })
   // The one subtraction the page does: gross that sits in unknown orders, outside the bridge.
   const excludedGross = bridgeGross === null ? 0 : a.totals.gross_inr - bridgeGross;
   const unknown = a.totals.unknown_count;
+  const handlingEstimated = handlingEstimateUsed(a);
   return (
     <div className="drawer-stack">
       {focusLine ? (
@@ -184,9 +187,9 @@ function BridgeDetail({ a, focus }: { a: AnalysisResponse; focus: BridgeFocus })
       ) : null}
       <section className="drawer-section" aria-label="Period waterfall">
         <h3 className="section-label">From gross sales to contribution</h3>
-        <BridgeChart lines={lines} focus={focus} estimated={a.config.handling_default_inr > 0 ? ['handling'] : []} />
+        <BridgeChart lines={lines} focus={focus} estimated={handlingEstimated ? ['handling'] : []} />
       </section>
-      {a.config.handling_default_inr > 0 ? (
+      {handlingEstimated ? (
         <p className="field-hint">
           Handling includes {formatInr(a.config.handling_default_inr)} per order, estimated for rows without handling_inr.
         </p>
