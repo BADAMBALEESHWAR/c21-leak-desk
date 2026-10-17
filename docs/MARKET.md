@@ -39,7 +39,7 @@ Competitor pricing and features are as published on their sites when we checked;
 |---|---|
 | Segment | Indian D2C brands doing 100–5,000 orders a month on Shopify, WooCommerce or marketplaces, with no finance team. Also agencies and accountants who serve several such brands |
 | Buyer and user | The founder-operator buys. The ops lead uses it weekly. The accountant reviews the decision log monthly |
-| Pricing (first test) | **Starter ₹999/month** up to 500 orders · **Growth ₹2,999/month** up to 3,000 orders · **Scale ₹7,999/month** up to 15,000 orders plus API access. Annual billing saves 20%. A free 14-day trial runs on your own CSV |
+| Pricing (first test) | **Free ₹0** up to 100 orders a month, no card · **Starter ₹999/month** up to 500 orders · **Growth ₹2,999/month** up to 3,000 orders · **Scale ₹7,999/month** up to 15,000 orders plus API access. Annual billing saves 20%. Paid plans start with a 14-day trial on your own orders. The free plan lets a founder see their own numbers before any sales call |
 | Price position | Starter is below TrueProfit's entry price (about $35) and far below Lifetimely's (about $149) |
 | First-customer path | Interview five founders about leakage → offer a free "sample order audit" on last month's CSV → show the leak board and one decision → convert to Starter |
 | Pilot promise | Run alongside a finance-approved contribution report for one month. We make no claim of statutory profit. Data stays in the customer's account and can be exported at any time |
