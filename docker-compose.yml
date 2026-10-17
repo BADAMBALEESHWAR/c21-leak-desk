@@ -1,0 +1,43 @@
+services:
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: api/Dockerfile
+    image: ${API_IMAGE:-leakdesk-api:local}
+    restart: unless-stopped
+    environment:
+      PORT: 8080
+      MONGO_URL: mongodb://mongo:27017/leakdesk
+      AI_DISABLED: ${AI_DISABLED:-1}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}
+      S3_BUCKET: ${S3_BUCKET:-}
+    ports:
+      - "${API_PORT:-8080}:8080"
+    depends_on:
+      mongo:
+        condition: service_healthy
+
+  web:
+    build:
+      context: web
+    image: ${WEB_IMAGE:-leakdesk-web:local}
+    restart: unless-stopped
+    ports:
+      - "${WEB_PORT:-3000}:80"
+    depends_on:
+      - api
+
+volumes:
+  mongo-data:
