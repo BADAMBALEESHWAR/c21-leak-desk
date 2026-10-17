@@ -1,4 +1,5 @@
 import { useRef, type KeyboardEvent } from 'react';
+import { formatCount } from '../lib/format';
 
 export interface TabItem<T extends string> {
   id: T;
@@ -54,7 +55,7 @@ export function Tabs<T extends string>({ label, idPrefix, tabs, value, onChange 
             onKeyDown={(e) => onKeyDown(e, i)}
           >
             <span className="tab-label">{t.label}</span>
-            {t.count !== undefined ? <span className="tab-count">{t.count}</span> : null}
+            {t.count !== undefined ? <span className="tab-count">{formatCount(t.count)}</span> : null}
           </button>
         );
       })}

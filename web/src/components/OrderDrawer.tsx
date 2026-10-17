@@ -9,6 +9,7 @@ import { Button } from './Button';
 import { Icon } from './Icon';
 import { ReconciliationLine } from './Reconciliation';
 import { Drawer } from './Drawer';
+import { AboutDetail, ChecksDetail } from './InfoDrawers';
 import { Money } from './Money';
 import { Callout, Skeleton } from './ui';
 
@@ -182,8 +183,13 @@ function BridgeDetail({ a, focus }: { a: AnalysisResponse; focus: BridgeFocus })
       ) : null}
       <section className="drawer-section" aria-label="Period waterfall">
         <h3 className="section-label">From gross sales to contribution</h3>
-        <BridgeChart lines={lines} focus={focus} />
+        <BridgeChart lines={lines} focus={focus} estimated={a.config.handling_default_inr > 0 ? ['handling'] : []} />
       </section>
+      {a.config.handling_default_inr > 0 ? (
+        <p className="field-hint">
+          Handling includes {formatInr(a.config.handling_default_inr)} per order, estimated for rows without handling_inr.
+        </p>
+      ) : null}
       {a.attribution === 'channel' ? (
         <p className="field-hint">Channel mode: ads move off the orders and channel spend is deducted once, at the channel line.</p>
       ) : null}
@@ -243,7 +249,7 @@ function MarginDetail({ a }: { a: AnalysisResponse }) {
           Unknown {plural(unknownOrders.length, 'order', 'orders')} ({unknownOrders.length})
         </h3>
         <ul className="unknown-list">
-          {unknownOrders.map((o) => (
+          {unknownOrders.slice(0, 20).map((o) => (
             <li key={o.order_id}>
               <button type="button" className="unknown-item" onClick={() => openOrderResult(o)} aria-label={`Open ${o.order_id}: missing ${o.unknown_fields.join(', ')}`}>
                 <span className="unknown-id">{o.order_id}</span>
@@ -253,6 +259,7 @@ function MarginDetail({ a }: { a: AnalysisResponse }) {
             </li>
           ))}
         </ul>
+        {unknownOrders.length > 20 ? <p className="field-hint">and {unknownOrders.length - 20} more in the ledger.</p> : null}
       </section>
       <Button
         variant="primary"
@@ -335,6 +342,14 @@ export function OrderDrawer() {
       </Pill>
     );
     body = <MarginDetail a={analysis} />;
+  } else if (drawer?.kind === 'checks') {
+    title = 'Public checks';
+    meta = <span className="drawer-date">Pack checks for case C21 · 25 points</span>;
+    body = <ChecksDetail />;
+  } else if (drawer?.kind === 'about') {
+    title = 'About Leak Desk';
+    meta = <span className="drawer-date">Order contribution and profit leak desk · C21</span>;
+    body = <AboutDetail />;
   } else if (drawer?.kind === 'missing') {
     title = drawer.orderId;
     body = <Callout tone="info" title={`Order ${drawer.orderId} is not in the current analysis.`}>Load a dataset that contains it, then open it from the ledger.</Callout>;

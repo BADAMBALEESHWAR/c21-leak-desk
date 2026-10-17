@@ -1,10 +1,12 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import type { AnalysisResponse, GroupRow, LineKey, OrderResult } from '../api/types';
 import { BarRows, type BarRow } from '../charts/BarRows';
 import { ChartCard } from '../charts/ChartCard';
 import { WhaleCurve } from '../charts/WhaleCurve';
 import { Pill, Unknown } from '../components/Badge';
-import { LinkButton } from '../components/Button';
+import { ButtonLink, LinkButton } from '../components/Button';
+import { Pagination } from '../components/Pagination';
+import { api } from '../api/client';
 import { NeedsAnalysis } from '../components/EmptyState';
 import { Icon } from '../components/Icon';
 import { Money } from '../components/Money';
@@ -19,6 +21,8 @@ import { ATTRIBUTION_LABEL } from '../lib/labels';
 import { useStore, type LedgerFilter } from '../state/store';
 
 type Filter = LedgerFilter;
+
+const PAGE_SIZE = 50;
 
 /** Table-focus requests already handled, kept across visits to this step. */
 let lastHandledFocus = 0;
@@ -43,7 +47,7 @@ function KeyCell({ value }: { value: string }) {
   return value === 'unassigned' ? <span className="cell-muted">unassigned</span> : <>{value}</>;
 }
 
-function Kpis({ a }: { a: AnalysisResponse }) {
+const Kpis = memo(function Kpis({ a }: { a: AnalysisResponse }) {
   const { openBridge, openMargin, focusLedgerTable } = useStore();
   const t = a.totals;
   const gateOpen = a.headline_gate.open && t.headline_ready !== false && t.contribution_pct !== null;
@@ -86,6 +90,7 @@ function Kpis({ a }: { a: AnalysisResponse }) {
               </Pill>
             )}
             {a.attribution === 'channel' && t.channel_spend_inr ? <span className="kpi-note">after {formatInr(t.channel_spend_inr)} channel spend</span> : null}
+            {a.config.handling_default_inr > 0 ? <span className="kpi-note">incl. estimated handling {formatInr(a.config.handling_default_inr)}/order</span> : null}
           </>
         }
       />
@@ -135,9 +140,9 @@ function Kpis({ a }: { a: AnalysisResponse }) {
       />
     </div>
   );
-}
+});
 
-function ChannelChart({ a }: { a: AnalysisResponse }) {
+const ChannelChart = memo(function ChannelChart({ a }: { a: AnalysisResponse }) {
   const channelMode = a.attribution === 'channel';
   const rows: BarRow[] = a.groups.channel.map((g) => ({
     key: g.key,
@@ -200,7 +205,7 @@ function ChannelChart({ a }: { a: AnalysisResponse }) {
       <BarRows rows={rows} ariaLabel="Contribution by channel" labelWidth={118} />
     </ChartCard>
   );
-}
+});
 
 function sumInr(rows: GroupRow[], pick: (r: GroupRow) => number | null): number | null {
   let s = 0;
@@ -212,7 +217,7 @@ function sumInr(rows: GroupRow[], pick: (r: GroupRow) => number | null): number 
   return s;
 }
 
-function OrdersTable({ orders }: { orders: OrderResult[] }) {
+function OrdersTable({ orders, handlingEstimate }: { orders: OrderResult[]; handlingEstimate: number }) {
   const { openOrderResult } = useStore();
   const columns: Column<OrderResult>[] = [
     {
@@ -258,7 +263,19 @@ function OrdersTable({ orders }: { orders: OrderResult[] }) {
     { id: 'ship', header: 'Shipping', align: 'right', cell: (o) => <Deduction order={o} k="shipping" /> },
     { id: 'fee', header: 'Fee', align: 'right', cell: (o) => <Deduction order={o} k="payment_fee" /> },
     { id: 'ret', header: 'Return', align: 'right', cell: (o) => <Deduction order={o} k="return_cost" /> },
-    { id: 'hand', header: 'Handling', align: 'right', cell: (o) => <Deduction order={o} k="handling" /> },
+    {
+      id: 'hand',
+      header:
+        handlingEstimate > 0 ? (
+          <span className="th-pill" title={`Rows without handling_inr use ${formatInr(handlingEstimate)} per order (estimate).`}>
+            Handling <Pill tone="warning">estimated</Pill>
+          </span>
+        ) : (
+          'Handling'
+        ),
+      align: 'right',
+      cell: (o) => <Deduction order={o} k="handling" />,
+    },
     { id: 'ads', header: 'Ads', align: 'right', cell: (o) => <Deduction order={o} k="ads" /> },
     {
       id: 'contribution',
@@ -368,7 +385,7 @@ function LateRefunds({ a }: { a: AnalysisResponse }) {
     <Callout tone="warning" title={`${n} ${plural(n, 'refund', 'refunds')} dated after the period end (${late.period_end}) ${plural(n, 'is', 'are')} pending`}>
       <p>Counted in this period as kept. If recognised, contribution changes by {formatInr(late.pending_delta_inr)}.</p>
       <ul className="late-list">
-        {late.orders.map((o) => (
+        {late.orders.slice(0, 5).map((o) => (
           <li key={o.order_id}>
             <LinkButton onClick={() => openOrderResult(o)}>{o.order_id}</LinkButton>
             <span className="cell-sub"> refund {o.refund_date}</span>
@@ -380,6 +397,7 @@ function LateRefunds({ a }: { a: AnalysisResponse }) {
           </li>
         ))}
       </ul>
+      {n > 5 ? <p className="muted small">and {n - 5} more — use the Late refund filter to see them all.</p> : null}
       <p>
         Total if recognised <Money value={late.total_if_recognised_inr} tone="contribution" />
       </p>
@@ -390,6 +408,7 @@ function LateRefunds({ a }: { a: AnalysisResponse }) {
 export function LedgerScreen() {
   const { analysis, ledgerTab: tab, setLedgerTab: setTab, ledgerFilter: filter, setLedgerFilter: setFilter, tableFocus, openOrderResult } = useStore();
   const [query, setQuery] = useState('');
+  const [page, setPage] = useState(1);
   const tableRef = useRef<HTMLElement>(null);
   const seenFocus = useRef(lastHandledFocus);
 
@@ -430,6 +449,12 @@ export function LedgerScreen() {
     });
   }, [orders, filter, query]);
 
+  // Any change to what is shown starts again at page 1.
+  const analysisKey = analysis?.analysis_id ?? null;
+  useEffect(() => {
+    setPage(1);
+  }, [filter, query, analysisKey]);
+
   if (!analysis) {
     return (
       <div className="page">
@@ -452,6 +477,14 @@ export function LedgerScreen() {
     { id: 'synthetic', label: 'Synthetic' },
   ];
   const notes = analysis.labels.filter((l) => !SHOWN_ELSEWHERE.includes(l));
+  const pageCount = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
+  const current = Math.min(page, pageCount);
+  const first = (current - 1) * PAGE_SIZE;
+  const pageRows = visible.slice(first, first + PAGE_SIZE);
+  const goPage = (p: number) => {
+    setPage(Math.max(1, Math.min(pageCount, p)));
+    tableRef.current?.querySelector('.table-sheet')?.scrollTo({ top: 0 });
+  };
   const unknownInCurve = analysis.orders.filter((o) => o.contribution_inr === null).length;
 
   return (
@@ -493,7 +526,7 @@ export function LedgerScreen() {
                     onClick={() => setFilter(f.id)}
                   >
                     {f.label}
-                    <span className="chip-count">{counts[f.id]}</span>
+                    <span className="chip-count">{formatCount(counts[f.id])}</span>
                   </button>
                 ))}
               </div>
@@ -504,6 +537,9 @@ export function LedgerScreen() {
               </label>
             </div>
           ) : null}
+          <ButtonLink variant="secondary" size="sm" icon="download" href={api.ledgerExportUrl(analysis.analysis_id, 'csv')} download className="toolbar-export">
+            Export CSV
+          </ButtonLink>
         </div>
         {tab === 'orders' && filter !== 'all' ? (
           <div className="filter-note" role="status">
@@ -520,10 +556,16 @@ export function LedgerScreen() {
         <div role="tabpanel" id={panelId('ledger', tab)} aria-labelledby={tabId('ledger', tab)} className="tabpanel">
           {tab === 'orders' ? (
             <>
-              <OrdersTable orders={visible} />
-              <p className="table-foot">
-                Showing {visible.length} of {analysis.orders.length} orders · select a row for its waterfall
-              </p>
+              <OrdersTable orders={pageRows} handlingEstimate={analysis.config.handling_default_inr} />
+              <div className="table-foot table-foot-pager">
+                <span>
+                  {visible.length === 0
+                    ? 'No orders to show'
+                    : `Showing ${formatCount(first + 1)}–${formatCount(first + pageRows.length)} of ${formatCount(visible.length)}`}
+                  {visible.length !== analysis.orders.length ? ` (filtered from ${formatCount(analysis.orders.length)})` : ''} · select a row for its waterfall
+                </span>
+                <Pagination page={current} pageCount={pageCount} onPage={goPage} label="Orders pages" />
+              </div>
             </>
           ) : tab === 'channel' ? (
             <ChannelTable a={analysis} />

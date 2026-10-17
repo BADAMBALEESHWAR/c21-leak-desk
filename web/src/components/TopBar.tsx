@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { toErrorInfo, type ErrorInfo } from '../api/client';
 import type { AttributionMode } from '../api/types';
+import { formatCount } from '../lib/format';
 import { ATTRIBUTION_LABEL } from '../lib/labels';
 import { hrefFor, type Route } from '../lib/router';
 import { useStore } from '../state/store';
@@ -41,7 +42,7 @@ export function TopBar({ route, onError }: { route: Route; onError: (e: ErrorInf
     onError(null);
     setSwitching(true);
     try {
-      await runAnalysis(mode, analysis.period_end, analysis.dataset_id);
+      await runAnalysis(mode, analysis.period_end, analysis.dataset_id, analysis.config.handling_default_inr);
     } catch (err) {
       onError(toErrorInfo(err));
     } finally {
@@ -67,7 +68,7 @@ export function TopBar({ route, onError }: { route: Route; onError: (e: ErrorInf
             <span className="chip-main">{name}</span>
             <span className="chip-extra">
               {' '}
-              · {orders} orders{synthetic > 0 ? ` · ${synthetic} synthetic` : ''}
+              · {formatCount(orders)} orders{synthetic > 0 ? ` · ${formatCount(synthetic)} synthetic` : ''}
             </span>
           </span>
         ) : null}

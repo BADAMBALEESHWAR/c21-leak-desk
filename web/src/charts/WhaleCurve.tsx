@@ -1,4 +1,4 @@
-import { useState, type KeyboardEvent, type PointerEvent } from 'react';
+import { memo, useState, type KeyboardEvent, type PointerEvent } from 'react';
 import type { WhalePoint } from '../api/types';
 import { formatInr, formatSignedInr, plural } from '../lib/format';
 import { ChartCard, ChartTip, useWidth, type TipState } from './ChartCard';
@@ -33,7 +33,7 @@ interface Props {
  * light wash, hairline axes, the fall after the peak marked in the loss tint, peak and final
  * labelled; a crosshair snaps to the nearest order (pointer or arrow keys).
  */
-export function WhaleCurve({ points, unknownCount, channelSpend }: Props) {
+export const WhaleCurve = memo(function WhaleCurve({ points, unknownCount, channelSpend }: Props) {
   const [ref, width] = useWidth<HTMLDivElement>(520);
   const [active, setActive] = useState<number | null>(null);
   const n = points.length;
@@ -208,4 +208,4 @@ export function WhaleCurve({ points, unknownCount, channelSpend }: Props) {
       </div>
     </ChartCard>
   );
-}
+});
