@@ -1,0 +1,354 @@
+{
+  "label": "Sample orders with labelled synthetic rows",
+  "orders": 27,
+  "synthetic_rows": 7,
+  "reconciliation": {
+    "orders_inr": 7053,
+    "channels_inr": 7053,
+    "products_inr": 7053,
+    "ok": true
+  },
+  "reconciliation_channel_mode": {
+    "orders_inr": 7053,
+    "channels_inr": 7053,
+    "products_inr": 7053,
+    "ok": true
+  },
+  "rows": [
+    {
+      "order_id": "O01",
+      "channel": null,
+      "product_id": null,
+      "synthetic": false,
+      "returned": false,
+      "status": "ok",
+      "net_sales_inr": 900,
+      "contribution_inr": 420,
+      "leak_cause": null,
+      "lines": [
+        {
+          "key": "gross",
+          "label": "Gross sales",
+          "amount_inr": 1000,
+          "source": "input"
+        },
+        {
+          "key": "discount",
+          "label": "Discount",
+          "amount_inr": -100,
+          "source": "input"
+        },
+        {
+          "key": "refund",
+          "label": "Refund",
+          "amount_inr": 0,
+          "source": "input"
+        },
+        {
+          "key": "net_product_cost",
+          "label": "Net product cost",
+          "amount_inr": -400,
+          "source": "derived"
+        },
+        {
+          "key": "shipping",
+          "label": "Shipping",
+          "amount_inr": -60,
+          "source": "input"
+        },
+        {
+          "key": "payment_fee",
+          "label": "Payment fee",
+          "amount_inr": -20,
+          "source": "input"
+        },
+        {
+          "key": "return_cost",
+          "label": "Return cost",
+          "amount_inr": 0,
+          "source": "input"
+        },
+        {
+          "key": "handling",
+          "label": "Handling",
+          "amount_inr": 0,
+          "source": "config_default"
+        },
+        {
+          "key": "ads",
+          "label": "Ads",
+          "amount_inr": 0,
+          "source": "not_supplied"
+        }
+      ]
+    },
+    {
+      "order_id": "O05",
+      "channel": null,
+      "product_id": null,
+      "synthetic": false,
+      "returned": true,
+      "status": "ok",
+      "net_sales_inr": 0,
+      "contribution_inr": -180,
+      "leak_cause": "full_return_partial_recovery",
+      "lines": [
+        {
+          "key": "gross",
+          "label": "Gross sales",
+          "amount_inr": 1000,
+          "source": "input"
+        },
+        {
+          "key": "discount",
+          "label": "Discount",
+          "amount_inr": -100,
+          "source": "input"
+        },
+        {
+          "key": "refund",
+          "label": "Refund",
+          "amount_inr": -900,
+          "source": "input"
+        },
+        {
+          "key": "net_product_cost",
+          "label": "Net product cost",
+          "amount_inr": -50,
+          "source": "derived"
+        },
+        {
+          "key": "shipping",
+          "label": "Shipping",
+          "amount_inr": -60,
+          "source": "input"
+        },
+        {
+          "key": "payment_fee",
+          "label": "Payment fee",
+          "amount_inr": -20,
+          "source": "input"
+        },
+        {
+          "key": "return_cost",
+          "label": "Return cost",
+          "amount_inr": -50,
+          "source": "input"
+        },
+        {
+          "key": "handling",
+          "label": "Handling",
+          "amount_inr": 0,
+          "source": "config_default"
+        },
+        {
+          "key": "ads",
+          "label": "Ads",
+          "amount_inr": 0,
+          "source": "not_supplied"
+        }
+      ]
+    },
+    {
+      "order_id": "S01",
+      "channel": "web",
+      "product_id": "P1",
+      "synthetic": true,
+      "returned": false,
+      "status": "ok",
+      "net_sales_inr": 1500,
+      "contribution_inr": 680,
+      "leak_cause": null,
+      "lines": [
+        {
+          "key": "gross",
+          "label": "Gross sales",
+          "amount_inr": 1500,
+          "source": "input"
+        },
+        {
+          "key": "discount",
+          "label": "Discount",
+          "amount_inr": 0,
+          "source": "input"
+        },
+        {
+          "key": "refund",
+          "label": "Refund",
+          "amount_inr": 0,
+          "source": "input"
+        },
+        {
+          "key": "net_product_cost",
+          "label": "Net product cost",
+          "amount_inr": -600,
+          "source": "derived"
+        },
+        {
+          "key": "shipping",
+          "label": "Shipping",
+          "amount_inr": -70,
+          "source": "input"
+        },
+        {
+          "key": "payment_fee",
+          "label": "Payment fee",
+          "amount_inr": -30,
+          "source": "input"
+        },
+        {
+          "key": "return_cost",
+          "label": "Return cost",
+          "amount_inr": 0,
+          "source": "input"
+        },
+        {
+          "key": "handling",
+          "label": "Handling",
+          "amount_inr": -20,
+          "source": "input"
+        },
+        {
+          "key": "ads",
+          "label": "Ads",
+          "amount_inr": -100,
+          "source": "input"
+        }
+      ]
+    },
+    {
+      "order_id": "S03",
+      "channel": "instagram",
+      "product_id": "P3",
+      "synthetic": true,
+      "returned": true,
+      "status": "ok",
+      "net_sales_inr": 0,
+      "contribution_inr": -664,
+      "leak_cause": "full_return_partial_recovery",
+      "lines": [
+        {
+          "key": "gross",
+          "label": "Gross sales",
+          "amount_inr": 1200,
+          "source": "input"
+        },
+        {
+          "key": "discount",
+          "label": "Discount",
+          "amount_inr": -100,
+          "source": "input"
+        },
+        {
+          "key": "refund",
+          "label": "Refund",
+          "amount_inr": -1100,
+          "source": "input"
+        },
+        {
+          "key": "net_product_cost",
+          "label": "Net product cost",
+          "amount_inr": -400,
+          "source": "derived"
+        },
+        {
+          "key": "shipping",
+          "label": "Shipping",
+          "amount_inr": -60,
+          "source": "input"
+        },
+        {
+          "key": "payment_fee",
+          "label": "Payment fee",
+          "amount_inr": -24,
+          "source": "input"
+        },
+        {
+          "key": "return_cost",
+          "label": "Return cost",
+          "amount_inr": -80,
+          "source": "input"
+        },
+        {
+          "key": "handling",
+          "label": "Handling",
+          "amount_inr": -20,
+          "source": "input"
+        },
+        {
+          "key": "ads",
+          "label": "Ads",
+          "amount_inr": -80,
+          "source": "input"
+        }
+      ]
+    },
+    {
+      "order_id": "S04",
+      "channel": "web",
+      "product_id": "P1",
+      "synthetic": true,
+      "returned": true,
+      "status": "unknown",
+      "net_sales_inr": null,
+      "contribution_inr": null,
+      "leak_cause": "refund_unknown",
+      "lines": [
+        {
+          "key": "gross",
+          "label": "Gross sales",
+          "amount_inr": 1000,
+          "source": "input"
+        },
+        {
+          "key": "discount",
+          "label": "Discount",
+          "amount_inr": -100,
+          "source": "input"
+        },
+        {
+          "key": "refund",
+          "label": "Refund",
+          "amount_inr": null,
+          "source": "input"
+        },
+        {
+          "key": "net_product_cost",
+          "label": "Net product cost",
+          "amount_inr": null,
+          "source": "derived"
+        },
+        {
+          "key": "shipping",
+          "label": "Shipping",
+          "amount_inr": -60,
+          "source": "input"
+        },
+        {
+          "key": "payment_fee",
+          "label": "Payment fee",
+          "amount_inr": -20,
+          "source": "input"
+        },
+        {
+          "key": "return_cost",
+          "label": "Return cost",
+          "amount_inr": null,
+          "source": "input"
+        },
+        {
+          "key": "handling",
+          "label": "Handling",
+          "amount_inr": -20,
+          "source": "input"
+        },
+        {
+          "key": "ads",
+          "label": "Ads",
+          "amount_inr": -50,
+          "source": "input"
+        }
+      ]
+    }
+  ]
+}
