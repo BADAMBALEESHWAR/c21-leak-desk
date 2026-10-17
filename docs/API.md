@@ -3,31 +3,62 @@
 Base path `/api/v1`. JSON in and out unless noted. Every response carries `x-request-id` and `x-engine-version`.
 Money fields end in `_inr` (whole rupees), percentages in `_pct` (0–100). `null` means unknown, never zero.
 Types: `api/src/engine/types.ts`. Request schemas (Zod): `api/src/schema/orders.ts`. Rules: `docs/RULES.md`.
+Internal names keep the engine's record name (`leakdesk-api`, `/leakdesk/*`); the product is Profyn.
 
 ## Endpoints
 
 | Method and path | Request | Response | Errors |
 |---|---|---|---|
+| `GET /auth/config` | — | `{enabled, domain, client_id, region}` — public sign-in settings, no secrets; `domain` and `client_id` are `null` when sign-in is off | — |
+| `GET /me` | — | `{user: {sub, email} \| null, auth_enabled, workspace: "account"\|"demo"}` | 401 |
+| `GET /workspace` | Bearer token | Signed in: `{workspace: "account", user, datasets: [{dataset_id, source, period_end, rows_kept, files, created_at, latest_analysis: {analysis_id, attribution, created_at, contribution_inr} \| null}], latest: {dataset_id, analysis_id} \| null}`, newest first; a dataset that was added to is listed only as its newest version. Without a token: `{workspace: "demo", user: null, datasets: [], latest: null}` | 401 |
 | `GET /health` | — | `{status: "ok"\|"degraded", db: "ok"\|"down"\|"memory", ai: "ok"\|"disabled"\|"degraded", storage: "local"\|"s3", engine_version, uptime_s}` | 503 when Mongo is configured but down |
 | `GET /checks` | — | `{check1:{expected, actual, six_lines, pass}, check2:{allocate_total, channel_total, fixture_total, reconciled, never_both, channel_spend, pass}, check3:{unknown_labelled, confidence, before, after_recovery_50, recommendation_changed, pass}, all_pass, engine_version}` — computed live, compared with `data/expected.json` | — |
 | `GET /worked-order` | — | six labelled lines, `contribution_inr: 230`, note | — |
 | `GET /samples` | — | `[{source, label, description, file}]` | — |
-| `POST /datasets` | `{source, period_end?}`, the fixture file shape `{records:{orders}}`, a bare `[orders]`, `text/csv`, or multipart field `file` (.json/.csv) | 201 `{dataset_id, source, rows_in, rows_kept, rows_rejected, kept_ids, synthetic_rows, flags:[{order_id, line, reason, detail, field?, path?, action}], warnings, period_end, schema_version, persisted}` | 413, 415, 422 |
+| `POST /datasets` | `{source, period_end?}`, the fixture file shape `{records:{orders}}`, a bare `[orders]`, `text/csv`, or multipart field `file` (.json/.csv), repeated for up to 12 files that are merged into one dataset (e.g. one CSV per month; 5 MB each, 10,000 orders in total) | 201 `{dataset_id, source, rows_in, rows_kept, rows_rejected, kept_ids, synthetic_rows, flags:[{order_id, line, file?, reason, detail, field?, path?, action}], warnings, period_end, schema_version, files?:[{name, rows}], persisted}`. With several files, every flag names its `file` and that file's own `line`; an `order_id` already seen in an earlier file is a duplicate (second one dropped). Optional `append_to=<dataset_id>` (form field or query) adds the upload to that saved dataset: orders whose id is already saved are ignored (flag "… is already saved — ignored."), the result is a new dataset version (`rows_added`, `duplicates_ignored`, `appended_to`, `files` so far); when nothing is new the answer is 200 `{unchanged: true, rows_added: 0, duplicates_ignored, message}` and the saved dataset stays as it was | 404, 413, 415, 422 |
 | `GET /datasets/:id` | — | dataset summary and flags | 404 |
 | `POST /datasets/:id/analyses` | `{attribution: "allocate"\|"channel", period_end?, config?: {handling_default_inr?}, channel_spend?: {channel: inr}}` | 201 `AnalysisResult & {analysis_id, dataset_id, persisted}` | 404, 409, 422 |
 | `GET /analyses/:id` | — | as above | 404 |
 | `GET /analyses/:id/orders/:order_id` | — | `{row, computed, waterfall:[{label, inr, note?}], status, flags}` | 404 |
+| `GET /analyses/:id/pulse/:view` | `view`: `overview`, `months`, `products`, `channels`, `leaks` or `insights`; `?month=YYYY-MM` for `overview` (default: the latest month) | `{analysis_id, …view fields, labels, unknown_count, synthetic_rows}`; see Pulse below | 404 (unknown analysis or view) |
 | `GET /analyses/:id/export?format=csv\|json` | — | per-order ledger file (CSV for spreadsheets; empty cell = unknown) with totals and reconciliation rows | 404 |
 | `GET /template.csv` | — | C21 CSV template: header plus a kept order, a return and a return with unknown refund facts | — |
 | `POST /analyses/:id/narrate` | — | `{ai, leaks:[{cause, why, why_source}], recommendation:{why, why_source}}` — optional AI rewording; template on any failure | 404 |
 | `POST /analyses/:id/scenarios` | `{overrides: exactly one of {return_rate_pct, recovery_pct, shipping_inr, refund_policy: "full"\|"partial", ads_per_order}, optionally with assume_unknown_refund: true}` | 201 `{scenario_id, changed, overrides, baseline, scenario, delta:{…, by_order[≤10]}, recommendation, baseline_recommendation, candidates[], assumptions[], observed, persisted}` | 404, 422 `override_invalid` |
 | `GET /scenarios/:id` | — | stored scenario | 404 |
 | `POST /scenarios/:id/test-plan` | — | `{intervention, test_30d, stop_rule, expected_delta_inr, source}` | 404 |
-| `POST /analyses/:id/decisions` | `{scenario_id?, intervention, expected_delta_inr, test_30d, stop_rule, owner, notes?}` | 201 `{decision_id, saved_at, assumptions, engine_version, persisted}` | 404, 422 (field path), 503 |
+| `POST /analyses/:id/decisions` | `{scenario_id?, intervention, expected_delta_inr, test_30d, stop_rule, owner, notes?}` | 201 `{decision_id, saved_at, assumptions, engine_version, persisted, workspace: "demo"\|"account"\|"shared"}` | 404, 422 (field path), 503 |
 | `GET /decisions` · `GET /decisions/:id` | — | list · full record with assumption snapshot and evidence | 404 |
 | `GET /decisions/:id/export?format=md\|json` | — | file download; Markdown includes the three check values | 404 |
 
-Sample sources: `fixture`, `extended`, `duplicate_order`, `late_refund`, `null_refund`, `missing_fee`, `refund_over_gross`, `recovery_400`, `bad_schema`.
+Sample sources: `fixture`, `extended`, `duplicate_order`, `late_refund`, `null_refund`, `missing_fee`, `refund_over_gross`, `recovery_400`, `bad_schema`, `demo_12m` (3,020 labelled synthetic orders, Oct 2025–Sep 2026, for Pulse; never used by `/checks`).
+
+Optional order columns for Pulse: `payment_type` (`cod`\|`prepaid`; header aliases `payment_method`, `payment_mode`), `customer_id` (alias `customer`) and `units` (whole number, at least 1; 1 when missing; aliases `qty`, `quantity`). Without them, the payment and repeat-customer views return `{not_in_file: true}`.
+
+## Sign-in
+
+Sign-in is optional (Amazon Cognito, `api/src/auth.ts`). It is off unless `COGNITO_POOL_ID`, `COGNITO_CLIENT_ID` and `COGNITO_DOMAIN` are all set. When it is off, an `Authorization` header is ignored and the API behaves as it did before sign-in (decisions saved as usual, `workspace: "shared"`).
+
+When it is on:
+
+- Send `Authorization: Bearer <id token>`. A valid token scopes datasets, analyses and decisions to that account; another account's records answer 404 `not_found`.
+- No token: the caller is a guest in the demo workspace. Guest decisions are kept in memory only (`workspace: "demo"`, `persisted: false`).
+- An invalid or expired token is 401 `unauthorized`. A missing token is never blocked.
+- `/health`, `/checks`, `/worked-order`, `/samples`, `/template.csv` and the web app's deep links work without a login.
+
+## Pulse
+
+Owner analytics over the same reconciled orders as the ledger (`api/src/engine/pulse.ts`). Read-only; each view is cached per analysis. Contribution is after ads in both attribution modes, so monthly and product totals equal `totals.contribution_inr`.
+
+| View | Response fields |
+|---|---|
+| `overview` | `month, months[], headline, previous, deltas: {orders_pct, net_sales_pct, contribution_pct, return_pct_pts}, best, worst, actions[≤3]` — best and worst by net sales, contribution and contribution per order; each action is `{title, detail, recoverable_inr, lever, overrides?}`, and `overrides` pre-fills a scenario |
+| `months` | `months: [{month, orders, unknown, gross_inr, net_sales_inr, contribution_inr, contribution_pct, return_pct, discount_depth_pct, aov_inr}]` |
+| `products` | `products: [{product_id, units, orders, net_sales_inr, contribution_inr, contribution_per_unit_inr, return_pct, discount_depth_pct, shipping_pct, rank_units, rank_net_sales, rank_contribution, label: "push"\|"fix"\|"niche"\|"review", lever, note}]` |
+| `channels` | `attribution, channels: [{channel, orders, net_sales_inr, contribution_inr, return_pct, ads_inr, ads_share_pct}], payments: {rows, cod_vs_prepaid_return_ratio} \| {not_in_file: true}` |
+| `leaks` | `causes[], months: [{month, by_cause, total_lost_inr, unknown_orders}]` |
+| `insights` | `discount_bands[], negative_from_discount_band, order_value_bands[], repeat: {customers, repeat_customers, repeat_rate_pct, contribution_per_order_first_inr, contribution_per_order_repeat_inr} \| {not_in_file: true}` |
 
 ## Error body (Blueprint §16.1)
 
@@ -37,12 +68,13 @@ Sample sources: `fixture`, `extended`, `duplicate_order`, `late_refund`, `null_r
 
 | HTTP | code | When |
 |---|---|---|
+| 401 | `unauthorized` | sign-in on and the Bearer token is invalid, expired or malformed |
 | 413 | `file_too_large` | over 5 MB or 10,000 rows |
 | 415 | `unsupported_type` | not JSON or CSV |
 | 422 | `schema_invalid` | missing or mistyped field; `path` names it |
 | 422 | `no_valid_rows` | every row rejected; `issues` lists each |
 | 422 | `override_invalid` | scenario with zero or several overrides |
-| 404 | `not_found` | unknown dataset, analysis, scenario, decision or order |
+| 404 | `not_found` | unknown dataset, analysis, scenario, decision, order or Pulse view; or a record of another account |
 | 409 | `attribution_conflict` | explicit channel spend with per-order ads in allocate mode; `hint` is the rule |
 | 503 | `db_unavailable` | Mongo down on a decision save (analyses still compute, `persisted: false`) |
 
