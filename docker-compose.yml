@@ -27,6 +27,9 @@ services:
       COGNITO_POOL_ID: ${COGNITO_POOL_ID:-}
       COGNITO_CLIENT_ID: ${COGNITO_CLIENT_ID:-}
       COGNITO_DOMAIN: ${COGNITO_DOMAIN:-}
+    # Uploads and large stored records when S3 is not configured; kept across rebuilds.
+    volumes:
+      - uploads:/app/data/uploads
     ports:
       - "${API_PORT:-8080}:8080"
     depends_on:
@@ -45,3 +48,4 @@ services:
 
 volumes:
   mongo-data:
+  uploads:

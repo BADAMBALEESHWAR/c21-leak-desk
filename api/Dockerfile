@@ -14,6 +14,8 @@ COPY --from=build /app/api/node_modules ./node_modules
 COPY --from=build /app/api/dist ./dist
 COPY api/package.json ./
 COPY data /app/data
+# Uploaded files and large stored records land here when S3 is not configured (or is unreachable).
+RUN mkdir -p /app/data/uploads && chown -R node:node /app/data/uploads
 USER node
 EXPOSE 8080
 HEALTHCHECK --interval=15s --timeout=3s --retries=5 CMD wget -qO- http://127.0.0.1:8080/api/v1/health >/dev/null || exit 1
