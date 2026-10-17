@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { aiStatus, MAX_CALLS_PER_ANALYSIS, narrate } from '../ai/client.js';
 import { analyze } from '../engine/analyze.js';
+import { canSee, accountOf, type AuthUser } from '../auth.js';
 import { ah, notFound } from '../errors.js';
 import { ledgerCsv } from '../export/csv.js';
 import { analyses, datasets, newId, type AnalysisRecord, type DatasetRecord } from '../repo.js';
@@ -8,9 +9,9 @@ import { AnalysisRequestSchema } from '../schema/orders.js';
 
 export const analysesRouter = Router();
 
-export async function loadAnalysis(id: string): Promise<{ analysis: AnalysisRecord; dataset: DatasetRecord }> {
+export async function loadAnalysis(id: string, viewer?: AuthUser): Promise<{ analysis: AnalysisRecord; dataset: DatasetRecord }> {
   const analysis = await analyses.get(id);
-  if (!analysis) throw notFound('Analysis', id);
+  if (!analysis || !canSee(analysis.account, viewer)) throw notFound('Analysis', id);
   const dataset = await datasets.get(analysis.dataset_id);
   if (!dataset) throw notFound('Dataset', analysis.dataset_id);
   return { analysis, dataset };
@@ -36,7 +37,7 @@ analysesRouter.post(
   ah(async (req, res) => {
     const body = AnalysisRequestSchema.parse(req.body ?? {});
     const dataset = await datasets.get(req.params.id);
-    if (!dataset) throw notFound('Dataset', req.params.id);
+    if (!dataset || !canSee(dataset.account, req.user)) throw notFound('Dataset', req.params.id);
     const started = Date.now();
     const result = analyze(dataset.rows, {
       attribution: body.attribution,
@@ -46,6 +47,7 @@ analysesRouter.post(
     });
     const record: AnalysisRecord = {
       _id: newId(),
+      account: accountOf(req.user),
       dataset_id: dataset._id,
       engine_version: result.engine_version,
       attribution: result.attribution,
@@ -64,7 +66,7 @@ analysesRouter.post(
 analysesRouter.get(
   '/analyses/:id',
   ah(async (req, res) => {
-    const { analysis } = await loadAnalysis(req.params.id);
+    const { analysis } = await loadAnalysis(req.params.id, req.user);
     res.json(view(analysis));
   }),
 );
@@ -73,7 +75,7 @@ analysesRouter.get(
 analysesRouter.get(
   '/analyses/:id/export',
   ah(async (req, res) => {
-    const { analysis } = await loadAnalysis(req.params.id);
+    const { analysis } = await loadAnalysis(req.params.id, req.user);
     const format = req.query.format === 'json' ? 'json' : 'csv';
     res.setHeader('Content-Disposition', `attachment; filename="ledger-${analysis._id}.${format}"`);
     if (format === 'json') res.type('application/json').send(JSON.stringify(view(analysis), null, 2));
@@ -85,7 +87,7 @@ analysesRouter.get(
 analysesRouter.get(
   '/analyses/:id/orders/:order_id',
   ah(async (req, res) => {
-    const { analysis, dataset } = await loadAnalysis(req.params.id);
+    const { analysis, dataset } = await loadAnalysis(req.params.id, req.user);
     const computed = analysis.result.orders.find((o) => o.order_id === req.params.order_id);
     if (!computed) throw notFound('Order', req.params.order_id);
     res.json({
@@ -102,7 +104,7 @@ analysesRouter.get(
 analysesRouter.post(
   '/analyses/:id/narrate',
   ah(async (req, res) => {
-    const { analysis } = await loadAnalysis(req.params.id);
+    const { analysis } = await loadAnalysis(req.params.id, req.user);
     const a = analysis.result;
     const leaks = await Promise.all(
       a.leaks.slice(0, MAX_CALLS_PER_ANALYSIS - 1).map(async (l) => {

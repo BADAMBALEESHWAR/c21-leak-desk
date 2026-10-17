@@ -8,6 +8,7 @@ import type { ScenarioOverrides } from './schema/orders.js';
 
 export interface DatasetRecord {
   _id: string;
+  account?: string;
   source: string;
   rows: OrderRow[];
   flags: ValidationFlag[];
@@ -16,11 +17,18 @@ export interface DatasetRecord {
   period_end: string;
   rows_in: number;
   rows_rejected: number;
+  /** Kept rows, stored so a workspace list never has to load the rows themselves. */
+  rows_kept?: number;
+  /** Files merged into this dataset, in upload order. */
+  files?: Array<{ name: string; rows: number }>;
+  /** The dataset this one extends (an upload added to saved data). */
+  supersedes?: string;
   created_at: Date;
 }
 
 export interface AnalysisRecord {
   _id: string;
+  account?: string;
   dataset_id: string;
   engine_version: string;
   attribution: string;
@@ -41,6 +49,7 @@ export interface ScenarioRecord {
 
 export interface DecisionRecord {
   _id: string;
+  account?: string;
   analysis_id: string;
   scenario_id?: string;
   intervention: string;
@@ -97,12 +106,26 @@ class Collection<T extends { _id: string }> {
     }
   }
 
-  async list(sortField: keyof T): Promise<T[]> {
+  /** One account's records only (never guest or shared ones), newest first, with just the named fields from Mongo. */
+  async summaries(account: string, sortField: keyof T & string, fields: string): Promise<Array<Partial<T> & { _id: string }>> {
+    const memory = [...this.mem.values()].filter((d) => (d as { account?: string }).account === account);
+    if (dbState() !== 'connected') return memory.sort((a, b) => (a[sortField] < b[sortField] ? 1 : -1));
+    const docs = (await this.model.find({ account }).select(fields).sort({ [sortField]: -1 }).limit(50).lean()) as unknown as Array<Partial<T> & { _id: string }>;
+    const seen = new Set(docs.map((d) => d._id));
+    const key = (d: Partial<T>) => String(d[sortField] instanceof Date ? (d[sortField] as Date).toISOString() : d[sortField]);
+    return [...docs, ...memory.filter((d) => !seen.has(d._id))].sort((a, b) => (key(a) < key(b) ? 1 : -1));
+  }
+
+  async list(sortField: keyof T, account?: string): Promise<T[]> {
+    const mine = (d: T) => account === undefined || (d as { account?: string }).account === account || (account === 'guest' && !(d as { account?: string }).account);
+    const memory = [...this.mem.values()].filter(mine);
     if (dbState() === 'connected') {
-      const docs = (await this.model.find().sort({ [sortField as string]: -1 }).limit(100).lean()) as unknown as T[];
-      return docs;
+      const query = account === undefined ? {} : account === 'guest' ? { $or: [{ account: 'guest' }, { account: { $exists: false } }] } : { account };
+      const docs = (await this.model.find(query).sort({ [sortField as string]: -1 }).limit(100).lean()) as unknown as T[];
+      const seen = new Set(docs.map((d) => d._id));
+      return [...docs, ...memory.filter((d) => !seen.has(d._id))].sort((a, b) => (a[sortField] < b[sortField] ? 1 : -1));
     }
-    return [...this.mem.values()].sort((a, b) => (a[sortField] < b[sortField] ? 1 : -1));
+    return memory.sort((a, b) => (a[sortField] < b[sortField] ? 1 : -1));
   }
 }
 
@@ -113,7 +136,11 @@ const decisionStore = new Collection<DecisionRecord>('decisions', DecisionModel)
 
 /** Decisions are the saved result: they need the database when one is configured. */
 export const decisions = {
-  async save(doc: DecisionRecord): Promise<boolean> {
+  async save(doc: DecisionRecord, opts: { memoryOnly?: boolean } = {}): Promise<boolean> {
+    if (opts.memoryOnly) {
+      decisionStore.remember(doc);
+      return false;
+    }
     const state = dbState();
     if (state === 'down') {
       throw new HttpError(503, 'db_unavailable', 'The database is not reachable, so the decision was not saved. Check that Mongo is running, then save again.');
@@ -125,5 +152,5 @@ export const decisions = {
     return persisted;
   },
   get: (id: string) => decisionStore.get(id),
-  list: () => decisionStore.list('saved_at'),
+  list: (account?: string) => decisionStore.list('saved_at', account),
 };

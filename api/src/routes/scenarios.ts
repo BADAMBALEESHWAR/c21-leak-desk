@@ -1,17 +1,26 @@
 import { Router } from 'express';
 import { scenarioFor } from '../engine/analyze.js';
 import { ah, notFound } from '../errors.js';
-import { newId, scenarios } from '../repo.js';
+import { canSee, type AuthUser } from '../auth.js';
+import { analyses, newId, scenarios } from '../repo.js';
 import { ScenarioRequestSchema } from '../schema/orders.js';
 import { ledgerOptionsOf, loadAnalysis } from './analyses.js';
 
 export const scenariosRouter = Router();
 
+/** A scenario is visible to whoever can see its analysis (signed-in accounts never see each other's). */
+async function loadScenario(id: string, viewer?: AuthUser) {
+  const s = await scenarios.get(id);
+  const analysis = s ? await analyses.get(s.analysis_id) : null;
+  if (!s || (analysis && !canSee(analysis.account, viewer))) throw notFound('Scenario', id);
+  return s;
+}
+
 scenariosRouter.post(
   '/analyses/:id/scenarios',
   ah(async (req, res) => {
     const body = ScenarioRequestSchema.parse(req.body ?? {});
-    const { analysis, dataset } = await loadAnalysis(req.params.id);
+    const { analysis, dataset } = await loadAnalysis(req.params.id, req.user);
     const started = Date.now();
     const result = scenarioFor(dataset.rows, ledgerOptionsOf(analysis), body.overrides);
     const id = newId();
@@ -24,8 +33,7 @@ scenariosRouter.post(
 scenariosRouter.get(
   '/scenarios/:id',
   ah(async (req, res) => {
-    const s = await scenarios.get(req.params.id);
-    if (!s) throw notFound('Scenario', req.params.id);
+    const s = await loadScenario(req.params.id, req.user);
     res.json({ scenario_id: s._id, analysis_id: s.analysis_id, ...s.result });
   }),
 );
@@ -34,8 +42,7 @@ scenariosRouter.get(
 scenariosRouter.post(
   '/scenarios/:id/test-plan',
   ah(async (req, res) => {
-    const s = await scenarios.get(req.params.id);
-    if (!s) throw notFound('Scenario', req.params.id);
+    const s = await loadScenario(req.params.id, req.user);
     const r = s.result.recommendation;
     res.json({
       scenario_id: s._id,
