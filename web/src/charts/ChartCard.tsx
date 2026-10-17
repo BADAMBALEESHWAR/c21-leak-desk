@@ -19,7 +19,7 @@ export function useWidth<T extends HTMLElement>(fallback = 560): [RefObject<T>, 
   return [ref, width];
 }
 
-export type SeriesTone = 'series-1' | 'series-2' | 'muted' | 'loss' | 'gain' | 'primary';
+export type SeriesTone = 'series-1' | 'series-2' | 'muted' | 'loss' | 'gain' | 'primary' | 'cat-1' | 'cat-2' | 'cat-3' | 'cat-4' | 'cat-5';
 
 export interface LegendItem {
   label: string;
