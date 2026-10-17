@@ -152,6 +152,8 @@ export function computeLedger(allRows: OrderRow[], opts: LedgerOptions, describe
   const labels = [ATTRIBUTION_LABEL, 'Operational contribution, not statutory net profit.'];
   if (rows.some((r) => r.synthetic)) labels.push('Includes labelled synthetic rows (synthetic: true); they are not observed data.');
   if (rows.some((r) => r.handling_inr === undefined)) labels.push(`Handling ${formatInr(handling)} per order where the row has none (estimate).`);
+  const outside = allRows.length - rows.length;
+  if (outside > 0) labels.push(`${outside} order${outside === 1 ? " is" : "s are"} dated after the period end (${periodEnd}) and outside this period.`);
 
   return {
     engine_version: ENGINE_VERSION,

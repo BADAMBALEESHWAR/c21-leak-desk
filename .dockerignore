@@ -8,3 +8,6 @@ docs
 *.docx
 *.zip
 data/uploads
+.env
+.env.*
+!.env.example

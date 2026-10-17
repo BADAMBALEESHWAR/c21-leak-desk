@@ -8,6 +8,22 @@ Every number comes from a deterministic, tested engine; template text (or, optio
 
 Operational contribution, not statutory net profit. The fixture and every added row are synthetic teaching data; no claim of live revenue or production readiness.
 
+## MVP and USPs
+
+**MVP: one journey, five steps.** Import order economics → Ledger with contribution per order that reconciles to channel and product totals → Leaks grouped by cause → Scenario with one controlled change → Decision with an assumption snapshot, 30-day test and stop rule.
+
+**What makes it different**
+
+1. Refund and recovery facts before any profit headline: the margin stays hidden until they are complete.
+2. Every rupee is deterministic and auditable; AI only rewords text and is rejected if it adds a number.
+3. Ads are never deducted twice: switch attribution and the totals stay reconciled.
+4. Unknown is a value, never zero: partial totals and labelled assumptions.
+5. One controlled change leads to one measurable decision.
+6. Works from a CSV today (template and column aliases; 10,000 orders in about 0.3 s), with the same contract for Fynd order APIs tomorrow.
+7. Judge-ready proof: `/checks`, the Pack checks panel, `make check` PASS ×3 and CI from a clean clone.
+
+Details, proof for each claim and the pitch outline: `docs/PRODUCT.md`.
+
 ## Run it
 
 ```
@@ -21,7 +37,7 @@ Without Docker (Node 20+; the API uses an in-memory store when `MONGO_URL` is em
 npm run setup
 npm run dev:api                  # http://localhost:8080/api/v1/health
 npm run dev:web                  # http://localhost:5173
-npm test                         # 127 Vitest tests: engine, reconcile, validate, scenario, api, ai-guard, fuzz
+npm test                         # 133 Vitest tests: engine, reconcile, validate, scenario, api, ai-guard, fuzz, perf
 npm run ui:smoke                 # clicks through the journey in Edge (needs dev:web running)
 npm run check
 ```
@@ -52,7 +68,7 @@ npm run check
 | `tests/` | Acceptance tests (Blueprint §18) |
 | `scripts/check.mjs` | Check harness: `BASE_URL=… npm run check` |
 | `infra/`, `.github/workflows/` | Docker, AWS scripts (S3, CloudFront, EC2, ECR, IAM, SSM, CloudWatch), CI and deploy |
-| `docs/` | `DEMO.md`, `RULES.md`, `API.md`, `DEPLOY.md`, `SNAPSHOT.md`, `FEEDBACK.md`, `adr/`, `mba/` |
+| `docs/` | `PRODUCT.md` (MVP, USPs, pitch), `DEMO.md`, `RULES.md`, `API.md`, `DEPLOY.md`, `SNAPSHOT.md`, `FEEDBACK.md`, `adr/`, `mba/` |
 
 ## Data rules
 
