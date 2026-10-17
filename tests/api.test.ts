@@ -97,6 +97,9 @@ describe('api contract (Blueprint §10, §16)', () => {
     const a = await request(app).post(`${api}/datasets/${added.body.dataset_id}/analyses`).send({});
     expect(a.body.orders.map((o: { order_id: string }) => o.order_id).sort()).toEqual(['A1', 'S1']);
     expect((await request(app).post(`${api}/datasets?append_to=nope`).attach('file', Buffer.from(sep), 'sep.csv')).status).toBe(404);
+    // Aimed at the superseded first version: it follows on to the newest one, so nothing is duplicated.
+    const stale = await request(app).post(`${api}/datasets?append_to=${first.body.dataset_id}`).attach('file', Buffer.from(sep), 'sep.csv');
+    expect(stale.body).toMatchObject({ unchanged: true, dataset_id: added.body.dataset_id, duplicates_ignored: 2 });
   });
 
   it('a broken file in a multi-file upload is named in the error', async () => {
