@@ -1,0 +1,33 @@
+﻿Item,Unit,Base assumption,Downside assumption,Source or status,Formula or treatment
+Gross per order,INR/order,1000,1000,fixture (synthetic),gross_inr; the same on all 20 fixture orders
+Discount per order,INR/order,100,100,fixture (synthetic),discount_inr; 10% of gross
+Refund per returned order,INR/order,900,900,fixture (synthetic),"Full refund = gross − discount = 1,000 − 100; kept orders refund 0"
+Net sales per kept order,INR/order,900,900,fixture (synthetic),"gross − discount − refund = 1,000 − 100 − 0 (R1)"
+Net sales per returned order,INR/order,0,0,fixture (synthetic),"1,000 − 100 − 900 (R1)"
+Product cost,INR/order,400,400,fixture (synthetic),product_cost_inr
+Recovered product cost per returned order,INR/order,350,200,fixture (synthetic); downside = scenario recovery 50% (check 3),"Stock value recovered after a return; subtracted from product cost once, never added to revenue (R2)"
+Net product cost per returned order,INR/order,50,200,fixture (synthetic); downside = scenario recovery 50%,product cost − recovered = 400 − 350; downside 400 − 200
+Shipping,INR/order,60,60,fixture (synthetic),"shipping_inr; outbound, borne by the brand"
+Payment fee,INR/order,20,20,fixture (synthetic),"payment_fee_inr; null would make the order unknown, never zero"
+Return cost per returned order,INR/order,50,50,fixture (synthetic),return_cost_inr; reverse logistics and inspection
+Handling,INR/order,0,0,engine default (labelled estimate); the fixture has no handling column,"handling_inr if the row has it, else ₹0 labelled estimate (R4); replace with the founder's real pick and pack cost before a pilot"
+Ads,INR/order,0,0,fixture (synthetic); reference rows carry no ads,"Deducted per order (allocate) or once per channel (channel spend), never both (R3)"
+Contribution per kept order,INR/order,420,420,fixture (synthetic),900 − 400 − 60 − 20 − 0 − 0 − 0 (R5)
+Contribution per returned order,INR/order,-180,-330,fixture (synthetic); downside = scenario recovery 50%,0 − (400 − 350) − 60 − 20 − 50 = −180; downside 0 − (400 − 200) − 60 − 20 − 50 = −330
+Return rate,percent,20,30,fixture (synthetic): 4 of 20 returned; downside = scenario return rate 30%,returned orders / orders × 100
+Blended contribution per order,INR/order,300,240,fixture (synthetic); downside = return rate 30% at the same recovery,"(16 × 420 + 4 × (−180)) / 20 = 6,000 / 20; downside 4,800 / 20"
+Contribution for the 20-order period,INR/period,6000,4800,fixture (synthetic); downside = return rate 30%,Σ order contribution; Σ orders = Σ channels = Σ products
+Contribution % of net sales,percent,41.7,38.1,fixture (synthetic); downside = return rate 30%,"6,000 / 14,400 × 100; downside 4,800 / 12,600 × 100; shown only when refund and recovery facts are complete (headline gate)"
+Value of the recommended change (charge return shipping),INR/period,200,300,"fixture (synthetic); second column = return rate 30%, where the change is worth more","returned orders × return cost = 4 × 50; at 30%: 6 × 50; confidence low at 4 returns, high at 6"
+"Loss on returned orders at 1,000 orders a month",INR/month,36000,54000,"assumption to test: the fixture mix scaled to 1,000 orders; not observed","1,000 × return rate × 180 = 1,000 × 20% × 180; downside 1,000 × 30% × 180"
+Subscription price,INR/brand/month,1500,999,assumption to test (price hypothesis; no market evidence),"Monthly contribution-report subscription; test ₹999, ₹1,500 and ₹2,500 in interviews and in the paid-pilot ask"
+Payment collection fee,INR/brand/month,30,20,assumption to test,price × 2 / 100 (gateway rate assumed at 2%)
+Analyst time per report,minutes/report,30,60,assumption to test,Mapping the founder's export to the C21 schema and reviewing flags; falls if column mapping is built
+Analyst cost per hour,INR/hour,400,400,assumption to test,Classroom assumption
+Analyst cost per report,INR/report,200,400,assumption to test,minutes / 60 × hourly cost = 30 / 60 × 400; downside 60 / 60 × 400
+Hosting share per report,INR/report,50,100,assumption to test,"Shared instance, storage and backup cost / reports served in the month"
+Cost to serve per report,INR/report,280,520,assumption to test,payment fee + analyst cost + hosting share = 30 + 200 + 50; downside 20 + 400 + 100
+Contribution per subscriber,INR/brand/month,1220,479,assumption to test,"price − cost to serve = 1,500 − 280; downside 999 − 520"
+Acquisition cost per paying customer,INR/customer,2500,5000,assumption to test (from Growth_Plan),"30-day budget / paying pilots = 5,000 / 2; downside 5,000 / 1"
+Months to recover acquisition cost,months,2.0,10.4,assumption to test,"acquisition cost / contribution per subscriber = 2,500 / 1,220; downside 5,000 / 479"
+Other costs,,,,Excluded,"Founder sales time, fixed team costs, taxes and GST, subscription refunds; add before a real pilot"
