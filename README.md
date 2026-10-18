@@ -2,7 +2,7 @@
 
 **Know More. Earn Better.** Profyn ("profit + insights") answers Fynd × NMIMS case C21, Order Contribution and Profit Leak Desk.
 
-Live site: **https://d2gmrabs4sk8gk.cloudfront.net** (AWS Mumbai: CloudFront, S3, EC2, Cognito; every push to `main` redeploys). The profyn.in domain is being registered and will point to the same site. Steps: `docs/DEPLOY.md`.
+Live site: **https://d2gmrabs4sk8gk.cloudfront.net** (AWS Mumbai: CloudFront, S3, EC2, Cognito; every push to `main` redeploys). Steps: `docs/DEPLOY.md`.
 
 A small D2C founder sees net sales, not contribution.
 Profyn imports order economics, computes operational contribution per order with explicit refund and recovery semantics,
@@ -11,6 +11,16 @@ compares one controlled cost or refund scenario, and saves one measurable decisi
 Every number comes from a deterministic, tested engine; template text (or, optionally, AI) only words it.
 
 Operational contribution, not statutory net profit. The fixture and every added row are synthetic teaching data; no claim of live revenue or production readiness.
+
+## Demo
+
+- **Live:** https://d2gmrabs4sk8gk.cloudfront.net. "Try the demo" opens the app on synthetic sample data with no sign-in; "Watch demo · 2 min" on the landing page plays the recording.
+- **Recording:** `web/public/media/profyn-demo.mp4` (1 min 49 s, captioned), served at `/media/profyn-demo.mp4`.
+- **Proof in the app:** `#/checks` shows the four checks line by line, `#/changelog` the refund and recovery semantics, `#/report` a printable monthly report.
+- **Edit a flagged row:** Import → flagged rows → Edit. The correction is saved as a new dataset version with an audit trail; the original stays as it was.
+- **Decision export:** `docs/sample_decision.json` is a saved decision with its starting state, scenario, assumptions and 30-day check.
+- **Languages:** English, हिन्दी, తెలుగు (switch in the top bar).
+- **Scope:** `docs/SCOPE.md`. **Snapshot:** `docs/SNAPSHOT.md`.
 
 ## MVP and USPs
 
@@ -31,7 +41,7 @@ Operational contribution, not statutory net profit. The fixture and every added 
 4. Unknown is a value, never zero: partial totals and labelled assumptions.
 5. One controlled change leads to one measurable decision.
 6. Works from a CSV today (template and column aliases; 10,000 orders analysed in under 1 s), with the same contract for Fynd order APIs tomorrow.
-7. Proof built in: `/checks`, the checks panel, `make check` PASS ×3 and CI from a clean clone.
+7. Proof built in: `/checks`, the checks panel, `make check` PASS ×4 and CI from a clean clone.
 
 Details, proof for each claim and the pitch outline: `docs/PRODUCT.md`. Similar products and how Profyn sells: `docs/MARKET.md`. AWS deploy for profyn.in: `docs/DEPLOY.md`.
 
@@ -39,7 +49,7 @@ Details, proof for each claim and the pitch outline: `docs/PRODUCT.md`. Similar 
 
 ```
 docker compose up -d --build     # or: make up      → landing http://localhost:3000, app http://localhost:3000/app/, api http://localhost:8080
-npm run check                    # or: make check   → PASS ×3
+npm run check                    # or: make check   → PASS ×4
 ```
 
 Without Docker (Node 20+; the API uses an in-memory store when `MONGO_URL` is empty):
@@ -53,15 +63,16 @@ npm run ui:smoke                 # 12 steps in Edge: landing, the journey, the c
 npm run check
 ```
 
-## The three public checks
+## The four public checks
 
 | # | Where | Expected |
 |---|---|---|
 | 1 | Ledger → **Worked order** | ₹230: revenue 1,000 − refund 200 − net product cost 400 − shipping 50 − ads 100 − handling 20 |
 | 2 | Load the fixture or the extended sample → Ledger → switch attribution | Σ orders = Σ channels = Σ products: ₹6,000 on the fixture, ₹7,053 on the extended file, in both modes; ads move from order lines to the channel line, never both |
 | 3 | Load **Missing refund** → Scenario → recovery ₹350 → ₹200 | O05 unknown (₹6,180 partial); recommendation goes from charge return shipping (₹150, confidence unknown) to raise recovery via inspection (₹480) |
+| 4 | Ledger → **Unit economics** on the worked order | Net revenue ₹800, CM1 50%, CM2 41.25%, CM3 28.75%, each with its formula |
 
-`GET /api/v1/checks` returns all three in one request, with no login. Every expected value is in `data/expected.json`; the judge's changed-input drills are one click each on the Import screen (`data/negative_tests/`).
+`GET /api/v1/checks` returns all four in one request with no login, with the working for each line. Every expected value is in `data/expected.json`; the changed-input drills are one click each on the Import screen (`data/negative_tests/`).
 
 ## What is where
 
@@ -96,7 +107,7 @@ npm run check
 
 ## Sign-in (optional)
 
-Sign-in uses Amazon Cognito and is off unless `COGNITO_POOL_ID`, `COGNITO_CLIENT_ID` and `COGNITO_DOMAIN` are all set for the API. When it is on, a Bearer id token scopes datasets, analyses and decisions to the account. A visitor without a token is a guest in the demo workspace, where decisions are kept in memory only. Nobody needs to sign in to run the demo or the checks.
+Sign-in uses Amazon Cognito and is off unless `COGNITO_POOL_ID`, `COGNITO_CLIENT_ID` and `COGNITO_DOMAIN` are all set for the API. When it is on, a Bearer id token scopes datasets, analyses and decisions to the account. A visitor without a token is a guest in the demo workspace, whose datasets and decisions are saved to the shared demo database. Nobody needs to sign in to run the demo or the checks.
 
 ## Contributors
 
