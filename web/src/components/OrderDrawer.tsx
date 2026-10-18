@@ -352,9 +352,7 @@ export function OrderDrawer() {
     body = <ChecksDetail />;
   } else if (drawer?.kind === 'about') {
     title = `About ${BRAND.name}`;
-    meta = <span className="drawer-date">
-        {BRAND.tagline} · {BRAND.domain}
-      </span>;
+    meta = <span className="drawer-date">{BRAND.tagline}</span>;
     body = <AboutDetail />;
   } else if (drawer?.kind === 'missing') {
     title = drawer.orderId;
