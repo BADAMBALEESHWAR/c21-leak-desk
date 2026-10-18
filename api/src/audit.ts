@@ -7,7 +7,7 @@ import { newId } from './repo.js';
 // Per-account audit log (Trust §5.2): imports, AI calls, decisions, exports, sign-ins, consent changes. Owners read it
 // at GET /me/audit. The shared demo workspace (guests) keeps no log: nothing in it belongs to anyone.
 
-export type AuditKind = 'import' | 'ai_call' | 'decision' | 'export' | 'login' | 'consent' | 'mapping';
+export type AuditKind = 'import' | 'ai_call' | 'decision' | 'export' | 'login' | 'consent' | 'mapping' | 'connector_connected' | 'connector_sync' | 'connector_disconnected';
 
 export interface AuditEvent {
   _id: string;

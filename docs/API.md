@@ -371,7 +371,7 @@ Built from the Pulse overview (latest month against the one before), the two lar
 
 ## v2 platform endpoints
 
-Column mapping, Google/GitHub sign-in, the owner's account (audit log, export, delete) and localized errors.
+Column mapping, Google/GitHub sign-in, the owner's account (audit log, export, delete), localized errors and the Shopify connector.
 Code: `api/src/ingest/mapper.ts`, `api/src/auth-oauth.ts`, `api/src/routes/{import,auth,account}.ts`, `api/src/audit.ts`, `api/src/i18n/`. Trust summary: [docs/TRUST.md](TRUST.md).
 
 ### Import mapping
@@ -409,8 +409,8 @@ Code: `api/src/ingest/mapper.ts`, `api/src/auth-oauth.ts`, `api/src/routes/{impo
 
 | Method and path | Request | Response | Errors |
 |---|---|---|---|
-| `GET /me/audit` | — | `[{at, kind, action, detail, data}]`, newest first (200 max). `kind`: `login`, `import`, `ai_call`, `decision`, `export`, `consent`, `mapping`; `detail` is one readable line, `data` the recorded fields | 401 |
-| `GET /me/export` | — | JSON attachment `profyn-export-<date>.json`: `{exported_at, account, user, consent, logins, datasets (with rows), analyses, scenarios, decisions, column_mappings, autopilots, audit}` | 401, 503 |
+| `GET /me/audit` | — | `[{at, kind, action, detail, data}]`, newest first (200 max). `kind`: `login`, `import`, `ai_call`, `decision`, `export`, `consent`, `mapping`, `connector_connected`, `connector_sync`, `connector_disconnected`; `detail` is one readable line, `data` the recorded fields | 401 |
+| `GET /me/export` | — | JSON attachment `profyn-export-<date>.json`: `{exported_at, account, user, consent, logins, datasets (with rows), analyses, scenarios, decisions, column_mappings, autopilots, connectors (no tokens), audit}` | 401, 503 |
 | `DELETE /me` | `{confirm: "DELETE"}` | 204; every record owned by the account, its uploads and stored bodies (`uploads/<dataset>-*`, `blobs/…`), mappings, sign-ins, audit log and user are deleted; the session cookie is cleared | 401, 422 (`path: "confirm"`), 503 |
 
 AI features record calls with `audit.record(req, {kind: "ai_call", feature, model, fields_sent, accepted, reason?})` (field names only, never values). Guests keep no audit log.
@@ -426,3 +426,35 @@ Error `message`, `hint` and `issues[].message` follow `?lang=` or `Accept-Langua
 ```
 
 New error codes: 400 `invalid_state` (sign-in state), 404 `provider_disabled` (provider not configured).
+
+### Shopify connector
+
+Orders come straight from a Shopify store (GraphQL Admin API, version `SHOPIFY_API_VERSION`, default `2026-07`) and become a dataset through the same validation as an upload (`source: "shopify:<shop>"`; not demo data for the AI policy). Code: `api/src/connectors/{shopify,store}.ts`, `api/src/routes/connectors.ts`; tests `tests/shopify.test.ts`.
+
+| Method and path | Request | Response | Errors |
+|---|---|---|---|
+| `POST /connectors/shopify/test` | `{shop, token}` | `{ok: true, shop: {name, domain, currency, plan?}, scopes: string[], orders_estimate?: number, currency_warning?}` (estimate = orders in the last 365 days) | 400 `invalid_shop` / `shop_not_found` ("Store not found — use your-store.myshopify.com"), 401 `shopify_unauthorized` ("Shopify rejected the access token"), 422 `missing_scope` ("Missing scope read_orders"), 422 `schema_invalid` (`token` missing), 502 `shopify_unavailable` |
+| `POST /connectors/shopify/connect` | `{shop, token, since?: "YYYY-MM-DD" (default 365 days ago), assumptions?: {shipping_inr = 60, fee_pct = 2, return_cost_inr = 0, cod_fee_inr = 0}}` | 201: the `POST /datasets` body (`dataset_id, rows_in, rows_kept, rows_rejected, kept_ids, flags, …`) plus `orders_fetched, skipped, skipped_detail: {cancelled, test}, assumptions, currency_warning?, cost_hint?, truncated?, more?` and `connector: {provider: "shopify", shop, shop_name, currency, connected_at, last_sync_at, orders_imported, stored}` | as above; 422 `no_orders` (none since `since`), 422 `no_valid_rows` (every order rejected, e.g. no "Cost per item" in Shopify) |
+| `POST /connectors/shopify/sync` | — | 201 as connect (a new version of the connector's dataset: `appended_to`, `supersedes`, `rows_added`, `rows_updated`, `duplicates_ignored`); 200 with `unchanged: true` when nothing changed | 404 `not_connected` (guest, or no connection), 401 `shopify_unauthorized` (token revoked or unreadable: connect again) |
+| `GET /connectors` | — | `{connectors: [{provider, shop, shop_name, currency, connected_at, last_sync_at, orders_imported, dataset_id, assumptions}], shopify_oauth: boolean}`; guests get `connectors: []` | — |
+| `DELETE /connectors/shopify` | — | 204; the stored token is deleted (datasets stay) | — |
+| `GET /connectors/shopify/install` | `?shop=x.myshopify.com&return=/app/` | 302 to `https://{shop}/admin/oauth/authorize?client_id&scope=read_orders,read_products,read_inventory&redirect_uri={PUBLIC_URL}/api/v1/connectors/shopify/callback&state`; sets `profyn_shopify` (signed state, 10 minutes, `Path=/api/v1/connectors/shopify`). Guests: 302 `/login/` | 400 `invalid_shop`, 404 `provider_disabled` (no `SHOPIFY_CLIENT_ID`/`SHOPIFY_CLIENT_SECRET`) |
+| `GET /connectors/shopify/callback` | from Shopify: `?code&hmac&shop&state&timestamp…` | Checks the HMAC (SHA-256 of the sorted other parameters with the client secret, constant-time compare), the store address and the state cookie; exchanges the code at `https://{shop}/admin/oauth/access_token`, stores the token for the signed-in owner, imports with the default assumptions and redirects to `<return>#/overview?connected=shopify` (on a failed import `…&shopify_error=<code>`; a failed exchange `#/overview?shopify_error=<code>`). Guests: 302 `/login/` | 400 `invalid_state` (bad HMAC, state or account), 400 `invalid_shop`, 404 |
+
+**Store address (SSRF guard).** Only `^[a-z0-9][a-z0-9-]*\.myshopify\.com$` is called; a bare name (`your-store`) gets `.myshopify.com` added. URLs, other hosts, ports and paths are 400 `invalid_shop` before any request. Redirects are not followed.
+
+**Token storage.** Signed-in owners: the token is stored AES-256-GCM encrypted (key `sha256(SESSION_SECRET + "shopify")`, random 12-byte IV) in the `connectors` collection (memory when no database), one per account; it is never returned or logged, and is removed by `DELETE /connectors/shopify` and `DELETE /me`. Guests (demo workspace) import once; nothing is stored (`stored: false`). A server without `SESSION_SECRET` stores nothing either. Audit events: `connector_connected`, `connector_sync`, `connector_disconnected`.
+
+**Mapping** (one row per order; `mapShopifyOrder`): `order_id` = name without `#` prefixed `SH` (`#1001` → `SH1001`); `date` = `createdAt` in IST; `discount_inr` = total discounts; `gross_inr` = subtotal (after discounts) + discounts; `refund_inr` = total refunded (0 with no refunds; capped at gross − discount, shipping refunds excluded); `net_sales_inr` = null (the engine derives it); `product_cost_inr` = Σ quantity × the variant's "Cost per item", **null when any line has no cost** (row rejected and listed for correction: unknown, never zero); `returned` = any refund line restocked as `RETURN` (or `LEGACY_RESTOCK`), or a full refund with refund lines; `recovered_product_cost_inr` = Σ restocked quantity × unit cost (0 when nothing returned; null when returned but a cost is unknown); `shipping_inr` = `assumptions.shipping_inr`; `payment_fee_inr` = round((subtotal + shipping charged) × `fee_pct` / 100) + `cod_fee_inr` for COD; `return_cost_inr` = `return_cost_inr` when returned, else 0; `payment_type` from the gateway names (COD / prepaid / null); `channel` from `sourceName` (`web`, `pos`, `shopify_draft_order` → `draft`, others lowercased); `product_id` = first line's SKU or product handle; `units` = Σ quantity; `refund_date` = first refund (IST); `note: "shopify; shipping/fee assumed"`. Test and cancelled orders are skipped and counted. No customer fields are read. Amounts are the shop currency: a non-INR store gets `currency_warning`. Unit cost is Shopify's current "Cost per item", not the cost on the order date.
+
+**Reading orders.** Orders are read oldest-update first (`sortKey: UPDATED_AT`, `query: "created_at:>=SINCE [updated_at:>=LAST]"`), 25 per page with up to 10 line items each (orders with more are re-read with 100), then unit costs per distinct variant (`nodes(ids:)`, 100 per call) and refund lines for refunded orders (10 per call). A query over Shopify's 1,000-point cost limit is retried with fewer nodes; throttling (`THROTTLED`, 429, 5xx) waits for the bucket (from `extensions.cost.throttleStatus`, or `Retry-After`) and retries up to 3 times. One import reads at most 20,000 orders and stops paginating after `SHOPIFY_IMPORT_BUDGET_MS` (default 25 000 ms) with `truncated: true`; the next sync continues from the last order read.
+
+**Sync.** Reads orders updated since the last sync and adds them to the newest version of the connector's dataset through the `append_to` path: new orders are added, unchanged ones ignored as duplicates, and orders whose Shopify facts changed (refund, return, cost, discount) replace the saved row (`rows_updated`) unless the owner corrected that order. If the dataset is gone, everything since `since` is imported again.
+
+**Getting a token (store owner).** Shopify admin → Settings → Apps and sales channels → Develop apps (or the Shopify Dev Dashboard for new apps) → Create an app → Configure Admin API scopes: `read_orders`, `read_products`, `read_inventory` (and `read_all_orders` for orders older than 60 days) → Install app → copy the Admin API access token (`shpat_…`, shown once) and paste it with the `your-store.myshopify.com` address. Product costs come from each variant's "Cost per item" (Products → product → Pricing).
+
+**App install (optional).** For an app created in the Shopify Dev Dashboard set `SHOPIFY_CLIENT_ID` and `SHOPIFY_CLIENT_SECRET` (with `SESSION_SECRET` and `PUBLIC_URL`); `shopify_oauth` is then `true`. Add `{PUBLIC_URL}/api/v1/connectors/shopify/callback` as an allowed redirect URL in the app's configuration.
+
+Environment: `SHOPIFY_CLIENT_ID`, `SHOPIFY_CLIENT_SECRET` (optional, app install), `SHOPIFY_API_VERSION` (default `2026-07`), `SHOPIFY_IMPORT_BUDGET_MS` (default `25000`), plus the existing `SESSION_SECRET` (token encryption) and `PUBLIC_URL` (redirect URI).
+
+New error codes: 400 `invalid_shop`, 400 `shop_not_found`, 401 `shopify_unauthorized`, 422 `missing_scope`, 422 `no_orders`, 404 `not_connected`, 502 `shopify_unavailable`.
