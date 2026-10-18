@@ -232,7 +232,7 @@ export function parseMonth(q: string, available: string[]): string | null {
 const WHAT_IF = /what if|what happens|suppose|if we|simulate|scenario|क्या होगा|अगर|ఒకవేళ|అయితే/;
 const LEAK_WORDS = /leak|why|lost|losing|loss|negative|bleed|लीक|नुकसान|क्यों|घाटा|లీక్|నష్టం|ఎందుకు/;
 const PRODUCT_WORDS = /product|sku|item|उत्पाद|प्रोडक्ट|ఉత్పత్తి|ప్రోడక్ట్/;
-const CHANNEL_WORDS = /channel|चैनल|ఛానల్|ఛానెల్/;
+const CHANNEL_WORDS = /channel|चैनल|ఛానల్|ఛానెల్|చానెల్|చానల్/;
 const MONTH_TREND = /month|trend|महीन|माह|నెల/;
 const BEST_WORDS = /best|highest|top|earn(s|ed)? most|सबसे अच्छा|सबसे ज़्यादा योगदान|ఉత్తమ|అత్యధిక/;
 const CANDIDATE_PHRASES: Array<[RegExp, (typeof CANDIDATE_KEYS)[number]]> = [
@@ -265,8 +265,11 @@ function scenarioCall(q: string, a: AnalysisResult): ToolCall {
   return { name: 'scenario.run', args: { intervention: best ?? 'raise_recovery_via_inspection' } };
 }
 
-/** Deterministic tool choice from keywords (English, Hindi, Telugu). */
-export function routeQuestion(question: string, a: AnalysisResult): ToolCall {
+/**
+ * Deterministic tool choice from keywords (English, Hindi, Telugu); null when no keyword matched, so the caller can ask
+ * the model instead of guessing.
+ */
+export function matchQuestion(question: string, a: AnalysisResult): ToolCall | null {
   const q = question.toLowerCase();
   const months = pulseMonths(a).months.map((m) => m.month);
   const month = parseMonth(q, months);
@@ -284,7 +287,33 @@ export function routeQuestion(question: string, a: AnalysisResult): ToolCall {
     return { name: 'leaks', args: { ...(cause ? { cause } : {}), ...withMonth } };
   }
   if (month || MONTH_TREND.test(q)) return { name: 'pulse.months', args: withMonth };
-  return { name: 'leaks', args: {} };
+  return null;
+}
+
+/** Deterministic tool choice; the biggest leaks when nothing matched. */
+export function routeQuestion(question: string, a: AnalysisResult): ToolCall {
+  return matchQuestion(question, a) ?? { name: 'leaks', args: {} };
+}
+
+/** What the data holds, for the model's tool prompt: the real months, channels and products to choose from. */
+export function dataOutline(a: AnalysisResult): string {
+  const months = pulseMonths(a).months.map((m) => m.month);
+  const keys = (g: Array<{ key: string | null }>) => g.map((x) => x.key).filter(Boolean).slice(0, 30).join(', ');
+  return `Months in the data: ${months.join(', ') || 'none'}. Channels: ${keys(a.groups.channel) || 'none'}. Products: ${keys(a.groups.product) || 'none'}.`;
+}
+
+/** A model-chosen month that is not in the data moves to the latest month in the data with the same month number. */
+export function fitMonth(call: ToolCall, a: AnalysisResult): ToolCall {
+  const month = (call.args as { month?: unknown }).month;
+  if (typeof month !== 'string') return call;
+  const months = pulseMonths(a).months.map((m) => m.month);
+  if (months.includes(month)) return call;
+  const mm = month.slice(5, 7);
+  const hit = [...months].reverse().find((m) => m.endsWith(`-${mm}`));
+  const args = { ...call.args } as Record<string, unknown>;
+  if (hit) args.month = hit;
+  else delete args.month;
+  return { ...call, args } as ToolCall;
 }
 
 // ---- template answers and links ----------------------------------------------------------------------------------

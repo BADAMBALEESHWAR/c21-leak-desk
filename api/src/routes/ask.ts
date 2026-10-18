@@ -6,7 +6,7 @@ import { recordAi } from '../ai/guardlog.js';
 import { langOf } from '../ai/localize.js';
 import { PHRASES } from '../ai/phrases.js';
 import { isLang, LANGUAGE_NAMES, type Lang } from '../ai/templates.js';
-import { linkFor, parseModelCall, routeQuestion, runTool, templateAnswer, TOOL_DECLARATIONS, type ToolCall, type ToolContext } from '../ai/tools.js';
+import { dataOutline, fitMonth, linkFor, matchQuestion, parseModelCall, routeQuestion, runTool, templateAnswer, TOOL_DECLARATIONS, type ToolCall, type ToolContext } from '../ai/tools.js';
 import { ah } from '../errors.js';
 import { logger } from '../logger.js';
 import { ledgerOptionsOf, loadAnalysis } from './analyses.js';
@@ -20,13 +20,17 @@ export const askRouter = Router();
 const AskRequestSchema = z.object({ question: z.string().trim().min(1, 'ask a question').max(500), lang: z.string().optional() });
 
 export const ASK_TOOL_PROMPT = `You route questions from the owner of a small Indian D2C brand to exactly one tool over their own order data.
-Pick the single tool that answers the question and fill only the arguments the question states. Months are YYYY-MM.`;
+Pick the single tool that answers the question and fill only the arguments the question states. Months are YYYY-MM and must come from the list of months in the data; use only the channels and products listed.`;
 
 export const ASK_PHRASE_PROMPT = `You answer the owner of a small Indian D2C brand in one to three short sentences.
 Use ONLY the tool result JSON you are given; the draft answer is already correct and may be reworded.
-Rules: copy every number exactly as it appears in the result, in Latin digits; never compute, round, convert or add figures;
+Rules: write every rupee amount exactly as the draft writes it, with the ₹ sign and Indian digit grouping (for example ₹ 1,48,425 or −₹ 435),
+never as INR or as a bare number like 148425; copy other numbers exactly, in Latin digits; never compute, round, convert or add figures;
 never invent products, channels, months or order IDs; do not say advertising caused sales; say contribution, never profit or margin.
 Reply in the language the request names. Return JSON {"answer": string}.`;
+
+/** Money written as INR or as a bare 4+ digit number (months like 2026-09 aside). */
+export const sloppyMoney = (text: string) => /\bINR\b|\bRs\.?\s/i.test(text) || /(?<![\d,.])\d{4,}(?![\d,]|\.\d)/.test(text.replace(/\b20\d{2}-\d{2}\b/g, ''));
 
 const ANSWER_SCHEMA = { type: SchemaType.OBJECT, properties: { answer: { type: SchemaType.STRING } }, required: ['answer'] };
 
@@ -41,7 +45,7 @@ const errorReason = (err: unknown) => {
   return msg === 'timeout' ? 'timeout' : /429|quota|rate/i.test(msg) ? 'quota' : 'error';
 };
 
-async function chooseTool(model: AiModel, question: string, lang: Lang): Promise<ToolCall | null> {
+async function chooseTool(model: AiModel, question: string, lang: Lang, outline: string): Promise<ToolCall | null> {
   if (!model.chooseTool || !takeQuota()) return null;
   try {
     const picked = await withTimeout(model.chooseTool(ASK_TOOL_PROMPT, `Language: ${LANGUAGE_NAMES[lang]}.\nQuestion: ${question}`, TOOL_DECLARATIONS), TIMEOUT_MS);
@@ -85,9 +89,12 @@ askRouter.post(
     const key = model ? cacheKey('ask', analysis._id, body.question, lang, model.model, PROMPT_VERSION_V2) : '';
     const hit = model ? cache.get(key) : undefined;
 
-    // 1. Pick the tool: the model's call when it is valid, else the keyword router.
+    // 1. Pick the tool. A clear keyword match needs no model call (the free tier allows a few calls a minute, so they go
+    //    to phrasing); otherwise the model picks from the real months, channels and products, else the biggest leaks.
     const routed = routeQuestion(body.question, ctx.a);
-    let call = (hit ? hit.call : model ? await chooseTool(model, body.question, lang) : null) ?? routed;
+    const matched = matchQuestion(body.question, ctx.a);
+    const picked = hit ? hit.call : matched ?? (model ? await chooseTool(model, body.question, lang, dataOutline(ctx.a)) : null);
+    let call = picked ? fitMonth(picked, ctx.a) : routed;
     let result: Record<string, unknown>;
     try {
       result = runTool(call, ctx);
@@ -108,6 +115,8 @@ askRouter.post(
       recordAi('ask', bad ? 'rejected' : 'accepted');
       remember(cache, key, { call, answer: text });
     }
+    // Grounded but untidy money ("148425 INR" instead of "₹ 1,48,425"): the template says the same thing cleanly.
+    if (!bad && text && sloppyMoney(text)) return void res.json({ answer: template, source: 'template', ...base, rejected: false });
     if (bad) {
       req.log.info({ analysis_id: analysis._id, tool: call.name, guard: bad }, 'ask answer rejected');
       return void res.json({ answer: null, source: 'table', ...base, rejected: true, message: PHRASES[lang].unsafe });
