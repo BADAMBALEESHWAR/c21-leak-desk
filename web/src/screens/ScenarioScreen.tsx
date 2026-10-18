@@ -448,7 +448,7 @@ function RecommendationCard({ rec, scenario, why, whySource, evidence, note }: {
         </div>
       </div>
       <p className="rec-confidence">
-        {evidence && !scenario ? (<><EvidenceBadge evidence={evidence} /><span>{apiText(evidence.reason)} {t('evidence.useBoth', 'Use this recommendation to save a decision or to test it in the Scenario.')}</span></>) : (<><ConfidenceBadge confidence={rec.confidence} prefix={lower(t('scenario.confidence'))} /><span>{apiText(rec.confidence_reason)}</span></>)}
+        {evidence ? (<><EvidenceBadge evidence={evidence} /><span>{apiText(evidence.reason)} {t('evidence.useBoth', 'Use this recommendation to save a decision or to test it in the Scenario.')}</span></>) : (<><ConfidenceBadge confidence={rec.confidence} prefix={lower(t('scenario.confidence'))} /><span>{apiText(rec.confidence_reason)}</span></>)}
       </p>
       {note ? <p className="rec-note">{note}</p> : null}
       <p className="rec-why">
@@ -650,7 +650,7 @@ export function ScenarioScreen() {
 
         <Results loading={scenarioLoading && current !== null}>
           <ContributionCards a={analysis} s={current} loading={scenarioLoading} onCompare={openCompare} onControls={toControls} />
-          <RecommendationCard rec={rec} scenario={current} why={aiWhy ?? rec.why} whySource={aiWhy ? 'ai' : rec.why_source} evidence={analysis.evidence?.[rec.intervention]} note={current ? recommendationNote(t, analysis.candidates, current.candidates, rec.intervention) : null} />
+          <RecommendationCard rec={rec} scenario={current} why={aiWhy ?? rec.why} whySource={aiWhy ? 'ai' : rec.why_source} evidence={(current ? current.evidence : analysis.evidence)?.[rec.intervention]} note={current ? recommendationNote(t, analysis.candidates, current.candidates, rec.intervention) : null} />
           {current ? <ScenarioImpact s={current} /> : null}
           <CandidatesChart rec={rec} candidates={candidates} baseline={current ? analysis.candidates : null} />
           {current && current.assumptions.length > 0 ? (
