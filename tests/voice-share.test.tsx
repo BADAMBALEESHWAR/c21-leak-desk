@@ -306,7 +306,7 @@ function overviewStore(analysis: AnalysisResponse | null = null) {
 }
 
 describe('Overview: AI briefing and share', () => {
-  it('shows the briefing above the headline, actions before leaks, and shares and copies the summary', async () => {
+  it('shows the briefing above the headline, leaks before actions, and shares and copies the summary', async () => {
     const calls = stubFetch((url, method) => {
       if (method === 'POST' && url === '/api/v1/datasets/d1/autopilot') return json(doc());
       if (url === '/api/v1/analyses/a1/digest?lang=en') return json(digest);
@@ -322,8 +322,8 @@ describe('Overview: AI briefing and share', () => {
     expect(within(brief).getByText('Summary · numbers from the engine')).toBeTruthy();
     expect(calls.some((c) => c.url === '/api/v1/analyses/a1/digest?lang=en')).toBe(true);
 
-    // Order: briefing → headline → top 3 actions → top leaks.
-    const order = ['.ov-brief', '.ov-headline', '#ov-actions-title', '#ov-leaks-title'].map((sel) => container.querySelector(sel)!);
+    // Order: briefing → headline → top leaks → top 3 actions.
+    const order = ['.ov-brief', '.ov-headline', '#ov-leaks-title', '#ov-actions-title'].map((sel) => container.querySelector(sel)!);
     for (let i = 1; i < order.length; i++) expect(order[i - 1].compareDocumentPosition(order[i]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 
     // Sharing is the monthly report as a PDF: the Overview links to it instead of pasting English text.
