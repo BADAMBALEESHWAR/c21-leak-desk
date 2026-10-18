@@ -32,7 +32,13 @@ export function decisionMarkdown(d: DecisionRecord): string {
   lines.push(`- Expected impact: ${formatInr(d.expected_delta_inr)} per period, confidence ${d.confidence}`);
   lines.push(`- 30-day test: ${d.test_30d}`);
   lines.push(`- Stop rule: ${d.stop_rule}`);
-  lines.push(`- Owner: ${d.owner}`, '');
+  lines.push(`- Owner: ${d.owner}`);
+  const ci = d.check_in_30_days;
+  if (ci) {
+    const fmt = (v: number | null) => (v === null ? '—' : ci.unit === 'inr' ? formatInr(v) : `${v}%`);
+    lines.push(`- 30-day check-in (${ci.date}): ${ci.metric_label} ${ci.direction === 'at_most' ? 'at most' : 'at least'} ${fmt(ci.target_value)} (now ${fmt(ci.baseline_value)})`);
+  }
+  lines.push('');
 
   lines.push('## Assumptions (scenario inputs, not observed facts)', '', '| Assumption | Value |', '|---|---|');
   for (const [k, v] of Object.entries(a)) {
