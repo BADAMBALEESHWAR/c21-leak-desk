@@ -2493,5 +2493,19 @@
     "placeholder": "Ask anything about your orders, in English, Hindi or Telugu…",
     "input": "Your question",
     "send": "Ask AI"
+  },
+  "razorpay": {
+    "title": "Collect with Razorpay",
+    "hint": "Make a payment link for the customer and send it on WhatsApp.",
+    "testMode": "test mode",
+    "amount": "Amount (₹)",
+    "note": "Note for the customer",
+    "phone": "Customer phone (optional)",
+    "copied": "Link copied",
+    "copy": "Copy link",
+    "whatsapp": "Send on WhatsApp",
+    "creating": "Creating link…",
+    "create": "Create Razorpay payment link",
+    "defaultNote": "Return shipping charge"
   }
 }
