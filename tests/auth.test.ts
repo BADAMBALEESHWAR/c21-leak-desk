@@ -1,7 +1,15 @@
 import request from 'supertest';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { createApp } from '../api/src/app';
 import type { AuthSettings } from '../api/src/auth';
+import { DecisionModel } from '../api/src/models';
+
+// Tests run without Mongo; this switch stands in for a connected database for one save.
+const db = vi.hoisted(() => ({ connected: false }));
+vi.mock('../api/src/db', async (load) => {
+  const real = await load<typeof import('../api/src/db')>();
+  return { ...real, dbState: () => (db.connected ? 'connected' : real.dbState()) };
+});
 
 // Sign-in with a stand-in verifier (no AWS needed). Two users and a guest.
 const USERS: Record<string, { sub: string; email: string }> = {
@@ -47,11 +55,34 @@ describe('sign-in and accounts', () => {
     expect((await request(app).get(`${api}/worked-order`)).body.contribution_inr).toBe(230);
   });
 
-  it('a guest decision stays in the demo workspace; a signed-in decision is the user’s', async () => {
-    const guest = await decide();
-    expect(guest.decision).toMatchObject({ persisted: false, workspace: 'demo' });
+  it('a guest decision is saved to the database under account "guest" in the demo workspace; a signed-in decision is the user’s', async () => {
+    const d = await request(app).post(`${api}/datasets`).send({ source: 'fixture' });
+    const a = await request(app).post(`${api}/datasets/${d.body.dataset_id}/analyses`).send({});
+    const body = { intervention: 'charge_return_shipping', expected_delta_inr: 200, test_30d: 'Charge return shipping for 30 days.', stop_rule: 'Stop if orders fall.', owner: 'Ops lead' };
+    const create = vi.spyOn(DecisionModel, 'create').mockImplementation((async (doc: unknown) => doc) as never);
+    db.connected = true;
+    let guest: request.Response;
+    let written: unknown[];
+    try {
+      guest = await request(app).post(`${api}/analyses/${a.body.analysis_id}/decisions`).send(body);
+      written = create.mock.calls.map((c) => c[0]);
+    } finally {
+      db.connected = false;
+      create.mockRestore();
+    }
+    expect(guest.status).toBe(201);
+    expect(guest.body).toMatchObject({ persisted: true, workspace: 'demo' });
+    expect(written).toHaveLength(1);
+    expect(written[0]).toMatchObject({ _id: guest.body.decision_id, account: 'guest' });
+
     const mine = await decide('token-a');
     expect(mine.decision.workspace).toBe('account');
+    // Lists stay scoped: the signed-in user never lists the guest's decision, and the guest never lists the user's.
+    const listA = (await request(app).get(`${api}/decisions`).set('Authorization', 'Bearer token-a')).body as Array<{ decision_id: string }>;
+    const listGuest = (await request(app).get(`${api}/decisions`)).body as Array<{ decision_id: string }>;
+    expect(listA.map((x) => x.decision_id)).not.toContain(guest.body.decision_id);
+    expect(listGuest.map((x) => x.decision_id)).toContain(guest.body.decision_id);
+    expect(listGuest.map((x) => x.decision_id)).not.toContain(mine.decision.decision_id);
   });
 
   it('users never see each other’s analyses or decisions', async () => {
