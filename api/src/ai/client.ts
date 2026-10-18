@@ -7,6 +7,7 @@ import { logger } from '../logger.js';
 import { AiCacheModel } from '../models/index.js';
 import { LANGUAGE_NAMES, type Lang } from './templates.js';
 import { recordAi } from './guardlog.js';
+import { withFallback } from './models.js';
 
 // Optional narration (Blueprint §13). The engine decides; the model may only reword a template sentence.
 
@@ -117,12 +118,12 @@ function geminiClient(): ModelClient | null {
   if (config.aiDisabled || !process.env.GEMINI_API_KEY) return null;
   const name = process.env.GEMINI_MODEL || 'gemini-3.5-flash';
   const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-  const model = genAI.getGenerativeModel({
+  const generationConfig = { temperature: 0, responseMimeType: 'application/json', responseSchema: RESPONSE_SCHEMA, maxOutputTokens: 500 };
+  return {
     model: name,
-    systemInstruction: SYSTEM_PROMPT,
-    generationConfig: { temperature: 0, responseMimeType: 'application/json', responseSchema: RESPONSE_SCHEMA, maxOutputTokens: 500 },
-  });
-  return { model: name, generate: async (_system, user) => (await model.generateContent(user)).response.text() };
+    generate: (_system, user) =>
+      withFallback(async (model) => (await genAI.getGenerativeModel({ model, systemInstruction: SYSTEM_PROMPT, generationConfig }).generateContent(user)).response.text()),
+  };
 }
 
 // Cache and quota: memory always, Mongo ai_cache (TTL 7 days) when connected.
