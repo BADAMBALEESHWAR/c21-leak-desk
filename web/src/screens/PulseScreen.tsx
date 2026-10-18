@@ -18,11 +18,13 @@ import type {
   PulseProduct,
   PulseProducts,
 } from '../api/types';
-import { ChartCard, type SeriesTone } from '../charts/ChartCard';
-import { ColumnChart } from '../charts/ColumnChart';
+import { ChartCard, ChartTable, type SeriesTone, type TipRow } from '../charts/ChartCard';
+import { DivergingBars, type DivergingRow } from '../charts/DivergingBars';
+import { MonthColumns, type MonthDatum } from '../charts/MonthColumns';
 import { QuadrantChart } from '../charts/QuadrantChart';
 import { formatMonth } from '../charts/scale';
-import { StackedColumnChart, type StackKey } from '../charts/StackedColumnChart';
+import { StackedLeaks, type LeakKey } from '../charts/StackedLeaks';
+import { Treemap, type TreemapItem } from '../charts/Treemap';
 import { Pill, Unknown } from '../components/Badge';
 import { useAuth } from '../auth/AuthContext';
 import { DEMO_URL } from '../brand';
@@ -37,7 +39,7 @@ import { Callout, EmptyPanel, ErrorCallout, InfoTip, Skeleton, StatCard } from '
 import { downloadCsv } from '../lib/csv';
 import { formatCount, formatDecimal, formatInr, formatPct, formatSignedDecimal, plural } from '../lib/format';
 import { ALLOCATED_EN, ALLOCATED_KEY, ATTRIBUTION_LABEL, handlingEstimateUsed, LEAK_LABELS } from '../lib/labels';
-import { hrefFor, navigate, parseHash } from '../lib/router';
+import { hrefFor, ledgerHref, navigate, parseHash, type LedgerQuery } from '../lib/router';
 import { useStore } from '../state/store';
 
 type PulseTab = 'overview' | 'months' | 'products' | 'channels' | 'leaks';
@@ -122,6 +124,21 @@ class TabBoundary extends Component<{ children: ReactNode; resetKey: string }, {
 }
 
 // ---- Small pieces --------------------------------------------------------------------------
+
+/** A Pulse row's way into the ledger: the filter plus where it came from, for the breadcrumb. */
+const toLedger = (tab: PulseTab, q: LedgerQuery) => ledgerHref({ ...q, from: `pulse.${tab}` });
+const go = (href: string) => {
+  window.location.hash = href;
+};
+
+/** The row's first cell as a link to its orders, so the row works from the keyboard too. */
+function RowLink({ href, children, label }: { href: string; children: ReactNode; label: string }) {
+  return (
+    <a className="row-link" href={href} aria-label={label}>
+      {children}
+    </a>
+  );
+}
 
 const pct = (v: number | null | undefined) => (v === null || v === undefined ? <Unknown /> : <span className="num">{formatPct(v)}</span>);
 
@@ -506,15 +523,35 @@ function prevMonth(m: string, months: string[]): string | null {
 // ---- Months ---------------------------------------------------------------------------------
 
 function MonthsTab({ a, focusMonth }: { a: AnalysisResponse; focusMonth: string | null }) {
+  const { t } = useTranslation();
   const res = usePulse<PulseMonths>(a.analysis_id, 'months', () => api.pulseMonths(a.analysis_id));
   if (res.loading && !res.data) return <Loading />;
   if (res.error || !res.data) return res.error ? <Failed error={res.error} /> : null;
   const rows = res.data.months;
-  const cats = rows.map((m) => ({ key: m.month, label: formatMonth(m.month, true), full: formatMonth(m.month) }));
-  const best = rows.reduce((bi, m, i) => (m.net_sales_inr > rows[bi].net_sales_inr ? i : bi), 0);
+  const openLabel = (what: string) => t('chart.openOrdersOf', 'Open the orders of {{what}} in the ledger', { what });
+  const data: MonthDatum[] = rows.map((m) => {
+    const extra: TipRow[] = [
+      { label: t('ledger.orders'), value: formatCount(m.orders) },
+      { label: t('chart.contributionPct', 'Contribution %'), value: m.contribution_pct === null ? t('status.unknown') : formatPct(m.contribution_pct) },
+      { label: t('chart.returnPct', 'Return %'), value: m.return_pct === null ? t('status.unknown') : formatPct(m.return_pct) },
+      { label: t('chart.discountDepth', 'Discount depth'), value: m.discount_depth_pct === null ? t('status.unknown') : formatPct(m.discount_depth_pct) },
+      { label: t('chart.aov', 'Average order'), value: m.aov_inr === null ? t('status.unknown') : formatInr(m.aov_inr) },
+    ];
+    if (m.unknown > 0) extra.push({ label: t('status.unknown').toLowerCase(), value: formatCount(m.unknown) });
+    return { month: m.month, label: formatMonth(m.month, true), full: formatMonth(m.month), netSales: m.net_sales_inr, contribution: m.contribution_inr, extra, href: toLedger('months', { month: m.month }) };
+  });
 
   const columns: Column<PulseMonth>[] = [
-    { id: 'month', header: 'Month', rowHeader: true, cell: (m) => formatMonth(m.month) },
+    {
+      id: 'month',
+      header: 'Month',
+      rowHeader: true,
+      cell: (m) => (
+        <RowLink href={toLedger('months', { month: m.month })} label={openLabel(formatMonth(m.month))}>
+          {formatMonth(m.month)}
+        </RowLink>
+      ),
+    },
     { id: 'orders', header: 'Orders', align: 'right', cell: (m) => <span className="num">{formatCount(m.orders)}</span> },
     { id: 'aov', header: 'AOV', align: 'right', cell: (m) => <Money value={m.aov_inr} tone="plain" /> },
     { id: 'gross', header: 'Gross', align: 'right', cell: (m) => <Money value={m.gross_inr} tone="plain" /> },
@@ -536,27 +573,47 @@ function MonthsTab({ a, focusMonth }: { a: AnalysisResponse; focusMonth: string 
     <div className="stack">
       <TabMeta unknown={res.data.unknown_count} labels={res.data.labels} />
       <ChartCard
-        title="Net sales and contribution by month"
-        subtitle={`${rows.length} months. Hover or use the arrow keys for each month's numbers.`}
+        title={t('chart.monthsTitle', 'Net sales and contribution by month')}
+        subtitle={t('chart.monthsSub', '{{n}} months on one ₹ axis. Hover or tab to a month for every margin; select it to open its orders.', { n: rows.length })}
         legend={[
-          { label: 'Net sales', tone: 'series-1' },
-          { label: 'Contribution', tone: 'series-2' },
+          { label: t('ledger.netSales'), tone: 'series-1' },
+          { label: t('chart.legendGain', 'Contribution ≥ ₹0'), tone: 'gain' },
+          { label: t('chart.legendLoss', 'Contribution < ₹0'), tone: 'loss' },
         ]}
+        csv={{
+          filename: 'pulse-months-chart.csv',
+          headers: ['month', 'net_sales_inr', 'contribution_inr', 'contribution_pct', 'return_pct', 'discount_depth_pct', 'aov_inr', 'orders'],
+          rows: rows.map((m) => [m.month, m.net_sales_inr, m.contribution_inr, m.contribution_pct, m.return_pct, m.discount_depth_pct, m.aov_inr, m.orders]),
+        }}
+        table={
+          <ChartTable
+            caption={t('chart.monthsTitle', 'Net sales and contribution by month')}
+            headers={[t('chart.month', 'Month'), t('ledger.netSales'), t('ledger.contribution'), t('chart.contributionPct', 'Contribution %')]}
+            rows={rows.map((m) => ({
+              key: m.month,
+              cells: [
+                <a key="m" href={toLedger('months', { month: m.month })}>
+                  {formatMonth(m.month)}
+                </a>,
+                formatInr(m.net_sales_inr),
+                <Money key="c" value={m.contribution_inr} tone="contribution" />,
+                m.contribution_pct === null ? '—' : formatPct(m.contribution_pct),
+              ],
+            }))}
+          />
+        }
       >
-        <ColumnChart
-          categories={cats}
-          series={[
-            { id: 'net', label: 'Net sales', tone: 'series-1', values: rows.map((m) => m.net_sales_inr) },
-            { id: 'contribution', label: 'Contribution', tone: 'series-2', values: rows.map((m) => m.contribution_inr) },
-          ]}
-          ariaLabel={`Net sales and contribution for ${rows.length} months; best net sales ${formatMonth(rows[best]?.month ?? '')}`}
-          format={formatInr}
-          callout={rows.length > 1 ? { index: best, text: `Best: ${formatMonth(rows[best].month, true)} ${formatInr(rows[best].net_sales_inr)}` } : null}
-          labelExtremes="contribution"
-        />
+        <MonthColumns months={data} ariaLabel={t('chart.monthsAria', 'Net sales and contribution for {{n}} months. Each month opens its orders in the ledger.', { n: rows.length })} />
       </ChartCard>
       <TableCard title="Month by month" sub="Orders, order value, returns and discount depth per month." onExport={exportCsv}>
-        <Table caption="Month by month" columns={columns} rows={rows} rowKey={(m) => m.month} rowClassName={(m) => (m.month === focusMonth ? 'row-strong' : undefined)} />
+        <Table
+          caption="Month by month"
+          columns={columns}
+          rows={rows}
+          rowKey={(m) => m.month}
+          onRowClick={(m) => go(toLedger('months', { month: m.month }))}
+          rowClassName={(m) => (m.month === focusMonth ? 'row-strong' : undefined)}
+        />
       </TableCard>
     </div>
   );
@@ -565,6 +622,8 @@ function MonthsTab({ a, focusMonth }: { a: AnalysisResponse; focusMonth: string 
 // ---- Products -------------------------------------------------------------------------------
 
 function ProductsTab({ a }: { a: AnalysisResponse }) {
+  const { t } = useTranslation();
+  const [view, setView] = useState<'treemap' | 'quadrant'>('treemap');
   const res = usePulse<PulseProducts>(a.analysis_id, 'products', () => api.pulseProducts(a.analysis_id));
   if (res.loading && !res.data) return <Loading />;
   if (res.error || !res.data) return res.error ? <Failed error={res.error} /> : null;
@@ -583,8 +642,53 @@ function ProductsTab({ a }: { a: AnalysisResponse }) {
       ],
     }));
 
+  const tiles: TreemapItem[] = rows.map((p) => ({
+    key: p.product_id,
+    label: p.product_id,
+    size: p.net_sales_inr,
+    colorValue: p.contribution_per_unit_inr,
+    href: toLedger('products', { product: p.product_id }),
+    tip: [
+      { label: t('chart.units', 'units'), value: formatCount(p.units) },
+      { label: t('ledger.contribution').toLowerCase(), value: fmt(p.contribution_inr) },
+      { label: t('chart.returnPct', 'Return %'), value: p.return_pct === null ? t('status.unknown') : formatPct(p.return_pct) },
+      { label: t('chart.call', 'call'), value: p.label },
+    ],
+  }));
+  const productCsv = {
+    filename: 'pulse-products-chart.csv',
+    headers: ['product_id', 'net_sales_inr', 'units', 'contribution_inr', 'contribution_per_unit_inr', 'label'],
+    rows: rows.map((p) => [p.product_id, p.net_sales_inr, p.units, p.contribution_inr, p.contribution_per_unit_inr, p.label]),
+  };
+  const productTable = (
+    <ChartTable
+      caption={t('chart.productsTitle', 'Products by net sales and contribution per unit')}
+      headers={[t('ledger.product'), t('ledger.netSales'), t('chart.unitsHead', 'Units'), t('chart.perUnit', 'Contribution per unit')]}
+      rows={rows.map((p) => ({
+        key: p.product_id,
+        cells: [
+          <a key="p" href={toLedger('products', { product: p.product_id })}>
+            {p.product_id}
+          </a>,
+          formatInr(p.net_sales_inr),
+          formatCount(p.units),
+          <Money key="u" value={p.contribution_per_unit_inr} tone="contribution" />,
+        ],
+      }))}
+    />
+  );
+
   const columns: Column<PulseProduct>[] = [
-    { id: 'product', header: 'Product', rowHeader: true, cell: (p) => p.product_id },
+    {
+      id: 'product',
+      header: 'Product',
+      rowHeader: true,
+      cell: (p) => (
+        <RowLink href={toLedger('products', { product: p.product_id })} label={t('chart.openOrdersOf', 'Open the orders of {{what}} in the ledger', { what: p.product_id })}>
+          {p.product_id}
+        </RowLink>
+      ),
+    },
     {
       id: 'label',
       header: 'Call',
@@ -612,11 +716,40 @@ function ProductsTab({ a }: { a: AnalysisResponse }) {
   return (
     <div className="stack">
       <TabMeta unknown={res.data.unknown_count} labels={res.data.labels} />
-      <ChartCard title="Volume against contribution per unit" subtitle="Push the top right, fix the bottom right; the engine's labels decide each product's corner.">
-        <QuadrantChart points={points} xLabel="Units sold" yLabel="Contribution per unit" ariaLabel={`Quadrant of ${points.length} products by units and contribution per unit`} />
+      <ChartCard
+        title={view === 'treemap' ? t('chart.productsTitle', 'Products by net sales and contribution per unit') : t('chart.quadrantTitle', 'Volume against contribution per unit')}
+        subtitle={
+          view === 'treemap'
+            ? t('chart.treemapSub', 'Each tile is a product: its area is net sales, its colour is contribution per unit (red loses, green earns). Select a tile to open its orders.')
+            : t('chart.quadrantSub', "Push the top right, fix the bottom right; the engine's labels decide each product's corner.")
+        }
+        csv={productCsv}
+        table={productTable}
+        actions={
+          <span className="chart-seg" role="group" aria-label={t('chart.view', 'Chart view')}>
+            <button type="button" aria-pressed={view === 'treemap'} onClick={() => setView('treemap')}>
+              {t('chart.treemap', 'Treemap')}
+            </button>
+            <button type="button" aria-pressed={view === 'quadrant'} onClick={() => setView('quadrant')}>
+              {t('chart.quadrant', 'Quadrant')}
+            </button>
+          </span>
+        }
+      >
+        {view === 'treemap' ? (
+          <Treemap
+            items={tiles}
+            ariaLabel={t('chart.treemapAria', '{{n}} products sized by net sales and coloured by contribution per unit. Each tile opens its orders in the ledger.', { n: tiles.length })}
+            formatColor={formatInr}
+            colorLabel={t('chart.perUnit', 'Contribution per unit')}
+            sizeLabel={t('ledger.netSales')}
+          />
+        ) : (
+          <QuadrantChart points={points} xLabel="Units sold" yLabel="Contribution per unit" ariaLabel={`Quadrant of ${points.length} products by units and contribution per unit`} />
+        )}
       </ChartCard>
       <TableCard title="Product ranking" sub="Ranks by units, net sales and contribution; the gap between them is the story." onExport={exportCsv}>
-        <Table caption="Product ranking" columns={columns} rows={rows} rowKey={(p) => p.product_id} />
+        <Table caption="Product ranking" columns={columns} rows={rows} rowKey={(p) => p.product_id} onRowClick={(p) => go(toLedger('products', { product: p.product_id }))} />
       </TableCard>
     </div>
   );
@@ -632,7 +765,16 @@ function ChannelsTab({ a }: { a: AnalysisResponse }) {
   if (res.error || !res.data) return res.error ? <Failed error={res.error} /> : null;
   const d = res.data;
   const channelCols: Column<PulseChannel>[] = [
-    { id: 'channel', header: 'Channel', rowHeader: true, cell: (c) => c.channel },
+    {
+      id: 'channel',
+      header: 'Channel',
+      rowHeader: true,
+      cell: (c) => (
+        <RowLink href={toLedger('channels', { channel: c.channel })} label={t('chart.openOrdersOf', 'Open the orders of {{what}} in the ledger', { what: c.channel })}>
+          {c.channel}
+        </RowLink>
+      ),
+    },
     { id: 'orders', header: 'Orders', align: 'right', cell: (c) => <span className="num">{formatCount(c.orders)}</span> },
     { id: 'net', header: 'Net sales', align: 'right', cell: (c) => <Money value={c.net_sales_inr} tone="plain" /> },
     { id: 'contribution', header: 'Operational contribution', align: 'right', className: 'col-strong', cell: (c) => <Money value={c.contribution_inr} tone="contribution" /> },
@@ -655,7 +797,19 @@ function ChannelsTab({ a }: { a: AnalysisResponse }) {
     { id: 'share', header: 'Ads share', align: 'right', cell: (c) => pct(c.ads_share_pct) },
   ];
   const payCols: Column<PulsePaymentRow>[] = [
-    { id: 'type', header: 'Payment', rowHeader: true, cell: (r) => (r.payment_type.toLowerCase() === 'cod' ? 'COD' : r.payment_type.charAt(0).toUpperCase() + r.payment_type.slice(1)) },
+    {
+      id: 'type',
+      header: 'Payment',
+      rowHeader: true,
+      cell: (r) => {
+        const name = r.payment_type.toLowerCase() === 'cod' ? 'COD' : r.payment_type.charAt(0).toUpperCase() + r.payment_type.slice(1);
+        return (
+          <RowLink href={toLedger('channels', { payment: r.payment_type })} label={t('chart.openOrdersOf', 'Open the orders of {{what}} in the ledger', { what: name })}>
+            {name}
+          </RowLink>
+        );
+      },
+    },
     { id: 'orders', header: 'Orders', align: 'right', cell: (r) => <span className="num">{formatCount(r.orders)}</span> },
     { id: 'share', header: 'Share', align: 'right', cell: (r) => pct(r.share_pct) },
     { id: 'ret', header: 'Return %', align: 'right', cell: (r) => pct(r.return_pct) },
@@ -670,6 +824,20 @@ function ChannelsTab({ a }: { a: AnalysisResponse }) {
       d.channels.map((c) => [c.channel, c.orders, c.net_sales_inr, c.contribution_inr, c.return_pct, c.ads_inr, c.ads_share_pct, d.attribution]),
     );
   const payments = d.payments;
+  const totalOrders = d.channels.reduce((n, c) => n + c.orders, 0) || 1;
+  const channelRows: DivergingRow[] = d.channels.map((c) => ({
+    key: c.channel,
+    label: c.channel,
+    value: c.contribution_inr,
+    share: c.orders / totalOrders,
+    sub: t('chart.ordersN', '{{n}} orders', { n: formatCount(c.orders) }),
+    href: toLedger('channels', { channel: c.channel }),
+    tip: [
+      { label: t('ledger.netSales'), value: formatInr(c.net_sales_inr) },
+      { label: t('chart.returnPct', 'Return %'), value: c.return_pct === null ? t('status.unknown') : formatPct(c.return_pct) },
+      { label: `${t('ledger.ads')} (${allocated})`, value: c.ads_inr === null ? t('status.unknown') : formatInr(c.ads_inr) },
+    ],
+  }));
 
   return (
     <div className="stack">
@@ -682,8 +850,41 @@ function ChannelsTab({ a }: { a: AnalysisResponse }) {
           </Pill>
         }
       />
+      <ChartCard
+        title={t('chart.byChannelTitle', 'Contribution by channel')}
+        subtitle={t('chart.channelsSub', 'Operational contribution per channel around ₹0; the thin bar is the channel’s share of orders. Select a channel to open its orders.')}
+        legend={[
+          { label: t('chart.legendGain', 'Contribution ≥ ₹0'), tone: 'gain' },
+          { label: t('chart.legendLoss', 'Contribution < ₹0'), tone: 'loss' },
+          { label: t('chart.shareOfOrdersHead', 'Share of orders'), tone: 'muted', shape: 'thin' },
+        ]}
+        csv={{
+          filename: 'pulse-channels-chart.csv',
+          headers: ['channel', 'orders', 'share_of_orders_pct', 'net_sales_inr', 'contribution_inr'],
+          rows: d.channels.map((c) => [c.channel, c.orders, Math.round((c.orders / totalOrders) * 10000) / 100, c.net_sales_inr, c.contribution_inr]),
+        }}
+        table={
+          <ChartTable
+            caption={t('chart.byChannelTitle', 'Contribution by channel')}
+            headers={[t('ledger.channel'), t('ledger.orders'), t('chart.shareOfOrdersHead', 'Share of orders'), t('ledger.contribution')]}
+            rows={d.channels.map((c) => ({
+              key: c.channel,
+              cells: [
+                <a key="c" href={toLedger('channels', { channel: c.channel })}>
+                  {c.channel}
+                </a>,
+                formatCount(c.orders),
+                formatPct((c.orders / totalOrders) * 100),
+                <Money key="v" value={c.contribution_inr} tone="contribution" />,
+              ],
+            }))}
+          />
+        }
+      >
+        <DivergingBars rows={channelRows} measure={t('ledger.contribution')} ariaLabel={t('chart.byChannelTitle', 'Contribution by channel')} format={formatInr} labelWidth={120} />
+      </ChartCard>
       <TableCard title="Channels" sub={<>Attribution mode as set in the top bar. {ATTRIBUTION_LABEL}</>} onExport={exportChannels}>
-        <Table caption="Contribution by channel" columns={channelCols} rows={d.channels} rowKey={(c) => c.channel} />
+        <Table caption="Contribution by channel" columns={channelCols} rows={d.channels} rowKey={(c) => c.channel} onRowClick={(c) => go(toLedger('channels', { channel: c.channel }))} />
       </TableCard>
       {'not_in_file' in payments ? (
         <Callout tone="info" title="COD vs prepaid: payment type is not in this file">
@@ -705,7 +906,7 @@ function ChannelsTab({ a }: { a: AnalysisResponse }) {
             )
           }
         >
-          <Table caption="Payment types" columns={payCols} rows={payments.rows} rowKey={(r) => r.payment_type} />
+          <Table caption="Payment types" columns={payCols} rows={payments.rows} rowKey={(r) => r.payment_type} onRowClick={(r) => go(toLedger('channels', { payment: r.payment_type }))} />
         </TableCard>
       )}
     </div>
@@ -715,20 +916,31 @@ function ChannelsTab({ a }: { a: AnalysisResponse }) {
 // ---- Leaks over time -------------------------------------------------------------------------------
 
 function LeaksTab({ a }: { a: AnalysisResponse }) {
+  const { t } = useTranslation();
   const res = usePulse<PulseLeaks>(a.analysis_id, 'leaks', () => api.pulseLeaks(a.analysis_id));
   if (res.loading && !res.data) return <Loading />;
   if (res.error || !res.data) return res.error ? <Failed error={res.error} /> : null;
   const d = res.data;
   // Only causes with rupees can be drawn; a refund without a recovery fact has no amount, only a count.
   const drawn = [...d.causes].filter((c) => d.months.some((m) => (m.by_cause[c] ?? 0) > 0)).sort((x, y) => idx(x) - idx(y));
-  const keys: StackKey[] = drawn.slice(0, 5).map((c) => ({ id: c, label: causeLabel(c), slot: Math.min(5, idx(c) + 1) }));
+  const keys: LeakKey[] = drawn.slice(0, 5).map((c) => ({ id: c, label: t(`focus.cause.${c}`, causeLabel(c)), slot: Math.min(5, idx(c) + 1) }));
   const unknownOrders = d.months.reduce((n, m) => n + m.unknown_orders, 0);
-  const cats = d.months.map((m) => ({ key: m.month, label: formatMonth(m.month, true), full: formatMonth(m.month) }));
+  const leakMonths = d.months.map((m) => ({ month: m.month, label: formatMonth(m.month, true), full: formatMonth(m.month), byCause: m.by_cause, total: m.total_lost_inr, unknownOrders: m.unknown_orders }));
+  const leakHref = (month: string, cause?: string) => toLedger('leaks', { month, cause });
   const first = d.months[0]?.total_lost_inr ?? 0;
   const last = d.months[d.months.length - 1]?.total_lost_inr ?? 0;
 
   const columns: Column<PulseLeaksRow>[] = [
-    { id: 'month', header: 'Month', rowHeader: true, cell: (m) => formatMonth(m.month) },
+    {
+      id: 'month',
+      header: 'Month',
+      rowHeader: true,
+      cell: (m) => (
+        <RowLink href={leakHref(m.month)} label={t('chart.openOrdersOf', 'Open the orders of {{what}} in the ledger', { what: formatMonth(m.month) })}>
+          {formatMonth(m.month)}
+        </RowLink>
+      ),
+    },
     ...keys.map((k) => ({
       id: k.id,
       header: (
@@ -738,7 +950,14 @@ function LeaksTab({ a }: { a: AnalysisResponse }) {
         </span>
       ),
       align: 'right' as const,
-      cell: (m: PulseLeaksRow) => <LostCell value={m.by_cause[k.id] ?? 0} />,
+      cell: (m: PulseLeaksRow) =>
+        (m.by_cause[k.id] ?? 0) > 0 ? (
+          <a className="cell-link" href={leakHref(m.month, k.id)} aria-label={t('chart.segmentLabel', '{{month}}, {{cause}}: {{inr}} lost. Open these orders in the ledger', { month: formatMonth(m.month), cause: k.label, inr: formatInr(m.by_cause[k.id]) })}>
+            <LostCell value={m.by_cause[k.id] ?? 0} />
+          </a>
+        ) : (
+          <LostCell value={0} />
+        ),
     })),
     { id: 'total', header: 'Total lost', align: 'right', className: 'col-strong', cell: (m) => <LostCell value={m.total_lost_inr} /> },
     { id: 'unknown', header: 'Refund unknown (orders)', align: 'right', cell: (m) => (m.unknown_orders > 0 ? <Pill tone="warning">{m.unknown_orders}</Pill> : <span className="cell-muted">0</span>) },
@@ -754,28 +973,48 @@ function LeaksTab({ a }: { a: AnalysisResponse }) {
     <div className="stack">
       <TabMeta unknown={d.unknown_count} labels={d.labels} />
       <ChartCard
-        title="₹ lost by cause, month by month"
+        title={t('chart.leaksTitle', '₹ lost by cause, month by month')}
         subtitle={
-          d.months.length > 1
-            ? `Losses went from ${formatInr(first)} in ${formatMonth(d.months[0].month)} to ${formatInr(last)} in ${formatMonth(d.months[d.months.length - 1].month)}.${
-                unknownOrders > 0 ? ` ${formatCount(unknownOrders)} ${plural(unknownOrders, 'order has', 'orders have')} no refund fact yet: counted in the table, not drawn.` : ''
-              }`
-            : 'Losses by primary cause.'
+          <>
+            {d.months.length > 1
+              ? `Losses went from ${formatInr(first)} in ${formatMonth(d.months[0].month)} to ${formatInr(last)} in ${formatMonth(d.months[d.months.length - 1].month)}.${
+                  unknownOrders > 0 ? ` ${formatCount(unknownOrders)} ${plural(unknownOrders, 'order has', 'orders have')} no refund fact yet: counted in the table, not drawn.` : ''
+                }`
+              : 'Losses by primary cause.'}{' '}
+            {t('chart.leaksSub', 'Each segment is one cause in one month; the line is the month’s total. Select a segment to open those orders.')}
+          </>
         }
-        legend={keys.map((k) => ({ label: k.label, tone: `cat-${k.slot}` as SeriesTone }))}
+        legend={[
+          ...keys.map((k) => ({ label: k.label, tone: `cat-${k.slot}` as SeriesTone })),
+          { label: t('chart.totalLost', 'Total lost'), tone: 'ink' as SeriesTone, shape: 'line' as const },
+        ]}
+        csv={{ filename: 'pulse-leaks-chart.csv', headers: ['month', ...keys.map((k) => k.id), 'total_lost_inr', 'unknown_orders'], rows: d.months.map((m) => [m.month, ...keys.map((k) => m.by_cause[k.id] ?? 0), m.total_lost_inr, m.unknown_orders]) }}
+        table={
+          <ChartTable
+            caption={t('chart.leaksTitle', '₹ lost by cause, month by month')}
+            headers={[t('chart.month', 'Month'), ...keys.map((k) => k.label), t('chart.totalLost', 'Total lost')]}
+            rows={d.months.map((m) => ({
+              key: m.month,
+              cells: [
+                <a key="m" href={leakHref(m.month)}>
+                  {formatMonth(m.month)}
+                </a>,
+                ...keys.map((k) => formatInr(m.by_cause[k.id] ?? 0)),
+                formatInr(m.total_lost_inr),
+              ],
+            }))}
+          />
+        }
       >
-        <StackedColumnChart
-          categories={cats}
+        <StackedLeaks
+          months={leakMonths}
           keys={keys}
-          values={d.months.map((m) => m.by_cause)}
-          totals={d.months.map((m) => m.total_lost_inr)}
-          ariaLabel={`Rupees lost by cause for ${d.months.length} months`}
-          format={formatInr}
-          extraTip={(i) => (d.months[i].unknown_orders > 0 ? { label: 'unknown orders', value: String(d.months[i].unknown_orders) } : null)}
+          hrefFor={leakHref}
+          ariaLabel={t('chart.leaksAria', 'Rupees lost by cause for {{n}} months, with the monthly total as a line. Each segment opens its orders in the ledger.', { n: d.months.length })}
         />
       </ChartCard>
       <TableCard title="Leaks by month" sub="Rupees lost by primary cause; unknown amounts are counted, not guessed." onExport={exportCsv} id="pulse-leaks-table">
-        <Table caption="Leaks by month" columns={columns} rows={d.months} rowKey={(m) => m.month} />
+        <Table caption="Leaks by month" columns={columns} rows={d.months} rowKey={(m) => m.month} onRowClick={(m) => go(leakHref(m.month))} />
       </TableCard>
     </div>
   );

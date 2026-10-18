@@ -1,6 +1,8 @@
 import { memo, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { AnalysisResponse, GroupRow, LineKey, Margins, OrderResult } from '../api/types';
+import { ChartTable, CsvButton } from '../charts/ChartCard';
+import { MarginBridge, type BridgeStep } from '../charts/MarginBridge';
 import { lower } from '../i18n';
 import { formatCount, formatInr, formatMarginPct } from '../lib/format';
 import { ALLOCATED_EN, ALLOCATED_KEY, handlingEstimateUsed } from '../lib/labels';
@@ -152,6 +154,33 @@ export function useFormulas(): Record<MetricId, { label: string; short: string; 
   };
 }
 
+// ---- Bridge -------------------------------------------------------------------------------------
+
+/**
+ * Net revenue → CM1 → CM2 → CM3 → net as bridge steps: each deduction drops from the running figure,
+ * each margin is drawn from ₹0. Steps with an unknown figure stop the bridge there.
+ */
+export function marginBridgeSteps(
+  u: UnitEconomicsFigures,
+  labels: { revenue: string; npc: string; cm1: string; costs: string; cm2: string; ads: string; cm3: string; fixed: string; net: string },
+  notes: { ads: string; fixed: string },
+): BridgeStep[] {
+  const rev = u.netRevenue;
+  if (rev === null) return [];
+  const steps: BridgeStep[] = [{ key: 'revenue', label: labels.revenue, kind: 'start', from: 0, to: rev }];
+  const add = (key: string, dropLabel: string, from: number, to: number | null, subKey: string, subLabel: string, pct: number | null, note?: string) => {
+    if (to === null) return false;
+    steps.push({ key, label: dropLabel, kind: 'drop', from, to, note });
+    steps.push({ key: subKey, label: subLabel, kind: 'subtotal', from: 0, to, pct });
+    return true;
+  };
+  if (!add('npc', labels.npc, rev, u.cm1Inr, 'cm1', labels.cm1, u.cm1Pct)) return steps;
+  if (!add('costs', labels.costs, u.cm1Inr as number, u.cm2Inr, 'cm2', labels.cm2, u.cm2Pct)) return steps;
+  if (!add('ads', labels.ads, u.cm2Inr as number, u.cm3Inr, 'cm3', labels.cm3, u.cm3Pct, notes.ads)) return steps;
+  if (u.fixedCosts > 0 && u.netInr !== null) add('fixed', labels.fixed, u.cm3Inr as number, u.netInr, 'net', labels.net, u.netPct, notes.fixed);
+  return steps;
+}
+
 // ---- Panel ------------------------------------------------------------------------------------
 
 function Tile({
@@ -295,6 +324,27 @@ export const UnitEconomics = memo(function UnitEconomics({ a }: { a: AnalysisRes
   );
 
   const r = inrText(u.netRevenue);
+  const steps = marginBridgeSteps(
+    u,
+    {
+      revenue: f.revenue.label,
+      npc: t('chart.bridgeNpc', 'Net product cost'),
+      cm1: t('chart.bridgeCm1', 'CM1 · gross margin'),
+      costs: t('chart.bridgeCosts', 'Shipping, fees and handling'),
+      cm2: t('chart.bridgeCm2', 'CM2 · after shipping and fees'),
+      ads: t('ledger.ads'),
+      cm3: t('chart.bridgeCm3', 'CM3 · operational contribution'),
+      fixed: t('chart.bridgeFixed', 'Fixed costs'),
+      net: t('chart.bridgeNet', 'Net (estimated)'),
+    },
+    { ads: t(ALLOCATED_KEY, ALLOCATED_EN), fixed: lower(t('provenance.assumed')) },
+  );
+  const bridgeTitle = t('chart.bridgeTitle', 'From net revenue to contribution');
+  const bridgeCsv = {
+    filename: 'unit-economics-bridge.csv',
+    headers: ['step', 'kind', 'from_inr', 'to_inr', 'change_inr', 'pct_of_net_revenue'],
+    rows: steps.map((s) => [s.key, s.kind, s.from, s.to, s.kind === 'drop' ? s.to - s.from : s.to, s.pct ?? null]),
+  };
   return (
     <section className="card ue-card" aria-labelledby="ue-title">
       <div className="ue-top">
@@ -385,6 +435,30 @@ export const UnitEconomics = memo(function UnitEconomics({ a }: { a: AnalysisRes
           note={t('unit.disclaimer', 'Estimated operational, not statutory net profit.')}
         />
       </div>
+      {steps.length > 1 ? (
+        <>
+          <div className="mb-head">
+            <h3 className="section-label">{bridgeTitle}</h3>
+            <CsvButton csv={bridgeCsv} title={bridgeTitle} />
+          </div>
+          <MarginBridge steps={steps} ariaLabel={bridgeTitle} />
+          <details className="chart-table">
+            <summary>{t('chart.tableView', 'Table view')}</summary>
+            <ChartTable
+              caption={bridgeTitle}
+              headers={[t('chart.step', 'Step'), t('chart.amount', 'Amount'), t('chart.pctOfRevenue', '% of net revenue')]}
+              rows={steps.map((s) => ({
+                key: s.key,
+                cells: [
+                  `${s.kind === 'drop' ? '− ' : s.kind === 'subtotal' ? '= ' : ''}${s.label}`,
+                  s.kind === 'drop' ? `−${formatInr(Math.abs(s.to - s.from))}` : formatInr(s.to),
+                  typeof s.pct === 'number' ? formatMarginPct(s.pct) : '—',
+                ],
+              }))}
+            />
+          </details>
+        </>
+      ) : null}
     </section>
   );
 });
