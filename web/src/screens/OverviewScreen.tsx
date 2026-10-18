@@ -571,6 +571,20 @@ export function OverviewScreen() {
       ) : null}
 
       {shown ? (
+        <section className="ov-section" aria-labelledby="ov-leaks-title">
+          <div className="section-head">
+            <h2 id="ov-leaks-title" className="section-title">
+              {t('overview.leaksTitle', 'The three biggest leaks')}
+            </h2>
+            <a className="section-meta" href={hrefFor('leaks')}>
+              {t('overview.allLeaks', 'All leaks')}
+            </a>
+          </div>
+          <Leaks doc={shown} />
+        </section>
+      ) : null}
+
+      {shown ? (
         <section className="ov-section" aria-labelledby="ov-actions-title">
           <div className="section-head">
             <h2 id="ov-actions-title" className="section-title">
@@ -606,20 +620,6 @@ export function OverviewScreen() {
               ))}
             </div>
           )}
-        </section>
-      ) : null}
-
-      {shown ? (
-        <section className="ov-section" aria-labelledby="ov-leaks-title">
-          <div className="section-head">
-            <h2 id="ov-leaks-title" className="section-title">
-              {t('overview.leaksTitle', 'The three biggest leaks')}
-            </h2>
-            <a className="section-meta" href={hrefFor('leaks')}>
-              {t('overview.allLeaks', 'All leaks')}
-            </a>
-          </div>
-          <Leaks doc={shown} />
         </section>
       ) : null}
     </div>
