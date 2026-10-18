@@ -1,4 +1,5 @@
 import { Component, useEffect, useMemo, useState, type ErrorInfo as ReactErrorInfo, type ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
 import { api, toErrorInfo, type ErrorInfo } from '../api/client';
 import type {
   AnalysisResponse,
@@ -29,12 +30,13 @@ import { Button, ButtonLink } from '../components/Button';
 import { Icon } from '../components/Icon';
 import { Money } from '../components/Money';
 import { PageHeader } from '../components/Page';
+import { Provenance } from '../components/Provenance';
 import { Table, type Column } from '../components/Table';
 import { panelId, tabId, Tabs } from '../components/Tabs';
 import { Callout, EmptyPanel, ErrorCallout, InfoTip, Skeleton, StatCard } from '../components/ui';
 import { downloadCsv } from '../lib/csv';
 import { formatCount, formatDecimal, formatInr, formatPct, formatSignedDecimal, plural } from '../lib/format';
-import { ATTRIBUTION_LABEL, LEAK_LABELS } from '../lib/labels';
+import { ALLOCATED_EN, ALLOCATED_KEY, ATTRIBUTION_LABEL, handlingEstimateUsed, LEAK_LABELS } from '../lib/labels';
 import { hrefFor, navigate, parseHash } from '../lib/router';
 import { useStore } from '../state/store';
 
@@ -378,8 +380,30 @@ function discountSentence(d: PulseInsights): string {
   return 'Contribution per order by discount band.';
 }
 
+/** Observed first, then the chips that qualify it: synthetic, estimated handling, unknown orders left out. */
+function TileProvenance({ a, synthetic, unknown, money, children }: { a: AnalysisResponse; synthetic: boolean; unknown: number; money?: boolean; children?: ReactNode }) {
+  const { t } = useTranslation();
+  return (
+    <>
+      <span className="tile-prov">
+        <Provenance kind="observed" />
+        {synthetic ? <Pill tone="teal">{t('status.syntheticTag').toLowerCase()}</Pill> : null}
+        {money && handlingEstimateUsed(a) ? <Pill tone="warning">{t('status.estimated').toLowerCase()}</Pill> : null}
+        {money && unknown > 0 ? (
+          <Pill tone="warning" title={`Partial: ${formatCount(unknown)} unknown ${plural(unknown, 'order', 'orders')} left out`}>
+            {formatCount(unknown)} {t('status.unknown').toLowerCase()}
+          </Pill>
+        ) : null}
+      </span>
+      {children}
+    </>
+  );
+}
+
 function OverviewTab({ a, toMonths }: { a: AnalysisResponse; toMonths: (month: string) => void }) {
   const account = useAuth().mode === 'account';
+  const { t } = useTranslation();
+  const synthetic = useMemo(() => a.orders.some((o) => o.synthetic), [a]);
   const [month, setMonth] = useState<string>('');
   const ov = usePulse<PulseOverview>(a.analysis_id, `overview:${month}`, () => api.pulseOverview(a.analysis_id, month || undefined));
   if (ov.loading && !ov.data) return <Loading />;
@@ -423,12 +447,12 @@ function OverviewTab({ a, toMonths }: { a: AnalysisResponse; toMonths: (month: s
       </div>
 
       <div className={`kpi-grid kpi-grid-6 pulse-kpis${ov.loading ? ' is-refreshing' : ''}`}>
-        <StatCard label="Orders" value={formatCount(h.orders)} sub={<DeltaPill value={d.deltas?.orders_pct} unit="pct" goodWhen="up" vs={vs} />} onClick={open} actionLabel={`Orders ${h.orders} in ${formatMonth(d.month)} — open the month table`} actionIcon="arrow-right" />
-        <StatCard label="Net sales" value={<Money value={h.net_sales_inr} tone="plain" />} sub={<DeltaPill value={d.deltas?.net_sales_pct} unit="pct" goodWhen="up" vs={vs} />} onClick={open} actionLabel={`Net sales ${formatInr(h.net_sales_inr)} — open the month table`} actionIcon="arrow-right" />
-        <StatCard label="Contribution" tone="primary" value={<Money value={h.contribution_inr} tone="contribution" />} sub={<DeltaPill value={d.deltas?.contribution_pct} unit="pct" goodWhen="up" vs={vs} />} onClick={open} actionLabel={`Contribution ${fmt(h.contribution_inr)} — open the month table`} actionIcon="arrow-right" />
-        <StatCard label="Contribution %" value={h.contribution_pct === null ? <Unknown /> : <span className="num">{formatPct(h.contribution_pct)}</span>} sub="Of net sales" onClick={open} actionLabel="Contribution percent — open the month table" actionIcon="arrow-right" />
-        <StatCard label="Return rate" tone="warning" value={h.return_pct === null ? <Unknown /> : <span className="num">{formatPct(h.return_pct)}</span>} sub={<DeltaPill value={d.deltas?.return_pct_pts} unit="pts" goodWhen="down" vs={vs} />} onClick={open} actionLabel="Return rate — open the month table" actionIcon="arrow-right" />
-        <StatCard label="Average order" value={<Money value={h.aov_inr} tone="plain" />} sub={`Gross ${formatInr(h.gross_inr)}`} onClick={open} actionLabel="Average order value — open the month table" actionIcon="arrow-right" />
+        <StatCard label="Orders" value={formatCount(h.orders)} sub={<TileProvenance a={a} synthetic={synthetic} unknown={d.unknown_count}><DeltaPill value={d.deltas?.orders_pct} unit="pct" goodWhen="up" vs={vs} /></TileProvenance>} onClick={open} actionLabel={`Orders ${h.orders} in ${formatMonth(d.month)} — open the month table`} actionIcon="arrow-right" />
+        <StatCard label="Net sales" value={<Money value={h.net_sales_inr} tone="plain" />} sub={<TileProvenance a={a} synthetic={synthetic} unknown={d.unknown_count}><DeltaPill value={d.deltas?.net_sales_pct} unit="pct" goodWhen="up" vs={vs} /></TileProvenance>} onClick={open} actionLabel={`Net sales ${formatInr(h.net_sales_inr)} — open the month table`} actionIcon="arrow-right" />
+        <StatCard label={t('ledger.operationalContribution', 'Operational contribution')} tone="primary" value={<Money value={h.contribution_inr} tone="contribution" />} sub={<TileProvenance a={a} synthetic={synthetic} unknown={d.unknown_count} money><DeltaPill value={d.deltas?.contribution_pct} unit="pct" goodWhen="up" vs={vs} /></TileProvenance>} onClick={open} actionLabel={`Operational contribution ${fmt(h.contribution_inr)} — open the month table`} actionIcon="arrow-right" />
+        <StatCard label="Contribution %" value={h.contribution_pct === null ? <Unknown /> : <span className="num">{formatPct(h.contribution_pct)}</span>} sub={<TileProvenance a={a} synthetic={synthetic} unknown={0} money><span className="kpi-note">Of net sales</span></TileProvenance>} onClick={open} actionLabel="Contribution percent — open the month table" actionIcon="arrow-right" />
+        <StatCard label="Return rate" tone="warning" value={h.return_pct === null ? <Unknown /> : <span className="num">{formatPct(h.return_pct)}</span>} sub={<TileProvenance a={a} synthetic={synthetic} unknown={d.unknown_count}><DeltaPill value={d.deltas?.return_pct_pts} unit="pts" goodWhen="down" vs={vs} /></TileProvenance>} onClick={open} actionLabel="Return rate — open the month table" actionIcon="arrow-right" />
+        <StatCard label="Average order" value={<Money value={h.aov_inr} tone="plain" />} sub={<TileProvenance a={a} synthetic={synthetic} unknown={d.unknown_count}><span className="kpi-note">Gross {formatInr(h.gross_inr)}</span></TileProvenance>} onClick={open} actionLabel="Average order value — open the month table" actionIcon="arrow-right" />
       </div>
 
       {best.length && worst.length ? (
@@ -601,6 +625,8 @@ function ProductsTab({ a }: { a: AnalysisResponse }) {
 // ---- Channels & payments ------------------------------------------------------------------------
 
 function ChannelsTab({ a }: { a: AnalysisResponse }) {
+  const { t } = useTranslation();
+  const allocated = t(ALLOCATED_KEY, ALLOCATED_EN);
   const res = usePulse<PulseChannels>(a.analysis_id, `channels:${a.attribution}`, () => api.pulseChannels(a.analysis_id));
   if (res.loading && !res.data) return <Loading />;
   if (res.error || !res.data) return res.error ? <Failed error={res.error} /> : null;
@@ -609,9 +635,23 @@ function ChannelsTab({ a }: { a: AnalysisResponse }) {
     { id: 'channel', header: 'Channel', rowHeader: true, cell: (c) => c.channel },
     { id: 'orders', header: 'Orders', align: 'right', cell: (c) => <span className="num">{formatCount(c.orders)}</span> },
     { id: 'net', header: 'Net sales', align: 'right', cell: (c) => <Money value={c.net_sales_inr} tone="plain" /> },
-    { id: 'contribution', header: 'Contribution', align: 'right', className: 'col-strong', cell: (c) => <Money value={c.contribution_inr} tone="contribution" /> },
+    { id: 'contribution', header: 'Operational contribution', align: 'right', className: 'col-strong', cell: (c) => <Money value={c.contribution_inr} tone="contribution" /> },
     { id: 'ret', header: 'Return %', align: 'right', cell: (c) => pct(c.return_pct) },
-    { id: 'ads', header: 'Ads', align: 'right', cell: (c) => <Money value={c.ads_inr} tone="plain" /> },
+    {
+      id: 'ads',
+      header: (
+        <span className="th-stack" title={allocated}>
+          <span>Ads</span>
+          <span className="th-sub">{allocated}</span>
+        </span>
+      ),
+      align: 'right',
+      cell: (c) => (
+        <span title={`Ads: ${allocated}`}>
+          <Money value={c.ads_inr} tone="plain" />
+        </span>
+      ),
+    },
     { id: 'share', header: 'Ads share', align: 'right', cell: (c) => pct(c.ads_share_pct) },
   ];
   const payCols: Column<PulsePaymentRow>[] = [
@@ -638,7 +678,7 @@ function ChannelsTab({ a }: { a: AnalysisResponse }) {
         labels={d.labels}
         extra={
           <Pill tone="neutral">
-            {d.attribution === 'channel' ? 'Channel spend at channel level' : 'Ads allocated per order'}
+            {d.attribution === 'channel' ? `Channel spend at channel level · ${allocated}` : `Ads allocated per order · ${allocated}`}
           </Pill>
         }
       />

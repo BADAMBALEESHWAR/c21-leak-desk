@@ -6,6 +6,8 @@ import type {
   ApiIssue,
   Checks,
   DatasetResponse,
+  RowCorrectionRequest,
+  DecisionExport,
   DecisionRequest,
   DecisionSaved,
   DecisionSummary,
@@ -29,6 +31,7 @@ import type {
 } from './types';
 
 import { getIdToken } from '../auth/auth';
+import { i18n } from '../i18n';
 
 export const API_BASE = '/api/v1';
 
@@ -128,8 +131,13 @@ async function bearer(): Promise<string | null> {
   throw sessionEndedError();
 }
 
-async function send(method: 'GET' | 'POST', path: string, body?: unknown, auth = true): Promise<{ res: Response; parsed: unknown }> {
-  const headers: Record<string, string> = { Accept: 'application/json' };
+/** The UI language, so explanation text from the API comes back in it (English when the API has no translation). */
+function language(): string {
+  return i18n.resolvedLanguage || i18n.language || 'en';
+}
+
+async function send(method: 'GET' | 'POST' | 'PATCH', path: string, body?: unknown, auth = true): Promise<{ res: Response; parsed: unknown }> {
+  const headers: Record<string, string> = { Accept: 'application/json', 'Accept-Language': language() };
   const init: RequestInit = { method, headers };
   const token = auth ? await bearer() : null;
   if (token) headers.Authorization = `Bearer ${token}`;
@@ -169,7 +177,7 @@ async function send(method: 'GET' | 'POST', path: string, body?: unknown, auth =
   }
 }
 
-async function request<T>(method: 'GET' | 'POST', path: string, body?: unknown, auth = true): Promise<T> {
+async function request<T>(method: 'GET' | 'POST' | 'PATCH', path: string, body?: unknown, auth = true): Promise<T> {
   const { res, parsed } = await send(method, path, body, auth);
   if (!res.ok) {
     if (res.status === 401 && binding?.account) throw sessionEndedError();
@@ -202,9 +210,11 @@ function saveBlob(blob: Blob, filename: string): void {
 /** Fetches a file with the session and saves it. A plain download link cannot send the Authorization header. */
 export async function downloadFile(url: string, filename: string): Promise<void> {
   const token = await bearer();
+  const headers: Record<string, string> = { 'Accept-Language': language() };
+  if (token) headers.Authorization = `Bearer ${token}`;
   let res: Response;
   try {
-    res = await fetch(url, token ? { headers: { Authorization: `Bearer ${token}` } } : undefined);
+    res = await fetch(url, { headers });
   } catch {
     throw new ApiError(0, null, UNREACHABLE);
   }
@@ -255,6 +265,10 @@ export const api = {
 
   getDataset: (datasetId: string) => request<DatasetResponse>('GET', `/datasets/${encodeURIComponent(datasetId)}`),
 
+  /** Fix one flagged or rejected row; answers with the new dataset version (the original is kept). */
+  correctRow: (datasetId: string, body: RowCorrectionRequest) =>
+    request<DatasetResponse>('PATCH', `/datasets/${encodeURIComponent(datasetId)}/rows`, body),
+
   /** The signed-in owner's saved datasets, newest first, each with its latest analysis. */
   workspace: () => request<WorkspaceResponse>('GET', '/workspace'),
 
@@ -274,6 +288,9 @@ export const api = {
     request<DecisionSaved>('POST', `/analyses/${encodeURIComponent(analysisId)}/decisions`, body),
 
   listDecisions: () => request<DecisionSummary[]>('GET', '/decisions'),
+
+  /** The decision record as exported (check-in, assumptions, starting state). */
+  decisionExport: (decisionId: string) => request<DecisionExport>('GET', `/decisions/${encodeURIComponent(decisionId)}/export?format=json`),
 
   me: () => request<MeResponse>('GET', '/me'),
 

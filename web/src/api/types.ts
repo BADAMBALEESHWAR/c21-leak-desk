@@ -80,6 +80,30 @@ export interface WorkedOrderResult {
   note: string;
 }
 
+/**
+ * Unit economics over the computed (known) orders. Net revenue = revenue − refunds (net sales);
+ * CM1 after net product cost, CM2 after shipping, payment fees and handling, CM3 after ads (operational contribution).
+ * Percentages are of net revenue; null when net revenue is 0 or unknown.
+ */
+export interface Margins {
+  net_revenue_inr: Inr;
+  net_product_cost_inr: Inr;
+  shipping_inr: Inr;
+  /** Return shipping; deducted with shipping in CM2. Absent when the API folds it into shipping_inr. */
+  return_cost_inr?: Inr;
+  payment_fee_inr: Inr;
+  handling_inr: Inr;
+  ads_inr: Inr;
+  contribution_inr: Inr;
+  cm1_pct: number | null;
+  cm2_pct: number | null;
+  cm3_pct: number | null;
+  orders_counted: number;
+  /** Orders left out because a fact is unknown. */
+  unknown_left_out?: number;
+  partial: boolean;
+}
+
 export interface GroupRow {
   key: string;
   orders: number;
@@ -88,6 +112,8 @@ export interface GroupRow {
   contribution_before_spend_inr: number;
   channel_spend_inr: Inr;
   contribution_inr: Inr;
+  /** Same shape as AnalysisResult.margins, for this channel or product. */
+  margins?: Margins;
 }
 
 export interface Reconciliation {
@@ -227,6 +253,8 @@ export interface AnalysisResult {
   recommendation: Recommendation;
   candidates: Candidate[];
   whale: WhalePoint[];
+  /** Unit economics for the whole period (absent from older analyses). */
+  margins?: Margins;
 }
 
 export interface ScenarioColumn {
@@ -304,6 +332,7 @@ export const SAMPLE_SOURCES = [
   'refund_over_gross',
   'recovery_400',
   'bad_schema',
+  'bad_values',
   'demo_12m',
 ] as const;
 
@@ -351,6 +380,40 @@ export interface DatasetResponse {
   unchanged?: boolean;
   /** The API's sentence for an unchanged upload, e.g. "Nothing new: all 2 orders were already saved." */
   message?: string;
+  /** Row corrections made on the import report, oldest first (each one is a new dataset version). */
+  corrections?: RowCorrection[];
+  /** Orders with at least one corrected (user-entered) value. */
+  corrected_order_ids?: string[];
+  /** Flags still open after the last correction. */
+  still_flagged?: number | ValidationFlag[];
+  /** Rejected rows as read from the file, so they can be fixed. */
+  rejected_rows?: RejectedRow[];
+}
+
+export interface RejectedRow {
+  line: number;
+  file?: string;
+  order_id?: string | null;
+  raw: Record<string, unknown>;
+}
+
+export interface RowCorrection {
+  order_id: string | null;
+  line: number | null;
+  field: string;
+  from: unknown;
+  to: unknown;
+  at: string;
+  by?: string | null;
+  note?: string | null;
+}
+
+/** PATCH /datasets/:id/rows: fix one flagged or rejected row; the API saves a new dataset version. */
+export interface RowCorrectionRequest {
+  order_id?: string;
+  line?: number;
+  changes: Record<string, string | number | boolean | null>;
+  note?: string;
 }
 
 export interface AnalysisRequest {
@@ -395,6 +458,10 @@ export interface DecisionRequest {
   stop_rule: string;
   owner: string;
   notes?: string;
+  /** Fixed costs per period (salaries, rent, tools), an assumption entered on the ledger. */
+  fixed_costs_inr?: number;
+  /** Every assumed input behind the decision, kept with it and written into the export. */
+  assumptions?: Record<string, unknown>;
 }
 
 export interface DecisionSaved {
@@ -403,6 +470,39 @@ export interface DecisionSaved {
   assumptions: Record<string, unknown>;
   engine_version: string;
   persisted: boolean;
+  /** 'demo' for decisions saved in the shared demo database. */
+  workspace?: WorkspaceKind;
+  /** Present when the API returns the 30-day check-in with the save. */
+  check_in_30_days?: CheckIn;
+}
+
+/** The 30-day check-in written into every decision export. */
+export interface CheckIn {
+  metric: string;
+  /** Plain-language name of the metric. */
+  metric_label?: string;
+  unit?: 'pct' | 'inr' | string;
+  direction?: 'at_least' | 'at_most' | string;
+  baseline_value?: number | null;
+  baseline_source?: string;
+  target_value: number | string | null;
+  date: string;
+  /** Operational contribution expected by the check-in, and what it is based on. */
+  contribution_target_inr?: number | null;
+  contribution_target_basis?: string;
+}
+
+/** GET /decisions/:id/export?format=json */
+export interface DecisionExport {
+  decision_id?: string;
+  starting_state?: Record<string, unknown>;
+  scenario?: Record<string, unknown> | null;
+  expected_impact_inr?: number | null;
+  date?: string;
+  check_in_30_days?: CheckIn;
+  assumptions?: Array<string | Record<string, unknown>>;
+  owner?: string;
+  [key: string]: unknown;
 }
 
 export interface DecisionSummary {

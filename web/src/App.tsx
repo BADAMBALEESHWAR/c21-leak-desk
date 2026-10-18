@@ -13,11 +13,15 @@ import { Callout, SkeletonCards } from './components/ui';
 import { Toast } from './components/Toast';
 import { SAMPLE_NAMES } from './lib/labels';
 import { navigate, parseHash, replaceWithBareRoute, useHashLocation, type Location, type Route } from './lib/router';
+import { i18n } from './i18n';
+import { ChangelogScreen } from './screens/ChangelogScreen';
+import { ChecksScreen } from './screens/ChecksScreen';
 import { DecisionScreen } from './screens/DecisionScreen';
 import { ImportScreen } from './screens/ImportScreen';
 import { LeaksScreen } from './screens/LeaksScreen';
 import { LedgerScreen } from './screens/LedgerScreen';
 import { PulseScreen } from './screens/PulseScreen';
+import { ReportScreen } from './screens/ReportScreen';
 import { ScenarioScreen } from './screens/ScenarioScreen';
 import { useStore } from './state/store';
 
@@ -28,7 +32,13 @@ const SCREENS: Record<Route, () => JSX.Element> = {
   scenario: ScenarioScreen,
   decision: DecisionScreen,
   pulse: PulseScreen,
+  checks: ChecksScreen,
+  changelog: ChangelogScreen,
+  report: ReportScreen,
 };
+
+// English names for the newer routes (breadcrumb, sidebar) until the language files carry them; never overrides a file.
+i18n.addResourceBundle('en', 'translation', { nav: { checks: 'Checks', changelog: 'Change log', report: 'Monthly report' } }, true, false);
 
 /** Read at load, before the router fills in a default route: "/app/" with no route opens the workspace's own start page. */
 const START_BARE = /^#?\/?$/.test(window.location.hash);

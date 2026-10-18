@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { BRAND } from '../brand';
 import { LANGS, setLanguage, type Lang } from '../i18n';
-import { hrefFor, type Route } from '../lib/router';
+import { hrefFor, navigate, type Route } from '../lib/router';
 import { useStore } from '../state/store';
 import { Icon, type IconName } from './Icon';
 import { LogoMark } from './LogoMark';
@@ -12,6 +12,12 @@ export const STEPS: Array<{ route: Route; label: string; icon: IconName; hint: s
   { route: 'leaks', label: 'Leaks', icon: 'alert-triangle', hint: 'Where money is lost' },
   { route: 'scenario', label: 'Scenario', icon: 'sliders', hint: 'Change one thing' },
   { route: 'decision', label: 'Decision', icon: 'check-circle', hint: 'Record what to do' },
+];
+
+/** Proof and reporting pages, below the checks card. */
+const FOOT_LINKS: Array<{ route: Route; key: string; label: string; icon: IconName }> = [
+  { route: 'checks', key: 'nav.checks', label: 'Checks', icon: 'check-circle' },
+  { route: 'report', key: 'nav.report', label: 'Monthly report', icon: 'file' },
 ];
 
 /** Shown in the collapsed sidebar, where the full names do not fit; the full name stays the accessible name. */
@@ -44,7 +50,7 @@ function LanguageSwitch() {
 
 export function Sidebar({ route }: { route: Route }) {
   const { t } = useTranslation();
-  const { datasetId, analysis, scenario, decisionSavedFor, engineVersion, checks, openChecks, openAbout } = useStore();
+  const { datasetId, analysis, scenario, decisionSavedFor, engineVersion, checks, openAbout } = useStore();
 
   const done: Record<Route, boolean> = {
     import: datasetId !== null,
@@ -53,6 +59,9 @@ export function Sidebar({ route }: { route: Route }) {
     scenario: analysis !== null && scenario !== null && scenario.analysis_id === analysis.analysis_id,
     decision: analysis !== null && decisionSavedFor === analysis.analysis_id,
     pulse: false,
+    checks: false,
+    changelog: false,
+    report: false,
   };
   const pulseCurrent = route === 'pulse';
   const allPass = checks !== null && checks.passed === checks.total;
@@ -122,9 +131,10 @@ export function Sidebar({ route }: { route: Route }) {
         {checks ? (
           <button
             type="button"
-            className={`checks-card${allPass ? '' : ' is-failing'}`}
-            onClick={openChecks}
+            className={`checks-card${allPass ? '' : ' is-failing'}${route === 'checks' ? ' is-current' : ''}`}
+            onClick={() => navigate('checks')}
             aria-label={`${checks.passed} of ${checks.total} engine checks pass — open the public checks`}
+            aria-current={route === 'checks' ? 'page' : undefined}
             data-tip="Public checks"
           >
             <span className="checks-icon" aria-hidden="true">
@@ -138,6 +148,21 @@ export function Sidebar({ route }: { route: Route }) {
             </span>
           </button>
         ) : null}
+        <ul className="foot-links" aria-label={t('nav.more', 'More')}>
+          {FOOT_LINKS.map((l) => (
+            <li key={l.route}>
+              <a
+                href={hrefFor(l.route)}
+                className={`foot-link-item${route === l.route ? ' is-active' : ''}`}
+                aria-current={route === l.route ? 'page' : undefined}
+                data-tip={t(l.key, l.label)}
+              >
+                <Icon name={l.icon} size={15} />
+                <span className="foot-link-text">{t(l.key, l.label)}</span>
+              </a>
+            </li>
+          ))}
+        </ul>
         <p className="foot-note">
           {t('footer.note')}{' '}
           <button type="button" className="foot-link" onClick={openAbout}>

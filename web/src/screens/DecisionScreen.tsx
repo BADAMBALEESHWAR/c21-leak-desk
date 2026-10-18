@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useId, useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
-import { api, ApiError, authDownload, toErrorInfo, type ErrorInfo } from '../api/client';
+import { api, ApiError, authDownload, downloadFile, toErrorInfo, type ErrorInfo } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
-import type { AnalysisResponse, Candidate, DecisionRequest, DecisionSaved, DecisionSummary, OverrideKey, Recommendation, ScenarioResponse, TextSource } from '../api/types';
+import type { AnalysisResponse, Candidate, CheckIn, DecisionRequest, DecisionSaved, DecisionSummary, OverrideKey, Recommendation, ScenarioResponse, TextSource } from '../api/types';
 import { CONFIDENCE_KEY, ConfidenceBadge, Pill, SourceTag } from '../components/Badge';
 import { Button, ButtonLink } from '../components/Button';
 import { NeedsAnalysis } from '../components/EmptyState';
@@ -10,13 +10,47 @@ import { ErrorNote } from '../components/ErrorNote';
 import { Icon } from '../components/Icon';
 import { Money } from '../components/Money';
 import { PageHeader } from '../components/Page';
+import { Provenance, ProvenanceValue } from '../components/Provenance';
 import { Table, type Column } from '../components/Table';
 import { Callout } from '../components/ui';
 import { lower } from '../i18n';
-import { capitalise, formatDateTime, formatInr, formatPct, formatSignedInr } from '../lib/format';
-import { OVERRIDE_LABELS } from '../lib/labels';
+import { addDays, capitalise, formatDate, formatDateTime, formatInr, formatPct, formatSignedInr } from '../lib/format';
+import { handlingEstimateUsed, OVERRIDE_LABELS } from '../lib/labels';
 import { hrefFor, navigate } from '../lib/router';
-import { useStore } from '../state/store';
+import { OVERRIDE_KEYS, useStore } from '../state/store';
+
+interface AssumedInput {
+  input: string;
+  label: string;
+  value: unknown;
+  why: string;
+}
+
+/** Every assumed input behind a decision; sent with the save so the export carries them all. */
+export function assumedInputs(
+  a: AnalysisResponse,
+  s: ScenarioResponse | null,
+  fixedCosts: number,
+  expected: { value: number | null; engine: number | null },
+): AssumedInput[] {
+  const out: AssumedInput[] = [];
+  if (s) {
+    for (const k of OVERRIDE_KEYS) {
+      if (s.overrides[k] !== undefined) out.push({ input: `scenario.${k}`, label: OVERRIDE_LABELS[k], value: s.overrides[k], why: 'scenario override' });
+    }
+    if (s.overrides.assume_unknown_refund) {
+      out.push({ input: 'scenario.assume_unknown_refund', label: OVERRIDE_LABELS.assume_unknown_refund, value: true, why: 'missing refund facts filled with a stated assumption' });
+    }
+  }
+  if (handlingEstimateUsed(a)) {
+    out.push({ input: 'handling_default_inr', label: 'Handling per order (estimate)', value: a.config.handling_default_inr, why: 'default for rows without handling_inr' });
+  }
+  if (fixedCosts > 0) out.push({ input: 'fixed_costs_inr', label: 'Fixed costs per period', value: fixedCosts, why: 'entered on the ledger for the estimated net margin' });
+  if (expected.value !== null && expected.value !== expected.engine) {
+    out.push({ input: 'expected_delta_inr', label: 'Expected ₹ impact per period', value: expected.value, why: `entered by the owner; the engine figure was ${expected.engine ?? 'none'}` });
+  }
+  return out;
+}
 
 const CUSTOM = '__custom__';
 type Field = 'intervention' | 'expected_delta_inr' | 'test_30d' | 'stop_rule' | 'owner' | 'notes';
@@ -118,7 +152,7 @@ function overrideText(o: Record<string, unknown> | undefined | null): string {
 }
 
 function Snapshot({ a, s }: { a: AnalysisResponse; s: ScenarioResponse | null }) {
-  const { focusLedgerTable } = useStore();
+  const { focusLedgerTable, fixedCosts } = useStore();
   const { t } = useTranslation();
   const contributionText = a.totals.contribution_inr === null ? 'unknown' : formatInr(a.totals.contribution_inr);
   return (
@@ -128,7 +162,7 @@ function Snapshot({ a, s }: { a: AnalysisResponse; s: ScenarioResponse | null })
       </h2>
       <div className="mini-kpis">
         <button type="button" className="card-action" onClick={() => navigate('ledger')} aria-label={`Contribution ${contributionText} — open the ledger`}>
-          <span>{t('ledger.contribution')}</span>
+          <span>{t('ledger.operationalContribution', 'Operational contribution')}</span>
           <strong>
             <Money value={a.totals.contribution_inr} tone="contribution" />
           </strong>
@@ -170,19 +204,33 @@ function Snapshot({ a, s }: { a: AnalysisResponse; s: ScenarioResponse | null })
         </div>
         <div>
           <dt>Changed</dt>
-          <dd>{s ? overrideText(s.overrides as Record<string, unknown>) : 'nothing (observed baseline)'}</dd>
+          <dd>
+            <ProvenanceValue kind={s ? 'assumed' : 'observed'} value={s ? overrideText(s.overrides as Record<string, unknown>) : 'nothing (observed baseline)'} />
+          </dd>
         </div>
         <div>
           <dt>Return rate</dt>
-          <dd>{formatPct(a.observed.return_rate_pct)} observed</dd>
+          <dd>
+            <ProvenanceValue kind="observed" value={formatPct(a.observed.return_rate_pct)} />
+          </dd>
         </div>
         <div>
           <dt>Recovery</dt>
-          <dd>{a.observed.recovery_pct === null ? 'unknown' : `${formatPct(a.observed.recovery_pct)} observed`}</dd>
+          <dd>
+            <ProvenanceValue kind="observed" value={a.observed.recovery_pct === null ? 'unknown' : formatPct(a.observed.recovery_pct)} />
+          </dd>
         </div>
         <div>
           <dt>Handling</dt>
-          <dd>{formatInr(a.config.handling_default_inr)} default</dd>
+          <dd>
+            <ProvenanceValue kind={handlingEstimateUsed(a) ? 'assumed' : 'observed'} value={handlingEstimateUsed(a) ? `${formatInr(a.config.handling_default_inr)} per order, estimate` : 'from the rows'} />
+          </dd>
+        </div>
+        <div>
+          <dt>Fixed costs</dt>
+          <dd>
+            <ProvenanceValue kind="assumed" value={fixedCosts > 0 ? `${formatInr(fixedCosts)} per period` : `${formatInr(0)} (not set)`} />
+          </dd>
         </div>
         <div>
           <dt>Engine</dt>
@@ -216,10 +264,62 @@ function snapshotValue(k: string, v: unknown): string {
   return String(v);
 }
 
-function SavedSnapshot({ saved }: { saved: DecisionSaved }) {
+/** The 30-day check-in: from the save or the export when the API sends it, else 30 days on, against operational contribution. */
+function useCheckIn(saved: DecisionSaved, fallback: CheckIn): { check: CheckIn; fromApi: boolean } {
+  const [fromExport, setFromExport] = useState<CheckIn | null>(null);
+  useEffect(() => {
+    if (saved.check_in_30_days) return undefined;
+    let cancelled = false;
+    api
+      .decisionExport(saved.decision_id)
+      .then((x) => {
+        if (!cancelled && x && x.check_in_30_days && x.check_in_30_days.date) setFromExport(x.check_in_30_days);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [saved.decision_id, saved.check_in_30_days]);
+  const api30 = saved.check_in_30_days ?? fromExport;
+  return { check: api30 ?? fallback, fromApi: api30 !== null && api30 !== undefined };
+}
+
+function valueText(v: CheckIn['target_value'] | undefined, c: CheckIn): string {
+  if (v === null || v === undefined || v === '') return 'not set';
+  if (typeof v !== 'number') return String(v);
+  const pct = c.unit ? c.unit === 'pct' : /pct|%|percent|rate/i.test(c.metric);
+  return pct ? formatPct(v) : formatInr(v);
+}
+
+const METRIC_NAMES: Record<string, string> = {
+  contribution_inr: 'Operational contribution per period',
+  operational_contribution_inr: 'Operational contribution per period',
+  recovery_pct: 'Recovery of product cost on returns',
+  return_rate_pct: 'Return rate',
+};
+
+function SavedSnapshot({ saved, a, expected }: { saved: DecisionSaved; a: AnalysisResponse; expected: number | null }) {
   const account = useAuth().mode === 'account';
+  const { showToast } = useStore();
   const { t } = useTranslation();
+  const [downloading, setDownloading] = useState(false);
   const entries = Object.entries({ ...saved.assumptions, engine_version: saved.engine_version }).filter(([k]) => k in SNAPSHOT_KEYS);
+  const base = a.totals.contribution_inr;
+  const { check } = useCheckIn(saved, {
+    metric: 'Operational contribution per period',
+    target_value: base === null ? null : base + (expected ?? 0),
+    date: addDays(saved.saved_at, 30),
+  });
+  const exportJson = async () => {
+    setDownloading(true);
+    try {
+      await downloadFile(api.exportUrl(saved.decision_id, 'json'), `decision-${saved.decision_id}.json`);
+    } catch (err) {
+      showToast(toErrorInfo(err).message, 'info');
+    } finally {
+      setDownloading(false);
+    }
+  };
   return (
     <section className="card saved-card" aria-labelledby="saved-title">
       <div className="card-head">
@@ -231,9 +331,51 @@ function SavedSnapshot({ saved }: { saved: DecisionSaved }) {
             {t('decision.saved')}
           </h2>
           <p className="card-sub">
-            {formatDateTime(saved.saved_at)} · {saved.persisted === false ? (account ? 'not saved: the database is unavailable' : 'demo workspace, not kept') : account ? 'saved to your account' : 'saved'}
+            {formatDateTime(saved.saved_at)} ·{' '}
+            {saved.persisted === false
+              ? t('topbar.inMemory')
+              : account && saved.workspace !== 'demo'
+                ? t('decision.savedToAccount', 'saved to your account')
+                : t('decision.savedDemo', 'demo workspace')}
           </p>
         </div>
+      </div>
+      <div className="saved-export">
+        <Button variant="secondary" size="sm" icon="download" onClick={() => void exportJson()} disabled={downloading}>
+          {t('actions.exportJson')}
+        </Button>
+        <span className="muted small">{t('decision.exportNote', 'decision-{{id}}.json, with every assumed input', { id: saved.decision_id })}</span>
+      </div>
+      <div className="checkin" aria-label={t('decision.checkInLabel', '30-day check-in')}>
+        <span className="checkin-date">
+          {t('decision.checkIn', 'Check in on {{date}}', { date: formatDate(check.date) })}
+        </span>
+        <dl className="checkin-kv">
+          <div>
+            <dt>{t('decision.metric', 'Metric')}</dt>
+            <dd>{check.metric_label ?? METRIC_NAMES[check.metric] ?? check.metric}</dd>
+          </div>
+          <div>
+            <dt>{t('decision.target', 'Target')}</dt>
+            <dd className="num">
+              {check.direction === 'at_most' ? t('decision.atMost', 'at most') : check.direction === 'at_least' ? t('decision.atLeast', 'at least') : ''}{' '}
+              {valueText(check.target_value, check)}
+              {check.baseline_value !== undefined && check.baseline_value !== null ? (
+                <span className="checkin-from">
+                  {' '}
+                  {t('decision.fromBaseline', 'from {{v}}', { v: valueText(check.baseline_value, check) })}{' '}
+                  <Provenance kind={check.baseline_source === 'observed' || check.baseline_source === undefined ? 'observed' : 'assumed'} />
+                </span>
+              ) : null}
+            </dd>
+          </div>
+          {typeof check.contribution_target_inr === 'number' ? (
+            <div>
+              <dt>{t('decision.contributionTarget', 'Contribution target')}</dt>
+              <dd className="num">{formatInr(check.contribution_target_inr)}</dd>
+            </div>
+          ) : null}
+        </dl>
       </div>
       <dl className="kv">
         {entries.map(([k, v]) => (
@@ -252,11 +394,11 @@ interface FormProps {
   s: ScenarioResponse | null;
   rec: Recommendation;
   candidates: Candidate[];
-  onSaved: (d: DecisionSaved) => void;
+  onSaved: (d: DecisionSaved, expected: number | null) => void;
 }
 
 function DecisionForm({ a, s, rec, candidates, onSaved }: FormProps) {
-  const { showToast, markDecisionSaved } = useStore();
+  const { showToast, markDecisionSaved, fixedCosts } = useStore();
   const { t } = useTranslation();
   const groupName = useId();
   const [choice, setChoice] = useState<string>(rec.preselect ? rec.intervention : '');
@@ -314,6 +456,8 @@ function DecisionForm({ a, s, rec, candidates, onSaved }: FormProps) {
       setErrors({ expected_delta_inr: 'Enter the expected change in rupees, for example 480, or leave it blank.' });
       return;
     }
+    const engineExpected = options.find((o) => o.key === choice)?.delta ?? null;
+    const assumed = assumedInputs(a, s, fixedCosts, { value: expectedNum, engine: engineExpected });
     const body: DecisionRequest = {
       ...(s ? { scenario_id: s.scenario_id } : {}),
       intervention,
@@ -322,13 +466,15 @@ function DecisionForm({ a, s, rec, candidates, onSaved }: FormProps) {
       stop_rule: stop,
       owner,
       ...(notes.trim() ? { notes: notes.trim() } : {}),
+      ...(fixedCosts > 0 ? { fixed_costs_inr: fixedCosts } : {}),
+      ...(assumed.length > 0 ? { assumptions: { provenance: 'assumed', assumed_inputs: assumed } } : {}),
     };
     setSaving(true);
     try {
       const saved = await api.createDecision(a.analysis_id, body);
       showToast(t('decision.saved'));
       markDecisionSaved(a.analysis_id);
-      onSaved(saved);
+      onSaved(saved, expectedNum);
     } catch (err) {
       if (err instanceof ApiError && err.issues.length > 0 && err.status === 422) {
         const next: Partial<Record<Field, string>> = {};
@@ -349,13 +495,21 @@ function DecisionForm({ a, s, rec, candidates, onSaved }: FormProps) {
   };
 
   const describedBy = (f: Field, hint?: string) => [hint, errors[f] ? `${f}-error` : undefined].filter(Boolean).join(' ') || undefined;
+  // Observed: the engine's figure for the chosen candidate at the observed baseline. Assumed: a scenario, a custom
+  // intervention, or a figure typed by the owner.
+  const chosenDelta = options.find((o) => o.key === choice)?.delta;
+  const expectedNumNow = expected.trim() === '' ? null : Number(expected);
+  const expectedKind = !s && choice !== CUSTOM && chosenDelta !== undefined && expectedNumNow === chosenDelta ? 'observed' : 'assumed';
+  const interventionKind = s || choice === CUSTOM ? 'assumed' : 'observed';
   const draftedFor = options.find((o) => o.key === rec.intervention)?.label ?? rec.label;
   const confidenceWord = CONFIDENCE_KEY[rec.confidence] ? lower(t(CONFIDENCE_KEY[rec.confidence])) : rec.confidence;
 
   return (
     <form className="card form-card" onSubmit={onSubmit} noValidate>
       <fieldset className="field choice-list" aria-describedby={describedBy('intervention', 'd-intervention-hint')}>
-        <legend className="field-label">{t('decision.intervention')}</legend>
+        <legend className="field-label">
+          {t('decision.intervention')} {choice ? <Provenance kind={interventionKind} /> : null}
+        </legend>
         <p id="d-intervention-hint" className="field-hint">
           {rec.preselect ? 'Pre-selected: the recommendation has high confidence.' : `Not pre-selected: confidence is ${rec.confidence}. ${rec.confidence_reason}`}
         </p>
@@ -407,9 +561,12 @@ function DecisionForm({ a, s, rec, candidates, onSaved }: FormProps) {
       </fieldset>
 
       <div className="field">
-        <label htmlFor="d-expected" className="field-label">
-          Expected ₹ impact per period
-        </label>
+        <span className="field-label-row">
+          <label htmlFor="d-expected" className="field-label">
+            Expected ₹ impact per period
+          </label>
+          {expected.trim() !== '' ? <Provenance kind={expectedKind} /> : null}
+        </span>
         <span className="num-field num-field-wide">
           <span className="num-affix" aria-hidden="true">
             ₹
@@ -429,6 +586,20 @@ function DecisionForm({ a, s, rec, candidates, onSaved }: FormProps) {
           Filled from the candidate you choose; change it if you expect a different effect.
         </p>
         <FieldError id="expected_delta_inr-error" message={errors.expected_delta_inr} />
+      </div>
+
+      <div className="field">
+        <span className="field-label-row">
+          <span className="field-label" id="d-fixed-label">
+            {t('unit.fixedCosts', 'Fixed costs (salaries, rent, tools)')}
+          </span>
+          <Provenance kind="assumed" />
+        </span>
+        <p className="field-static" aria-labelledby="d-fixed-label">
+          <span className="num">{fixedCosts > 0 ? `${formatInr(fixedCosts)} per period` : `${formatInr(0)} — not set`}</span>{' '}
+          <a href={hrefFor('ledger')}>{t('decision.changeOnLedger', 'Change on the ledger')}</a>
+          <span className="field-hint"> {t('decision.fixedSaved', 'Saved with the decision when set.')}</span>
+        </p>
       </div>
 
       <div className="draft-row">
@@ -528,7 +699,7 @@ export function DecisionScreen() {
   const { analysis, scenario } = useStore();
   const [version, setVersion] = useState(0);
   const { t } = useTranslation();
-  const [saved, setSaved] = useState<DecisionSaved | null>(null);
+  const [saved, setSaved] = useState<{ d: DecisionSaved; expected: number | null } | null>(null);
   const current = analysis && scenario && scenario.analysis_id === analysis.analysis_id ? scenario : null;
 
   const rec = current?.recommendation ?? analysis?.recommendation ?? null;
@@ -555,13 +726,13 @@ export function DecisionScreen() {
               s={current}
               rec={rec}
               candidates={candidates}
-              onSaved={(d) => {
-                setSaved(d);
+              onSaved={(d, expected) => {
+                setSaved({ d, expected });
                 setVersion((v) => v + 1);
               }}
             />
             <div className="stack sticky-col">
-              {saved ? <SavedSnapshot saved={saved} /> : null}
+              {saved ? <SavedSnapshot saved={saved.d} a={analysis} expected={saved.expected} /> : null}
               <Snapshot a={analysis} s={current} />
             </div>
           </div>

@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
 import { toErrorInfo, type ErrorInfo } from '../api/client';
 import type { Checks } from '../api/types';
 import { formatInr, formatPct } from '../lib/format';
@@ -123,6 +124,7 @@ function Evidence({ id, c }: { id: CheckId; c: Checks }) {
 }
 
 export function ChecksDetail() {
+  const { t } = useTranslation();
   const { checksRaw, checksLoading, refreshChecks, openWorked, closeDrawer, importDataset, runAnalysis, setLedgerTab, setOverrides } = useStore();
   const [busy, setBusy] = useState<CheckId | null>(null);
   const [error, setError] = useState<ErrorInfo | null>(null);
@@ -208,6 +210,15 @@ export function ChecksDetail() {
 
       <ErrorCallout error={error} />
 
+      <SeeIt
+        onClick={() => {
+          closeDrawer();
+          navigate('checks');
+        }}
+      >
+        {t('checks.openPage', 'Open the checks page, with the working for every check')}
+      </SeeIt>
+
       {results.map((r) => (
         <section key={r.id} className={`check-card${r.pass ? '' : ' is-failing'}`} aria-labelledby={`${r.id}-title`}>
           <div className="check-head">
@@ -260,6 +271,7 @@ function SeeIt({ children, onClick }: { children: ReactNode; onClick: () => void
 }
 
 export function AboutDetail() {
+  const { t } = useTranslation();
   const { analysis, closeDrawer, openMargin, focusLedgerTable } = useStore();
 
   const goto = (route: Route, after?: () => void) => {
@@ -380,6 +392,36 @@ export function AboutDetail() {
               </span>
             </li>
           ))}
+        </ul>
+      </section>
+
+      <section className="drawer-section" aria-labelledby="about-proof">
+        <h3 id="about-proof" className="section-label">
+          {t('changelog.aboutTitle', 'Proof and change log')}
+        </h3>
+        <ul className="usp-list">
+          <li className="usp">
+            <span className="usp-icon" aria-hidden="true">
+              <Icon name="file" size={18} />
+            </span>
+            <span className="usp-body">
+              <strong>{t('changelog.aboutHeading', 'From the brief to the evidence')}</strong>
+              <span className="usp-text">
+                {t('changelog.aboutText', 'Where the ledger started, the scope we negotiated and what we cut, and the evidence it holds now.')}
+              </span>
+              <SeeIt onClick={() => goto('changelog')}>{t('changelog.aboutLink', 'Open the change log')}</SeeIt>
+            </span>
+          </li>
+          <li className="usp">
+            <span className="usp-icon" aria-hidden="true">
+              <Icon name="check-circle" size={18} />
+            </span>
+            <span className="usp-body">
+              <strong>{t('checks.aboutHeading', 'Every check, with its working')}</strong>
+              <span className="usp-text">{t('checks.aboutText', 'Worked order, reconciliation, the missing refund and margins, re-run live on the reference data.')}</span>
+              <SeeIt onClick={() => goto('checks')}>{t('checks.aboutLink', 'Open the checks')}</SeeIt>
+            </span>
+          </li>
         </ul>
       </section>
 

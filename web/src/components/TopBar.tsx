@@ -6,7 +6,7 @@ import { useAuth } from '../auth/AuthContext';
 import { BRAND } from '../brand';
 import { lower } from '../i18n';
 import { formatCount } from '../lib/format';
-import { ATTRIBUTION_LABEL, datasetName } from '../lib/labels';
+import { ATTRIBUTION_TIP_EN, ATTRIBUTION_TIP_KEY, datasetName, isUploadSource } from '../lib/labels';
 import { hrefFor, type Route } from '../lib/router';
 import { useStore } from '../state/store';
 import { Button, ButtonLink } from './Button';
@@ -15,7 +15,7 @@ import { AttributionSegmented, InfoTip } from './ui';
 
 const ATTRIBUTION_ROUTES: Route[] = ['ledger', 'leaks', 'scenario', 'pulse'];
 
-export const DEMO_PILL_TIP = 'Demo workspace: uploads are stored, but not tied to an account.';
+export const DEMO_PILL_TIP = 'Saved to the shared demo database. Sign in to keep your data in your own account.';
 
 export function TopBar({ route, onError }: { route: Route; onError: (e: ErrorInfo | null) => void }) {
   const { dataset, analysis, samples, analysing, runAnalysis, openWorked, dbStatus } = useStore();
@@ -48,16 +48,32 @@ export function TopBar({ route, onError }: { route: Route; onError: (e: ErrorInf
 
   const email = auth.user?.email ?? null;
 
+  // Your own upload (no synthetic rows) is your data; the demo and every sample carry the demo disclaimer.
+  const ownData = isUploadSource(source) && synthetic === 0;
+  const sampleLoaded = source !== undefined && !isUploadSource(source);
+  const disclaimer = ownData
+    ? t('topbar.ownData', 'Your data · operational contribution, not statutory profit')
+    : !account || sampleLoaded
+      ? t('topbar.demoDisclaimer', 'Demo uses synthetic data. Not a live production system.')
+      : null;
+
   return (
     <header className="topbar">
-      <nav className="crumbs" aria-label="Breadcrumb">
-        <ol>
-          <li>
-            <a href={hrefFor('import')}>{BRAND.name}</a>
-          </li>
-          <li aria-current="page">{t(`nav.${route}`)}</li>
-        </ol>
-      </nav>
+      <div className="topbar-left">
+        <nav className="crumbs" aria-label="Breadcrumb">
+          <ol>
+            <li>
+              <a href={hrefFor('import')}>{BRAND.name}</a>
+            </li>
+            <li aria-current="page">{t(`nav.${route}`)}</li>
+          </ol>
+        </nav>
+        {disclaimer ? (
+          <p className={`topbar-disclaimer${ownData ? ' is-own' : ''}`} title={disclaimer}>
+            {disclaimer}
+          </p>
+        ) : null}
+      </div>
 
       <div className="topbar-actions">
         {orders !== null ? (
@@ -75,7 +91,7 @@ export function TopBar({ route, onError }: { route: Route; onError: (e: ErrorInf
         {analysis && ATTRIBUTION_ROUTES.includes(route) ? (
           <span className="topbar-attr">
             <AttributionSegmented value={analysis.attribution} onChange={(m) => void onAttribution(m)} disabled={analysing || switching} compact />
-            <InfoTip text={ATTRIBUTION_LABEL} label="About attribution" />
+            <InfoTip text={t(ATTRIBUTION_TIP_KEY, ATTRIBUTION_TIP_EN)} label="About attribution" />
           </span>
         ) : null}
 

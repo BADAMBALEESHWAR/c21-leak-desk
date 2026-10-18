@@ -10,6 +10,7 @@ import { ErrorNote } from '../components/ErrorNote';
 import { Icon } from '../components/Icon';
 import { PageHeader } from '../components/Page';
 import { Change, Money } from '../components/Money';
+import { Provenance, ProvenanceValue } from '../components/Provenance';
 import { NumberInput, SliderField } from '../components/SliderField';
 import { Table, type Column } from '../components/Table';
 import { Callout, Collapsible, InfoTip, revealElement, Skeleton, StatCard } from '../components/ui';
@@ -20,6 +21,18 @@ import { hrefFor, navigate } from '../lib/router';
 import { isRunnable, OVERRIDE_KEYS, sameOverrides, useStore } from '../state/store';
 
 type MainValue = number | 'full' | 'partial';
+
+/**
+ * Exactly one changed variable: keeps the first override that is set (in control order), drops the rest.
+ * The unknown-refund assumption may ride along.
+ */
+export function oneAtATime(o: ScenarioOverrides): ScenarioOverrides {
+  const first = OVERRIDE_KEYS.find((k) => o[k] !== undefined);
+  const next: ScenarioOverrides = {};
+  if (first) (next as Record<string, unknown>)[first] = o[first];
+  if (o.assume_unknown_refund) next.assume_unknown_refund = true;
+  return next;
+}
 
 /** Changing one assumption resets the others to observed; the unknown-refund assumption is kept. */
 function withOne(current: ScenarioOverrides, key: OverrideKey, value: MainValue | null): ScenarioOverrides {
@@ -44,18 +57,18 @@ const CHOICES: Array<{ key: OverrideKey; title: string }> = [
 function observedText(key: OverrideKey, obs: Observed): string {
   switch (key) {
     case 'return_rate_pct':
-      return `observed ${formatPct(obs.return_rate_pct)}`;
+      return formatPct(obs.return_rate_pct);
     case 'recovery_pct': {
-      if (obs.recovery_pct === null) return 'observed unknown';
+      if (obs.recovery_pct === null) return 'unknown';
       const avg = obs.avg_product_cost_on_returns_inr;
-      return avg ? `observed ${formatInr(Math.round((obs.recovery_pct / 100) * avg))} · ${formatPct(obs.recovery_pct)}` : `observed ${formatPct(obs.recovery_pct)}`;
+      return avg ? `${formatInr(Math.round((obs.recovery_pct / 100) * avg))} · ${formatPct(obs.recovery_pct)}` : formatPct(obs.recovery_pct);
     }
     case 'shipping_inr':
-      return obs.avg_shipping_inr === null ? 'observed unknown' : `observed avg ${formatInr(Math.round(obs.avg_shipping_inr))}`;
+      return obs.avg_shipping_inr === null ? 'unknown' : `avg ${formatInr(Math.round(obs.avg_shipping_inr))}`;
     case 'refund_policy':
-      return 'observed as recorded';
+      return 'as recorded';
     case 'ads_per_order':
-      return obs.avg_ads_per_order_inr === null ? 'observed unknown' : `observed avg ${formatInr(Math.round(obs.avg_ads_per_order_inr))}`;
+      return obs.avg_ads_per_order_inr === null ? 'unknown' : `avg ${formatInr(Math.round(obs.avg_ads_per_order_inr))}`;
   }
 }
 
@@ -208,7 +221,9 @@ function Controls({ obs, overrides, onChange }: { obs: Observed; overrides: Scen
             <label className="choice-head">
               <input type="radio" name={groupName} checked={isSel} onChange={() => select(c.key)} />
               <span className="choice-title">{t(c.title)}</span>
-              <span className="choice-meta">{value ? <Pill tone="primary">{value}</Pill> : observedText(c.key, obs)}</span>
+              <span className="choice-meta" data-control={c.key}>
+                {value ? <ProvenanceValue kind="assumed" value={<strong className="assumed-value">{value}</strong>} /> : <ProvenanceValue kind="observed" value={observedText(c.key, obs)} />}
+              </span>
             </label>
             {isSel ? (
               <div className="choice-body">
@@ -243,7 +258,7 @@ const ROWS: CompareRow[] = [
   { id: 'ret', label: 'Return cost', labelKey: 'ledger.returnCost', key: 'return_cost_inr', goodWhen: 'down', money: true },
   { id: 'hand', label: 'Handling', labelKey: 'ledger.handling', key: 'handling_inr', goodWhen: 'down', money: true },
   { id: 'ads', label: 'Ads', labelKey: 'ledger.ads', key: 'ads_inr', goodWhen: 'down', money: true },
-  { id: 'contribution', label: 'Contribution', labelKey: 'ledger.contribution', key: 'contribution_inr', goodWhen: 'up', money: true, strong: true },
+  { id: 'contribution', label: 'Operational contribution', labelKey: 'ledger.operationalContribution', key: 'contribution_inr', goodWhen: 'up', money: true, strong: true },
 ];
 
 function cellValue(col: ScenarioColumn | ScenarioResponse['delta'], r: CompareRow, isDelta: boolean) {
@@ -257,9 +272,9 @@ function cellValue(col: ScenarioColumn | ScenarioResponse['delta'], r: CompareRo
 function Comparison({ s }: { s: ScenarioResponse }) {
   const { t } = useTranslation();
   const columns: Column<CompareRow>[] = [
-    { id: 'line', header: t('scenario.line'), rowHeader: true, cell: (r) => (r.labelKey ? t(r.labelKey) : r.label) },
-    { id: 'base', header: t('scenario.baseline'), align: 'right', cell: (r) => cellValue(s.baseline, r, false) },
-    { id: 'scenario', header: t('scenario.scenario'), align: 'right', cell: (r) => cellValue(s.scenario, r, false) },
+    { id: 'line', header: t('scenario.line'), rowHeader: true, cell: (r) => (r.labelKey ? t(r.labelKey, r.label) : r.label) },
+    { id: 'base', header: t('scenario.observedBaseline', 'Observed baseline'), align: 'right', cell: (r) => cellValue(s.baseline, r, false) },
+    { id: 'scenario', header: t('scenario.assumedScenario', 'Assumed scenario'), align: 'right', cell: (r) => cellValue(s.scenario, r, false) },
     { id: 'change', header: t('scenario.delta'), align: 'right', cell: (r) => cellValue(s.delta, r, true) },
   ];
   return (
@@ -278,8 +293,8 @@ function OrderDeltas({ rows }: { rows: OrderDelta[] }) {
   const { t } = useTranslation();
   const columns: Column<OrderDelta>[] = [
     { id: 'order', header: t('ledger.order'), rowHeader: true, cell: (d) => d.order_id },
-    { id: 'base', header: t('scenario.baseline'), align: 'right', cell: (d) => <Money value={d.baseline_inr} tone="contribution" /> },
-    { id: 'scenario', header: t('scenario.scenario'), align: 'right', cell: (d) => <Money value={d.scenario_inr} tone="contribution" /> },
+    { id: 'base', header: t('scenario.observedBaseline', 'Observed baseline'), align: 'right', cell: (d) => <Money value={d.baseline_inr} tone="contribution" /> },
+    { id: 'scenario', header: t('scenario.assumedScenario', 'Assumed scenario'), align: 'right', cell: (d) => <Money value={d.scenario_inr} tone="contribution" /> },
     { id: 'delta', header: t('scenario.delta'), align: 'right', cell: (d) => (d.delta_inr === null ? <Unknown /> : <Change value={d.delta_inr} goodWhen="up" />) },
   ];
   return <Table caption="Per-order change, top 10 by size" columns={columns} rows={rows.slice(0, 10)} rowKey={(d) => d.order_id} emptyText="No order changes." />;
@@ -306,17 +321,21 @@ function ContributionCards({
   return (
     <div className="kpi-grid kpi-grid-2">
       <StatCard
-        label={t('scenario.baselineContribution')}
+        label={t('scenario.baselineOperational', 'Baseline operational contribution')}
         large
         value={<Money value={base} tone="contribution" />}
         sub={
-          a.totals.partial ? (
-            <Pill tone="warning" dot>
-              {t('status.partial')} · {a.totals.unknown_count} {lower(t('status.unknown'))}
-            </Pill>
-          ) : (
-            'Observed, as in the ledger'
-          )
+          <ProvenanceValue
+            kind="observed"
+            value={t('scenario.asInLedger', 'as in the ledger')}
+            chips={
+              a.totals.partial ? (
+                <Pill tone="warning" dot>
+                  {t('status.partial')} · {a.totals.unknown_count} {lower(t('status.unknown'))}
+                </Pill>
+              ) : null
+            }
+          />
         }
         actionIcon={s ? 'chevron-down' : 'arrow-right'}
         onClick={s ? onCompare : () => navigate('ledger')}
@@ -324,12 +343,13 @@ function ContributionCards({
       />
       {s ? (
         <StatCard
-          label={t('scenario.scenarioContribution')}
+          label={t('scenario.scenarioOperational', 'Scenario operational contribution')}
           large
           tone="primary"
           value={<Money value={scen} tone="contribution" />}
           sub={
             <>
+              <Provenance kind="assumed" />
               {delta === null ? <Unknown /> : <Pill tone={delta > 0 ? 'success' : delta < 0 ? 'danger' : 'neutral'}>{formatSignedInr(delta)} vs baseline</Pill>}
               <span className="kpi-note">Changed: {OVERRIDE_LABELS[s.changed as OverrideKey] ?? s.changed}</span>
             </>
@@ -377,11 +397,11 @@ function RecommendationCard({ rec, scenario, why, whySource }: { rec: Recommenda
       {before ? (
         <p className="flip">
           <span className="flip-part">
-            <span className="flip-label">Before:</span> {before.label} <span className="num">{formatInr(before.expected_delta_inr)}</span>
+            <span className="flip-label">Before:</span> {before.label} <span className="num">{formatInr(before.expected_delta_inr)}</span> <Provenance kind="observed" />
           </span>
           <Icon name="arrow-right" size={16} className="flip-arrow" />
           <span className="flip-part flip-now">
-            <span className="flip-label">Now:</span> <strong>{rec.label}</strong> <span className="num">{formatInr(rec.expected_delta_inr)}</span>
+            <span className="flip-label">Now:</span> <strong>{rec.label}</strong> <span className="num">{formatInr(rec.expected_delta_inr)}</span> <Provenance kind="assumed" />
           </span>
           {before.intervention === rec.intervention ? <span className="muted small">(same intervention)</span> : null}
         </p>
@@ -394,7 +414,9 @@ function RecommendationCard({ rec, scenario, why, whySource }: { rec: Recommenda
           {rec.rule ? <p className="rec-rule">{rec.rule}</p> : null}
         </div>
         <div className="rec-figure">
-          <span className="rec-figure-label">Expected per period</span>
+          <span className="rec-figure-label">
+            Expected per period <Provenance kind={scenario ? 'assumed' : 'observed'} />
+          </span>
           <span className="rec-figure-value">
             <Money value={rec.expected_delta_inr} tone="contribution" signed />
           </span>
@@ -478,6 +500,11 @@ export function ScenarioScreen() {
     controlsRef.current?.querySelector<HTMLInputElement>('.choice-head input')?.focus({ preventScroll: true });
   };
 
+  // Exactly one changed variable: anything that arrives with more is cut back to its first change.
+  useEffect(() => {
+    if (OVERRIDE_KEYS.filter((k) => overrides[k] !== undefined).length > 1) setOverrides(oneAtATime(overrides));
+  }, [overrides, setOverrides]);
+
   // No post on entry: the baseline is the analysis. A runnable change re-runs 250 ms after the controls settle.
   useEffect(() => {
     if (!analysisId) return undefined;
@@ -503,6 +530,7 @@ export function ScenarioScreen() {
   const refundGaps = obs.refund_unknown_orders;
   const unknownOrders = analysis.totals.unknown_count;
   const hasAny = OVERRIDE_KEYS.some((k) => overrides[k] !== undefined) || overrides.assume_unknown_refund === true;
+  const changedKey = OVERRIDE_KEYS.find((k) => overrides[k] !== undefined) ?? null;
   const rec = current?.recommendation ?? analysis.recommendation;
   const candidates = current?.candidates ?? analysis.candidates;
   const aiWhy = !current && narration?.recommendation?.why_source === 'ai' ? narration.recommendation.why : null;
@@ -526,7 +554,18 @@ export function ScenarioScreen() {
             <InfoTip text="A controlled scenario changes one thing. Picking another assumption resets the previous one to observed." label="Why one at a time" />
           </div>
           <p className="card-sub">One assumption at a time. Changing one resets the others to observed.</p>
-          <Controls obs={obs} overrides={overrides} onChange={setOverrides} />
+          <p className="changed-line" role="status">
+            {changedKey ? (
+              <>
+                <Provenance kind="assumed" /> {t('scenario.changedOne', '1 of 5 changed: {{what}}', { what: t(CHOICES.find((c) => c.key === changedKey)?.title ?? '', OVERRIDE_LABELS[changedKey]) })}
+              </>
+            ) : (
+              <>
+                <Provenance kind="observed" /> {t('scenario.nothingChanged', 'Nothing changed: every value is observed.')}
+              </>
+            )}
+          </p>
+          <Controls obs={obs} overrides={overrides} onChange={(o) => setOverrides(oneAtATime(o))} />
 
           <div className={`switch-row${overrides.assume_unknown_refund ? ' is-on' : ''}`}>
             <label className="switch">
@@ -548,6 +587,9 @@ export function ScenarioScreen() {
               </span>
               <span className="switch-label">Assume unknown refunds</span>
             </label>
+            <span className="switch-prov" data-control="assume_unknown_refund">
+              <Provenance kind={overrides.assume_unknown_refund ? 'assumed' : 'observed'} />
+            </span>
             <p id="sc-assume-hint" className="control-hint">
               {refundGaps === 0
                 ? 'No returned order is missing its refund in this dataset.'

@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { AnalysisResponse, GroupRow, LineKey, OrderResult } from '../api/types';
 import { BarRows, type BarRow } from '../charts/BarRows';
@@ -8,18 +8,21 @@ import { Pill, Unknown } from '../components/Badge';
 import { ButtonLink, LinkButton } from '../components/Button';
 import { Pagination } from '../components/Pagination';
 import { api, authDownload } from '../api/client';
+import { Definitions } from '../components/Definitions';
 import { NeedsAnalysis } from '../components/EmptyState';
 import { Icon } from '../components/Icon';
 import { Money } from '../components/Money';
 import { OrderPills } from '../components/OrderDrawer';
 import { NextStep, PageHeader } from '../components/Page';
-import { ReconciliationLine } from '../components/Reconciliation';
+import { PeriodTotals, ReconciliationLine } from '../components/Reconciliation';
 import { Table, type Column } from '../components/Table';
 import { panelId, tabId, Tabs } from '../components/Tabs';
 import { Callout, InfoTip, revealElement, StatCard } from '../components/ui';
+import { groupMarginsOf, marginsOf, rowFixedShare, unitEconomics, UnitEconomics, useFormulas } from '../components/UnitEconomics';
 import { lower } from '../i18n';
-import { formatCount, formatInr, formatPct, plural } from '../lib/format';
-import { ATTRIBUTION_LABEL, handlingEstimateUsed } from '../lib/labels';
+import { formatCount, formatInr, formatMarginPct, formatPct, plural } from '../lib/format';
+import { ALLOCATED_EN, ALLOCATED_KEY, ATTRIBUTION_LABEL, fullReturnPartialRecovery, handlingEstimateUsed } from '../lib/labels';
+import { hrefFor } from '../lib/router';
 import { useStore, type LedgerFilter } from '../state/store';
 
 type Filter = LedgerFilter;
@@ -31,7 +34,7 @@ let lastHandledFocus = 0;
 
 const SHOWN_ELSEWHERE = [ATTRIBUTION_LABEL, 'Operational contribution, not statutory net profit.'];
 
-function Deduction({ order, k }: { order: OrderResult; k: LineKey }) {
+function Deduction({ order, k, title }: { order: OrderResult; k: LineKey; title?: string }) {
   const line = order.lines.find((l) => l.key === k);
   if (!line || line.amount_inr === null) return <Unknown />;
   if (line.source === 'moved_to_channel') return <span className="cell-muted">to channel</span>;
@@ -42,7 +45,24 @@ function Deduction({ order, k }: { order: OrderResult; k: LineKey }) {
       </span>
     );
   }
+  if (title) {
+    return (
+      <span title={title}>
+        <Money value={Math.abs(line.amount_inr)} tone="plain" muteZero />
+      </span>
+    );
+  }
   return <Money value={Math.abs(line.amount_inr)} tone="plain" muteZero />;
+}
+
+/** A column heading with a second, smaller line (e.g. "allocated, not caused"). */
+function SubHead({ main, sub, title }: { main: ReactNode; sub: string; title?: string }) {
+  return (
+    <span className="th-stack" title={title ?? sub}>
+      <span>{main}</span>
+      <span className="th-sub">{sub}</span>
+    </span>
+  );
 }
 
 function KeyCell({ value }: { value: string }) {
@@ -74,13 +94,13 @@ const Kpis = memo(function Kpis({ a }: { a: AnalysisResponse }) {
         actionLabel={`Net sales ${formatInr(t.net_sales_inr)} — open period waterfall`}
       />
       <StatCard
-        label={tr('ledger.contribution')}
+        label={tr('ledger.operationalContribution', 'Operational contribution')}
         large
         tone="primary"
         icon="trending-down"
         value={<Money value={t.contribution_inr} tone="contribution" />}
         onClick={() => openBridge('contribution')}
-        actionLabel={`Contribution ${t.contribution_inr === null ? 'unknown' : formatInr(t.contribution_inr)}${t.partial ? `, partial, ${formatCount(t.unknown_count)} unknown` : ''} — open period waterfall`}
+        actionLabel={`Operational contribution ${t.contribution_inr === null ? 'unknown' : formatInr(t.contribution_inr)}${t.partial ? `, partial, ${formatCount(t.unknown_count)} unknown` : ''} — open period waterfall`}
         sub={
           <>
             {t.partial ? (
@@ -92,7 +112,11 @@ const Kpis = memo(function Kpis({ a }: { a: AnalysisResponse }) {
                 {tr('status.complete')}
               </Pill>
             )}
-            {a.attribution === 'channel' && t.channel_spend_inr ? <span className="kpi-note">after {formatInr(t.channel_spend_inr)} channel spend</span> : null}
+            {a.attribution === 'channel' && t.channel_spend_inr ? (
+              <span className="kpi-note">
+                {tr('ledger.afterSpend', 'after {{inr}} channel spend', { inr: formatInr(t.channel_spend_inr) })} · {tr(ALLOCATED_KEY, ALLOCATED_EN)}
+              </span>
+            ) : null}
             {handlingEstimateUsed(a) ? <span className="kpi-note">incl. estimated handling {formatInr(a.config.handling_default_inr)}/order</span> : null}
           </>
         }
@@ -195,7 +219,11 @@ const ChannelChart = memo(function ChannelChart({ a }: { a: AnalysisResponse }) 
   return (
     <ChartCard
       title="Contribution by channel"
-      subtitle={channelMode ? 'Contribution after spend, next to the channel spend deducted once per channel.' : 'Contribution after ads allocated to each order.'}
+      subtitle={
+        channelMode
+          ? t('ledger.chartChannel', 'Contribution after spend, next to the channel spend deducted once per channel. Spend is allocated, not caused.')
+          : t('ledger.chartAllocate', 'Contribution after ads allocated to each order (allocated, not caused).')
+      }
       legend={
         channelMode
           ? [
@@ -222,8 +250,10 @@ function sumInr(rows: GroupRow[], pick: (r: GroupRow) => number | null): number 
 }
 
 function OrdersTable({ orders, handlingEstimate }: { orders: OrderResult[]; handlingEstimate: number }) {
-  const { openOrderResult } = useStore();
+  const { openOrderResult, correctedOrderIds } = useStore();
+  const corrected = new Set(correctedOrderIds ?? []);
   const { t } = useTranslation();
+  const allocated = t(ALLOCATED_KEY, ALLOCATED_EN);
   const columns: Column<OrderResult>[] = [
     {
       id: 'order',
@@ -259,7 +289,7 @@ function OrdersTable({ orders, handlingEstimate }: { orders: OrderResult[]; hand
       className: 'col-status',
       cell: (o) => (
         <span className="pill-row">
-          <OrderPills order={o} />
+          <OrderPills order={o} corrected={corrected.has(o.order_id)} />
         </span>
       ),
     },
@@ -281,7 +311,7 @@ function OrdersTable({ orders, handlingEstimate }: { orders: OrderResult[]; hand
       align: 'right',
       cell: (o) => <Deduction order={o} k="handling" />,
     },
-    { id: 'ads', header: t('ledger.ads'), align: 'right', cell: (o) => <Deduction order={o} k="ads" /> },
+    { id: 'ads', header: <SubHead main={t('ledger.ads')} sub={allocated} />, align: 'right', cell: (o) => <Deduction order={o} k="ads" title={`${t('ledger.ads')}: ${allocated}`} /> },
     {
       id: 'contribution',
       header: t('ledger.contribution'),
@@ -297,6 +327,7 @@ function OrdersTable({ orders, handlingEstimate }: { orders: OrderResult[]; hand
       rows={orders}
       rowKey={(o) => o.order_id}
       onRowClick={openOrderResult}
+      rowClassName={(o) => (fullReturnPartialRecovery(o) ? 'row-loss' : undefined)}
       sheet
       className="orders-table"
       emptyText="No orders match this filter."
@@ -304,9 +335,54 @@ function OrdersTable({ orders, handlingEstimate }: { orders: OrderResult[]; hand
   );
 }
 
+/** The unit-economics percentages as columns, from each row's margins; fixed costs are shared by net revenue. */
+function useMarginColumns(a: AnalysisResponse, kind: 'channel' | 'product', rows: GroupRow[]): Column<GroupRow>[] {
+  const { fixedCosts } = useStore();
+  const { t } = useTranslation();
+  const f = useFormulas();
+  const { byKey, total } = useMemo(() => {
+    const period = marginsOf(a);
+    const map = new Map(
+      rows.map((r) => {
+        const m = groupMarginsOf(a, r, kind);
+        return [r.key, unitEconomics(m, rowFixedShare(fixedCosts, m.net_revenue_inr, period.net_revenue_inr))] as const;
+      }),
+    );
+    return { byKey: map, total: unitEconomics(period, fixedCosts) };
+  }, [a, kind, rows, fixedCosts]);
+  const pct = (v: number | null | undefined) =>
+    v === null || v === undefined ? <span className="cell-muted">—</span> : <span className={`num${v < 0 ? ' t-loss' : ''}`}>{formatMarginPct(v)}</span>;
+  const head = (main: string, formula: string) => (
+    <span className="th-formula" title={formula}>
+      {main}
+    </span>
+  );
+  return [
+    { id: 'cm1', header: head(f.cm1.short, f.cm1.formula), align: 'right', className: 'col-pct', cell: (r) => pct(byKey.get(r.key)?.cm1Pct), footer: pct(total.cm1Pct) },
+    { id: 'cm2', header: head(f.cm2.short, f.cm2.formula), align: 'right', className: 'col-pct', cell: (r) => pct(byKey.get(r.key)?.cm2Pct), footer: pct(total.cm2Pct) },
+    { id: 'cm3', header: head(f.cm3.short, f.cm3.formula), align: 'right', className: 'col-pct', cell: (r) => pct(byKey.get(r.key)?.cm3Pct), footer: pct(total.cm3Pct) },
+    {
+      id: 'netm',
+      header: (
+        <SubHead
+          main={f.net.short}
+          sub={t('unit.fixedShared', 'fixed costs assumed')}
+          title={`${f.net.formula}. ${t('unit.fixedSharedTip', 'Each row carries a share of the fixed costs in proportion to its net revenue (assumed).')}`}
+        />
+      ),
+      align: 'right',
+      className: 'col-pct',
+      cell: (r) => pct(byKey.get(r.key)?.netPct),
+      footer: pct(total.netPct),
+    },
+  ];
+}
+
 function ChannelTable({ a }: { a: AnalysisResponse }) {
   const rows = a.groups.channel;
   const { t } = useTranslation();
+  const marginCols = useMarginColumns(a, 'channel', rows);
+  const allocated = t(ALLOCATED_KEY, ALLOCATED_EN);
   const columns: Column<GroupRow>[] = [
     { id: 'key', header: t('ledger.channel'), rowHeader: true, cell: (r) => <KeyCell value={r.key} />, footer: t('common.total') },
     { id: 'orders', header: t('ledger.orders'), align: 'right', cell: (r) => <span className="num">{formatCount(r.orders)}</span>, footer: <span className="num">{formatCount(rows.reduce((s, r) => s + r.orders, 0))}</span> },
@@ -317,7 +393,13 @@ function ChannelTable({ a }: { a: AnalysisResponse }) {
       cell: (r) => (r.unknown_count > 0 ? <Pill tone="warning">{formatCount(r.unknown_count)}</Pill> : <span className="cell-muted">0</span>),
       footer: <span className="num">{formatCount(rows.reduce((s, r) => s + r.unknown_count, 0))}</span>,
     },
-    { id: 'net', header: t('ledger.netSales'), align: 'right', cell: (r) => <Money value={r.net_sales_inr} />, footer: <Money value={sumInr(rows, (r) => r.net_sales_inr)} /> },
+    {
+      id: 'net',
+      header: <span title={t('unit.netRevenueFormula', 'Net revenue = revenue − refunds (revenue is gross sales after discount)')}>{t('unit.netRevenue', 'Net revenue')}</span>,
+      align: 'right',
+      cell: (r) => <Money value={r.net_sales_inr} />,
+      footer: <Money value={sumInr(rows, (r) => r.net_sales_inr)} />,
+    },
     {
       id: 'before',
       header: t('ledger.beforeSpend'),
@@ -327,7 +409,7 @@ function ChannelTable({ a }: { a: AnalysisResponse }) {
     },
     {
       id: 'spend',
-      header: t('ledger.channelSpend'),
+      header: <SubHead main={t('ledger.channelSpend')} sub={allocated} />,
       align: 'right',
       cell: (r) => <Money value={r.channel_spend_inr} tone="plain" muteZero />,
       footer: <Money value={sumInr(rows, (r) => r.channel_spend_inr)} tone="plain" muteZero />,
@@ -340,8 +422,9 @@ function ChannelTable({ a }: { a: AnalysisResponse }) {
       cell: (r) => <Money value={r.contribution_inr} tone="contribution" />,
       footer: <Money value={a.reconciliation.channels_inr} tone="contribution" />,
     },
+    ...marginCols,
   ];
-  return <Table caption="Contribution by channel" columns={columns} rows={rows} rowKey={(r) => r.key} />;
+  return <Table caption="Contribution by channel, with unit economics" columns={columns} rows={rows} rowKey={(r) => r.key} className="group-table" />;
 }
 
 function ProductTable({ a }: { a: AnalysisResponse }) {
@@ -350,6 +433,7 @@ function ProductTable({ a }: { a: AnalysisResponse }) {
   const channelMode = a.attribution === 'channel';
   const label = a.groups.product_label;
   const { t } = useTranslation();
+  const marginCols = useMarginColumns(a, 'product', rows);
   const columns: Column<GroupRow>[] = [
     { id: 'key', header: t('ledger.product'), rowHeader: true, cell: (r) => <KeyCell value={r.key} />, footer: t('common.total') },
     { id: 'orders', header: t('ledger.orders'), align: 'right', cell: (r) => <span className="num">{formatCount(r.orders)}</span>, footer: <span className="num">{formatCount(rows.reduce((s, r) => s + r.orders, 0))}</span> },
@@ -360,27 +444,44 @@ function ProductTable({ a }: { a: AnalysisResponse }) {
       cell: (r) => (r.unknown_count > 0 ? <Pill tone="warning">{formatCount(r.unknown_count)}</Pill> : <span className="cell-muted">0</span>),
       footer: <span className="num">{formatCount(rows.reduce((s, r) => s + r.unknown_count, 0))}</span>,
     },
-    { id: 'net', header: t('ledger.netSales'), align: 'right', cell: (r) => <Money value={r.net_sales_inr} />, footer: <Money value={sumInr(rows, (r) => r.net_sales_inr)} /> },
+    {
+      id: 'net',
+      header: <span title={t('unit.netRevenueFormula', 'Net revenue = revenue − refunds (revenue is gross sales after discount)')}>{t('unit.netRevenue', 'Net revenue')}</span>,
+      align: 'right',
+      cell: (r) => <Money value={r.net_sales_inr} />,
+      footer: <Money value={sumInr(rows, (r) => r.net_sales_inr)} />,
+    },
     {
       id: 'contribution',
-      header: label ? `${t('ledger.contribution')}, ${label}` : t('ledger.contribution'),
+      header: label ? <SubHead main={t('ledger.contribution')} sub={label} /> : t('ledger.contribution'),
       align: 'right',
       className: 'col-strong',
       cell: (r) => <Money value={r.contribution_inr} tone="contribution" />,
       footer: <Money value={a.reconciliation.products_inr} tone="contribution" />,
     },
+    ...marginCols,
   ];
   const extra = channelMode ? (
     <tr className="spend-row">
       <th scope="row" colSpan={4}>
-        Channel spend (not allocated to products)
+        {t('ledger.spendRow', 'Channel spend (not allocated to products)')} <span className="th-sub">{t(ALLOCATED_KEY, ALLOCATED_EN)}</span>
       </th>
       <td className="r col-strong">
         <Money value={unallocated === null ? null : -unallocated} />
       </td>
+      <td colSpan={marginCols.length} />
     </tr>
   ) : null;
-  return <Table caption={`Contribution by product, ${label || 'per order'}`} columns={columns} rows={rows} rowKey={(r) => r.key} extraRows={extra} />;
+  return (
+    <Table
+      caption={`Contribution by product, ${label || 'per order'}, with unit economics`}
+      columns={columns}
+      rows={rows}
+      rowKey={(r) => r.key}
+      extraRows={extra}
+      className="group-table"
+    />
+  );
 }
 
 function LateRefunds({ a }: { a: AnalysisResponse }) {
@@ -390,7 +491,7 @@ function LateRefunds({ a }: { a: AnalysisResponse }) {
   const n = late.orders.length;
   return (
     <Callout tone="warning" title={`${formatCount(n)} ${plural(n, 'refund', 'refunds')} dated after the period end (${late.period_end}) ${plural(n, 'is', 'are')} pending`}>
-      <p>Counted in this period as kept. If recognised, contribution changes by {formatInr(late.pending_delta_inr)}.</p>
+      <p>Counted in this period as kept. If recognised, operational contribution changes by {formatInr(late.pending_delta_inr)} (a prior-period adjustment).</p>
       <ul className="late-list">
         {late.orders.slice(0, 5).map((o) => (
           <li key={o.order_id}>
@@ -409,6 +510,40 @@ function LateRefunds({ a }: { a: AnalysisResponse }) {
         Total if recognised <Money value={late.total_if_recognised_inr} tone="contribution" />
       </p>
     </Callout>
+  );
+}
+
+/** Rows the import set aside (duplicates first): a count beside the ledger title, linking to the report. */
+function ImportWarnings() {
+  const { dataset, analysis } = useStore();
+  const { t } = useTranslation();
+  if (!dataset || !analysis || dataset.dataset_id !== analysis.dataset_id) return null;
+  const duplicates = dataset.flags.filter((f) => f.reason === 'duplicate').length;
+  const others = dataset.flags.filter((f) => f.reason !== 'duplicate' && f.action !== 'kept').length;
+  if (duplicates + others === 0) return null;
+  const parts = [
+    duplicates > 0
+      ? duplicates === 1
+        ? t('ledger.duplicateIgnored', '1 duplicate ignored')
+        : t('ledger.duplicatesIgnored', '{{n}} duplicates ignored', { n: duplicates })
+      : null,
+    others > 0 ? (others === 1 ? t('ledger.rowSetAside', '1 row set aside') : t('ledger.rowsSetAside', '{{n}} rows set aside', { n: others })) : null,
+  ].filter(Boolean);
+  const ids = dataset.flags.filter((f) => f.reason === 'duplicate').map((f) => f.order_id ?? `line ${f.line}`);
+  return (
+    <a
+      className="warn-badge"
+      href={hrefFor('import')}
+      title={
+        duplicates > 0
+          ? t('ledger.duplicateTip', 'Duplicate order ids ({{ids}}): the second copy was ignored, so the order count is unchanged. Open the import report.', { ids: ids.join(', ') })
+          : t('ledger.warningsTip', 'Open the import report for the rows set aside.')
+      }
+    >
+      <Icon name="alert-triangle" size={14} />
+      <span className="warn-badge-count">{formatCount(duplicates + others)}</span>
+      <span>{parts.join(' · ')}</span>
+    </a>
   );
 }
 
@@ -506,10 +641,18 @@ export function LedgerScreen() {
             {notes.length > 0 ? <InfoTip label="About this data" text={notes.join(' ')} /> : null}
           </>
         }
+        actions={
+          <>
+            <ImportWarnings />
+            <Definitions />
+          </>
+        }
       />
 
       <ReconciliationLine rec={analysis.reconciliation} />
       <Kpis a={analysis} />
+      <PeriodTotals a={analysis} />
+      <UnitEconomics a={analysis} />
 
       <div className="grid-2">
         <ChannelChart a={analysis} />

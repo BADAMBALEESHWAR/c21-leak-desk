@@ -1,9 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { BRAND } from '../brand';
-import { FAQ, FEATURES, HERO, SOURCES, STEPS } from './content';
+import { LANGS, setLanguage } from '../i18n';
+import { CHANGELOG_URL, DEMO_MEDIA, FAQ, FEATURES, HERO, SOURCES, STEPS } from './content';
+import { SeeItInAction, WatchModal } from './DemoVideo';
 import { HeroDashboard } from './HeroDashboard';
 import { Icon } from './icons';
+import { Integrations } from './Integrations';
 import { Pricing } from './Pricing';
 import { LINKS, Wordmark } from './shared';
 
@@ -23,6 +26,21 @@ function Tagline() {
     <h1 id="hero-title" className="l-h1">
       {first} <span className="l-accent">{rest.join(' ')}</span>
     </h1>
+  );
+}
+
+/** English · हिन्दी · తెలుగు, each in its own script; the current one is pressed. */
+function LanguageSwitch({ className }: { className: string }) {
+  const { t, i18n } = useTranslation();
+  const current = i18n.resolvedLanguage ?? i18n.language;
+  return (
+    <div className={`l-lang ${className}`} role="group" aria-label={t('lang.label')}>
+      {LANGS.map((l) => (
+        <button key={l} type="button" lang={l} aria-pressed={current === l} onClick={() => setLanguage(l)}>
+          {t(`lang.${l}`)}
+        </button>
+      ))}
+    </div>
   );
 }
 
@@ -58,6 +76,7 @@ function Header() {
           ))}
         </nav>
         <div className="l-nav-actions">
+          <LanguageSwitch className="l-lang-bar" />
           <a className="l-btn l-btn-ghost l-hide-sm" href={LINKS.signIn}>
             {t('actions.signIn')}
           </a>
@@ -88,6 +107,7 @@ function Header() {
               </li>
             ))}
           </ul>
+          <LanguageSwitch className="l-lang-menu" />
           <div className="l-menu-cta">
             <a className="l-btn l-btn-secondary l-btn-block" href={LINKS.signIn}>
               {t('actions.signIn')}
@@ -116,6 +136,9 @@ function SectionHead({ kicker, title, lead, id, center = false }: { kicker: stri
 
 export function Landing() {
   const { t } = useTranslation();
+  const [watching, setWatching] = useState(false);
+  const watchBtn = useRef<HTMLButtonElement>(null);
+  const closeWatch = useCallback(() => setWatching(false), []);
   return (
     <>
       <a className="l-skip" href="#main">
@@ -141,13 +164,21 @@ export function Landing() {
               <p className="l-hero-body">{HERO.body}</p>
               <div className="l-cta">
                 <a className="l-btn l-btn-primary l-btn-lg" href={LINKS.demo}>
-                  {t('actions.tryDemo')}
+                  {t('landing.tryLiveDemo', 'Try the live demo')}
                   <Icon name="arrow-right" size={18} />
                 </a>
-                <a className="l-btn l-btn-secondary l-btn-lg" href={LINKS.signUp}>
-                  Start free
-                </a>
+                <button ref={watchBtn} type="button" className="l-btn l-btn-secondary l-btn-lg" aria-haspopup="dialog" onClick={() => setWatching(true)}>
+                  <span className="l-play" aria-hidden="true">
+                    <Icon name="play" size={11} />
+                  </span>
+                  {t('landing.watchDemo', 'Watch demo')}
+                  <span className="l-btn-meta">· {t('landing.watchDemoLength', '2 min')}</span>
+                </button>
               </div>
+              <p className="l-hero-meta">
+                <span>{t('landing.demoDisclaimer', 'Demo uses synthetic data. Not a live production system.')}</span>
+                <a href={LINKS.signUp}>{t('landing.startFreeOwn', 'Or start free on your own orders')}</a>
+              </p>
               <ul className="l-ticks" aria-label="At a glance">
                 {HERO.ticks.map((t) => (
                   <li key={t}>
@@ -177,6 +208,9 @@ export function Landing() {
             </ul>
           </div>
         </section>
+
+        {/* See it in action, with the proof strip */}
+        <SeeItInAction />
 
         {/* Why */}
         <section id="features" className="l-section" aria-labelledby="features-title">
@@ -228,6 +262,7 @@ export function Landing() {
                 </li>
               ))}
             </ol>
+            <Integrations />
           </div>
         </section>
 
@@ -256,6 +291,11 @@ export function Landing() {
               <p className="l-lead">
                 Still unsure? <a href={LINKS.demo}>Try the demo</a>; it answers most questions in a few minutes.
               </p>
+              {DEMO_MEDIA.youtubeUrl ? (
+                <p className="l-faq-yt">
+                  {t('landing.preferYoutube', 'Prefer YouTube?')} <a href={DEMO_MEDIA.youtubeUrl}>{t('landing.watchOnYoutube', 'Watch the demo there')}</a>
+                </p>
+              ) : null}
             </div>
             <div className="l-faq">
               {FAQ.map((f) => (
@@ -267,6 +307,19 @@ export function Landing() {
                   <p>{f.a}</p>
                 </details>
               ))}
+              <details className="l-faq-item">
+                <summary>
+                  <span>{t('landing.faqRefundsQ', 'What changed in how refunds are counted?')}</span>
+                  <Icon name="chevron-down" size={18} />
+                </summary>
+                <p>
+                  {t(
+                    'landing.faqRefundsA',
+                    'A refund used to count as lost revenue, and stock recovered from a return was ignored. Now a refund lowers net sales, recovered cost comes off product cost, the payment fee is its own line, and a refund dated after the period end is shown as a separate adjustment.',
+                  )}{' '}
+                  <a href={CHANGELOG_URL}>{t('landing.faqRefundsLink', 'See the change log')}</a>
+                </p>
+              </details>
             </div>
           </div>
         </section>
@@ -333,11 +386,16 @@ export function Landing() {
             </nav>
           </div>
           <div className="l-foot-bottom">
-            <p>© 2026 {BRAND.name}</p>
+            <p className="l-foot-meta">
+              <span>© 2026 {BRAND.name}</span>
+              <a href={BRAND.repoUrl}>{t('landing.github', 'GitHub')}</a>
+            </p>
             <p>{t('landing.footNote')}</p>
           </div>
         </div>
       </footer>
+
+      {watching ? <WatchModal onClose={closeWatch} returnFocus={watchBtn} /> : null}
     </>
   );
 }

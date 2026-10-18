@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 
-export const ROUTES = ['import', 'ledger', 'leaks', 'scenario', 'decision', 'pulse'] as const;
+export const ROUTES = ['import', 'ledger', 'leaks', 'scenario', 'decision', 'pulse', 'checks', 'changelog', 'report'] as const;
 export type Route = (typeof ROUTES)[number];
 
 export interface Location {
@@ -25,8 +25,9 @@ export function parseHash(hash: string): Location {
   };
 }
 
-export function hrefFor(route: Route): string {
-  return `#/${route}`;
+export function hrefFor(route: Route, params?: Record<string, string>): string {
+  const query = params ? new URLSearchParams(params).toString() : '';
+  return query ? `#/${route}?${query}` : `#/${route}`;
 }
 
 export function navigate(route: Route): void {
