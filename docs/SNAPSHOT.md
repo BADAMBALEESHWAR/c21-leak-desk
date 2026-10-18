@@ -8,9 +8,9 @@ Snapshot taken: 2026-10-17 18:42 (laptop local time), on the Node path. **Before
 
 ## 1. Recording
 
-- Demo recording (the 4-minute script in `docs/DEMO.md`): `[link to fill]`
-- Recorded by and when: `[to fill]`
-- Build shown in the recording (engine version from `/api/v1/health`, and tag or commit): `[to fill]`
+- Demo recording: `web/public/media/profyn-demo.mp4` (1 min 49 s, captioned, H.264), live at https://d2gmrabs4sk8gk.cloudfront.net/media/profyn-demo.mp4 and in the landing page's "Watch demo" modal.
+- Recorded by the team on 2026-10-18 against the live site.
+- Build shown: engine 1.0.0, live site on 2026-10-18 (Pulse 12-month demo, ledger, leaks, scenario, decision).
 
 ## 2. How to run
 
@@ -90,6 +90,18 @@ UI smoke (`npm run ui:smoke`, Edge driving the real app at 20:00): 7 of 7 steps 
   The Docker stack passed `npm run check` PASS ×3 and the 12-step UI smoke on http://localhost:3010 (now including a two-file monthly upload, the one-month Pulse note, "Landing: tagline, and Try the demo opens the app" and "Pulse: 12-month demo shows best months and three ranked actions"). 10,000 orders still validate and analyse in under 1 s on this laptop (test bound 2 s). The AWS scripts were updated for the Free Plan (t3.micro, the profyn.in domain, Cognito, CI OIDC).
 - 2026-10-18 early morning, first AWS deploy (account in ap-south-1): `infra/aws-up.sh` created ECR, two private S3 buckets, the instance role, an EC2 t3.small, the CloudFront function and distribution, SSM parameters and the health alarm. The first boot left the compose file as a placeholder (a comment in the user-data contained the placeholder text); fixed in the script, and `infra/deploy-api.sh` now ships the compose file on every deploy, which repaired the running instance. Then `infra/cognito.sh` (user pool `profyn`, hosted sign-in) and `infra/ci-oidc.sh` (role `leakdesk-ci`, repo secrets) ran. Live at https://d2gmrabs4sk8gk.cloudfront.net: `/api/v1/health` reports db ok and storage s3; `npm run check` PASS ×3 and the 12-step UI smoke passed against the live URL with sign-in on. Route 53 refused to register profyn.in ("contact AWS Support"); a support case is open.
 
+- 2026-10-18 morning, after the work order (unit economics CM1–CM3, observed/assumed provenance, checks with line-by-line working and check 4, decision export with a 30-day check, Hindi and Telugu explanation templates, the bad-values drill, and editing flagged rows as a new dataset version): `Tests  247 passed` across 20 files. `npm test` now runs the 10,000-order speed test in its own pass so parallel UI tests cannot slow it. `npm run check` PASS ×4 against the local API:
+
+```
+check1  worked order contribution                   expected 230   actual 230                                 PASS
+check2  Σorders=Σchannels=Σproducts (both modes)    7053 = 7053 (never both: true)                            PASS
+check3  unknown labelled; recommendation changes    charge_return_shipping → raise_recovery_via_inspection    PASS
+check4  margins on the worked order                 net revenue 800  CM1 50%  CM2 41.25%  CM3 28.75%          PASS
+engine 1.0.0 · 4/4 passed in 0.2 s · http://localhost:8080
+```
+
+  Storage on AWS: datasets, analyses, scenarios and decisions (guest decisions included) are written to MongoDB on the EC2 instance; files over 4 MB and every upload go to the private S3 bucket; `infra/mongo-backup.sh` dumps the database to S3 under `backups/` every hour.
+
 Re-run before the business team joins and paste the result here if anything changed: `[time and summary lines]`
 
 ## 4. Check harness output
@@ -122,7 +134,7 @@ check3  unknown labelled; recommendation changes    charge_return_shipping → r
 
 In the same run, a decision saved to Mongo survived an API container restart. With Mongo stopped, `/health` returned 503 `degraded` and a new import returned `persisted: false`.
 
-Not yet captured: `make check BASE_URL=<CloudFront URL>` against AWS: `[paste when run]`
+Against AWS: `BASE_URL=https://d2gmrabs4sk8gk.cloudfront.net npm run check` passes after every deploy (PASS ×3 before the work order, PASS ×4 after).
 
 ## 5. Known gaps
 
@@ -130,15 +142,15 @@ Stated plainly so the business team does not inherit surprises.
 
 1. **Tests went green only minutes before the snapshot** (section 3 history). Nothing has been run on a second machine yet.
 2. **Docker path verified on this laptop, not yet from a clean clone on a second machine.** The full stack (web via nginx, api, MongoDB 7) ran with `API_PORT=8090 WEB_PORT=3010 docker compose up -d --build`; `BASE_URL=http://localhost:3010 npm run check` printed PASS ×3 through the nginx `/api` proxy.
-3. **AWS not deployed.** No CloudFront URL yet, and `https://profyn.in` is not live. The scripts in `infra/` (`aws-up.sh`, `deploy-api.sh`, `deploy-web.sh`, `aws-down.sh`, and for the Free Plan `domain.sh`, `cognito.sh`, `ci-oidc.sh`) and `.github/workflows/deploy.yml` exist but have not been run. `docs/DEPLOY.md` is the plan.
+3. **AWS runs on one t3.small with MongoDB in Docker.** Live at https://d2gmrabs4sk8gk.cloudfront.net with hourly database backups to S3; there is no custom domain and no second instance or managed database yet.
 4. **AI rewording is optional and off by default** (`AI_DISABLED=1`). The adapter (`api/src/ai/client.ts`) passes its stubbed guard tests (`tests/ai-guard.test.ts`) but has not been run with a live key. With AI off, every explanation is template text and labelled so.
 5. **Tailwind and shadcn/ui are not used.** The web app uses plain CSS with the same design tokens (`web/src/styles/tokens.css`). Recharts is not used.
 6. **Money is in whole rupees.** Paise are not modelled. Half-up rounding of decimal inputs at import, with a flag (Blueprint §11), is not verified.
 7. **In-memory store when `MONGO_URL` is empty.** Decisions do not survive a restart in that mode; the UI says so.
-8. **UI smoke runs on Edge locally; CI uses Chromium.** `npm run ui:smoke` (playwright-core) clicks load → worked order → drawer → mode → scenario → decision; the CI `verify` job has not run yet because the repository is not on GitHub.
+8. **UI smoke runs on Edge locally; CI uses Chromium.** `npm run ui:smoke` (playwright-core) clicks load → worked order → drawer → mode → scenario → decision; CI runs on every push to `main` and deploys only after it passes.
 9. **Handling default is ₹0, not the Blueprint's ₹20**, so the fixture keeps its +420 per kept order. Rows that carry handling use it. See R4 in `docs/RULES.md`.
 10. **Synthetic data only.** The fixture is a 20-order teaching file, S01–S08 are labelled synthetic rows, and the 12-month Pulse demo (`data/demo_12m.json`, 3,020 orders) is generated by `scripts/gen-demo.mjs` with every row `synthetic: true`. Nothing here is evidence about real founders, real prices or real demand.
-11. **Sign-in is tested with a stand-in token verifier only.** `tests/auth.test.ts` covers guests, a bad token (401) and accounts that cannot see each other's records. `infra/cognito.sh` has not been run, so no live Cognito user pool has been tried.
+11. **Sign-in is tested with a stand-in token verifier only.** `tests/auth.test.ts` covers guests, a bad token (401) and accounts that cannot see each other's records. The live site uses the Cognito user pool `profyn`; sign-up and sign-in work on the app's own login page.
 12. **Out of scope by design:** live store or marketplace connectors, statutory P&L, GST and tax, causal ad attribution, forecasting, multiple currencies, team workspaces and roles.
 
 ## 6. Backlog, in priority order
@@ -147,9 +159,9 @@ Stated plainly so the business team does not inherit surprises.
 |---|---|---|---|
 | 1 | Cold run on a second laptop by someone who did not build the feature: `npm run setup`, `npm test`, `npm run check`, then the drills in `docs/DEMO.md` | The suite went green only at snapshot time | M4 |
 | 2 | Run `make up` → `make check` on a clean clone on a second laptop | Reproducibility is scored | M4 |
-| 3 | Record the 4-minute demo and link it in section 1 | Snapshot rule | M3 |
+| 3 | Done: demo recorded and linked in section 1 | Snapshot rule | M3 |
 | 4 | Mentor round: record notes verbatim in `docs/FEEDBACK.md`; confirm or replace the headline-gate change | Business-feedback criterion | All |
-| 5 | AWS deploy per `docs/DEPLOY.md`; run `make check BASE_URL=<CloudFront URL>` | Organiser requirement; second screen | M1 |
+| 5 | Done: AWS deploy; next, a custom domain and a managed database | Organiser requirement; second screen | M1 |
 | 6 | Done: UI smoke test of the journey (`scripts/ui-smoke.mjs`); extend it to the Leaks screen and the judge drills | Catches wiring breaks the unit tests miss | M2, M4 |
 | 7 | Run the AI rewording adapter with a live key; confirm the number-grounding guard, the 6-second fallback and the template tag on screen | Optional; labelled; off by default | M3 |
 | 8 | Decimal amounts: round half-up at import and flag when rounding exceeds ₹0.5 | Real exports carry paise | M1 |
