@@ -1,14 +1,16 @@
 import { useId, useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Icon } from './Icon';
+import { Button } from './Button';
+import { BagMark, openShopifyConnect, ShopifyActions, ShopifyConnectDrawer, ShopifyStatusLine, useShopifyConnector } from './ShopifyConnect';
 
 /**
  * The data sources. Files work today: the CSV / JSON template and the marketplace and payment report importers.
- * Direct API connectors are planned, each with what it needs before it can be built. Nothing here links to a vendor,
- * shows a connected state or asks for a token.
+ * Shopify connects directly with an Admin API token (read only). The other API connectors are planned, each with what
+ * it needs before it can be built; none of them links to a vendor, shows a connected state or asks for a token.
  */
 
-export type PlannedId = 'shopify' | 'amazon' | 'flipkart' | 'myntra' | 'meta_ads' | 'google_ads';
+export type PlannedId = 'amazon' | 'flipkart' | 'myntra' | 'meta_ads' | 'google_ads';
 
 interface Planned {
   id: PlannedId;
@@ -19,21 +21,9 @@ interface Planned {
   /** What has to exist before the connector can be built; ends with "Not connected." */
   note: string;
   noteKey: string;
-  /** The first connector to build. */
-  first?: boolean;
 }
 
 export const PLANNED: Planned[] = [
-  {
-    id: 'shopify',
-    name: 'Shopify API',
-    nameKey: 'integrations.shopifyApi',
-    data: 'orders, refunds, product costs',
-    dataKey: 'integrations.shopifyData',
-    note: 'Needs a custom app token from your Shopify admin. Built first. Not connected.',
-    noteKey: 'integrations.shopifyPrereq',
-    first: true,
-  },
   {
     id: 'amazon',
     name: 'Amazon SP-API',
@@ -125,7 +115,7 @@ function NotifyMe() {
   const id = useId();
   const [open, setOpen] = useState(false);
   const [email, setEmail] = useState('');
-  const [integration, setIntegration] = useState<PlannedId>('shopify');
+  const [integration, setIntegration] = useState<PlannedId>('amazon');
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
 
@@ -205,8 +195,8 @@ function NotifyMe() {
 function Timeline() {
   const { t } = useTranslation();
   const steps: Array<[string, string, string]> = [
-    ['now', t('integrations.now', 'Now'), t('integrations.nowWhatV2', 'CSV / JSON and report files')],
-    ['next', t('integrations.nextV2', 'Next'), t('integrations.nextWhatV2', 'Shopify API, then Meta Ads')],
+    ['now', t('integrations.now', 'Now'), t('integrations.nowWhatV3', 'CSV / JSON, report files, Shopify API')],
+    ['next', t('integrations.nextV2', 'Next'), t('integrations.nextWhatV3', 'Meta Ads, Razorpay')],
     ['later', t('integrations.laterV2', 'Later'), t('integrations.laterWhatV2', 'Amazon, Flipkart and Myntra APIs, Google Ads')],
   ];
   return (
@@ -222,7 +212,49 @@ function Timeline() {
   );
 }
 
-/** Import screen (full) and a compact list: what works now and what is planned. Visible, never clickable. */
+/** The live Shopify connector: Connect Shopify, or its connected state with Sync now, Open overview and Disconnect. */
+function ShopifyRow({ compact }: { compact: boolean }) {
+  const { t } = useTranslation();
+  const s = useShopifyConnector(!compact);
+  const connector = compact ? null : s.connector;
+  return (
+    <li className={`intg-item is-connector${connector ? ' is-connected' : ''}`} data-connector="shopify">
+      <span className="intg-mark intg-mark-live" aria-hidden="true">
+        <BagMark size={16} />
+      </span>
+      <span className="intg-text">
+        <span className="intg-name">{t('integrations.shopifyApi', 'Shopify API')}</span>
+        <span className="intg-data">{t('integrations.shopifyDataLive', 'orders, refunds, discounts, products · read only')}</span>
+        {compact ? null : connector ? (
+          <span className="intg-prereq intg-connected">
+            <ShopifyStatusLine connector={connector} />
+          </span>
+        ) : (
+          <span className="intg-prereq">{t('integrations.shopifyHow', 'Connect with an Admin API access token from your Shopify admin. Not connected.')}</span>
+        )}
+      </span>
+      <span className="intg-pills">
+        <span className="pill pill-success">
+          <span className="pill-dot" aria-hidden="true" />
+          {connector ? t('shopify.connected', 'Connected') : t('shopify.live', 'Live')}
+        </span>
+      </span>
+      {compact ? null : (
+        <span className="intg-connector-actions">
+          {connector ? (
+            <ShopifyActions connector={connector} />
+          ) : (
+            <Button variant="primary" size="sm" onClick={openShopifyConnect}>
+              {t('shopify.connect', 'Connect Shopify')}
+            </Button>
+          )}
+        </span>
+      )}
+    </li>
+  );
+}
+
+/** Import screen (full) and a compact list: what works now, the live Shopify connector, and what is planned. */
 export function Integrations({ compact = false }: { compact?: boolean }) {
   const { t } = useTranslation();
   const headId = useId();
@@ -236,7 +268,7 @@ export function Integrations({ compact = false }: { compact?: boolean }) {
           </h2>
           {compact ? null : (
             <p className="card-sub">
-              {t('integrations.subV2', 'Files work today: the template and the marketplace and payment reports. Direct API connectors are planned; none is connected or asks for a key.')}
+              {t('integrations.subV3', 'Files work today: the template and the marketplace and payment reports. Shopify connects directly with an Admin API token and only reads. The other API connectors are planned and not connected.')}
             </p>
           )}
         </div>
@@ -275,6 +307,11 @@ export function Integrations({ compact = false }: { compact?: boolean }) {
         ))}
       </ul>
 
+      <h3 className="intg-group">{t('integrations.liveApis', 'API connectors')}</h3>
+      <ul className="intg-list intg-list-connectors">
+        <ShopifyRow compact={compact} />
+      </ul>
+
       <h3 className="intg-group">{t('integrations.plannedApis', 'Planned API connectors')}</h3>
       <ul className="intg-list">
         {PLANNED.map((p) => (
@@ -292,13 +329,13 @@ export function Integrations({ compact = false }: { compact?: boolean }) {
               )}
             </span>
             <span className="intg-pills">
-              {p.first ? <span className="pill pill-primary">{t('integrations.buildFirst', 'Build first')}</span> : null}
               <span className="pill pill-neutral intg-soon">{t('integrations.planned', 'Planned')}</span>
             </span>
           </li>
         ))}
       </ul>
       <Timeline />
+      {compact ? null : <ShopifyConnectDrawer />}
     </section>
   );
 }
