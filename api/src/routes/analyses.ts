@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { aiStatus, MAX_CALLS_PER_ANALYSIS, narrate } from '../ai/client.js';
 import { aiPolicy } from '../ai/grounded.js';
+import { evidenceFor } from '../stats/evidence.js';
 import { langOf, localizeAnalysis } from '../ai/localize.js';
 import type { Lang } from '../ai/templates.js';
 import { analyze } from '../engine/analyze.js';
@@ -79,12 +80,22 @@ export function marginsFor(result: AnalysisResult): {
   };
 }
 
+/** Bootstrap evidence per candidate fix; never allowed to break an analysis response. */
+const evidenceOf = (a: AnalysisRecord, rows: OrderRow[]) => {
+  try {
+    return evidenceFor(a._id, rows, ledgerOptionsOf(a));
+  } catch {
+    return undefined;
+  }
+};
+
 const view = (a: AnalysisRecord, rows: OrderRow[], lang: Lang, persisted?: boolean) => ({
   analysis_id: a._id,
   dataset_id: a.dataset_id,
   ...(persisted === undefined ? {} : { persisted }),
   ...a.result,
   ...marginsFor(a.result),
+  evidence: evidenceOf(a, rows),
   ...localizeAnalysis(a.result, rows, lang),
   lang,
 });
