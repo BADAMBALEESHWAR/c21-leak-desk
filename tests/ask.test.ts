@@ -125,3 +125,28 @@ describe('ask profyn (v2 §1.3)', () => {
     expect((await request(app).post(`${api}/analyses/nope/ask`).send({ question: 'hi' })).status).toBe(404);
   });
 });
+
+const ask = (id: string, question: string, lang?: string) => request(app).post(`${api}/analyses/${id}/ask`).send({ question, ...(lang ? { lang } : {}) });
+
+describe('ask: general questions get the overall picture, not the leaks default', () => {
+  it.each([
+    ['Explain net sales', 'en'],
+    ['check the net sales and tell me where I need to improve', 'en'],
+    ['one', 'en'],
+    ['मेरी बिक्री कैसी है', 'hi'],
+  ])('%s', async (q, lang) => {
+    setModelForTests(null);
+    const d = (await request(app).post(`${api}/datasets`).send({ source: 'extended' })).body.dataset_id;
+    const an = (await request(app).post(`${api}/datasets/${d}/analyses`).send({ attribution: 'allocate' })).body.analysis_id;
+    const r = await ask(an, q, lang);
+    expect(r.body.tool.name).toBe('summary');
+    expect(r.body.answer).toContain('7,053');
+    expect(r.body.link.route).toBe('ledger');
+  });
+  it('a leak question still goes to the leaks tool', async () => {
+    setModelForTests(null);
+    const d = (await request(app).post(`${api}/datasets`).send({ source: 'extended' })).body.dataset_id;
+    const an = (await request(app).post(`${api}/datasets/${d}/analyses`).send({ attribution: 'allocate' })).body.analysis_id;
+    expect((await ask(an, 'Why are we losing money?')).body.tool.name).toBe('leaks');
+  });
+});
