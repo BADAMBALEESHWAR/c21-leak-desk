@@ -95,7 +95,7 @@ describe('ask profyn (v2 §1.3)', () => {
   });
 
   it('an invalid tool choice falls back to the keyword router', async () => {
-    setModelForTests(stub({ name: 'drop_tables', args: {} }, (r) => `Top leak lost ${r.leaks[0].lost_inr}.`));
+    setModelForTests(stub({ name: 'drop_tables', args: {} }, (r) => `Top leak lost ₹ ${r.leaks[0].lost_inr.toLocaleString('en-IN')}.`));
     const r = await ask(ext, 'Why are we losing money?');
     expect(r.body.tool.name).toBe('leaks');
     expect(r.body.source).toBe('ai');
@@ -111,7 +111,7 @@ describe('ask profyn (v2 §1.3)', () => {
     expect(te.body.answer).toMatch(/[ఀ-౿]/);
 
     const seen: string[] = [];
-    setModelForTests(stub({ name: 'leaks', args: {} }, (r) => `सबसे बड़ा लीक: ${r.leaks[0].lost_inr}`, seen));
+    setModelForTests(stub({ name: 'leaks', args: {} }, (r) => `सबसे बड़ा लीक: ₹ ${r.leaks[0].lost_inr.toLocaleString('en-IN')}`, seen));
     const ai = await ask(ext, 'Where are we leaking money?', 'te');
     expect(seen.some((u) => u.includes('Telugu'))).toBe(true);
     expect(ai.body.source).toBe('ai');
