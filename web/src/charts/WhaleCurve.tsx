@@ -1,10 +1,11 @@
 import { memo, useState, type KeyboardEvent, type PointerEvent } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { WhalePoint } from '../api/types';
 import { formatCount, formatInr, formatSignedInr, plural } from '../lib/format';
 import { ChartCard, ChartTip, useWidth, type TipState } from './ChartCard';
 
-const H = 200;
-const PAD = { top: 26, right: 16, bottom: 26, left: 48 };
+const H = 230;
+const PAD = { top: 58, right: 16, bottom: 26, left: 48 };
 
 function niceTicks(lo: number, hi: number, count = 4): number[] {
   const span = hi - lo || 1;
@@ -28,6 +29,8 @@ interface Props {
   points: WhalePoint[];
   unknownCount: number;
   channelSpend: number | null;
+  /** Opens the orders after the peak (the losing orders) in the ledger table. */
+  onShowAfterPeak?: () => void;
 }
 
 /**
@@ -35,7 +38,8 @@ interface Props {
  * light wash, hairline axes, the fall after the peak marked in the loss tint, peak and final
  * labelled; a crosshair snaps to the nearest order (pointer or arrow keys).
  */
-export const WhaleCurve = memo(function WhaleCurve({ points, unknownCount, channelSpend }: Props) {
+export const WhaleCurve = memo(function WhaleCurve({ points, unknownCount, channelSpend, onShowAfterPeak }: Props) {
+  const { t } = useTranslation();
   const [ref, width] = useWidth<HTMLDivElement>(520);
   const [active, setActive] = useState<number | null>(null);
   const n = points.length;
@@ -72,7 +76,6 @@ export const WhaleCurve = memo(function WhaleCurve({ points, unknownCount, chann
       : null;
 
   const peakX = x(peakIdx);
-  const peakAnchor = peakX > W * 0.62 ? 'end' : peakX < W * 0.3 ? 'start' : 'middle';
   const lastY = y(last.cumulative_inr);
   const lastLabelY = lastY + 18 > H - PAD.bottom + 10 ? lastY - 10 : lastY + 18;
 
@@ -148,8 +151,31 @@ export const WhaleCurve = memo(function WhaleCurve({ points, unknownCount, chann
     </div>
   );
 
+  // The curve may be sampled; ranks count the orders.
+  const afterPeak = last.rank - peak.rank;
+  const csv = {
+    filename: 'whale-curve.csv',
+    headers: ['rank', 'order_id', 'contribution_inr', 'cumulative_inr'],
+    rows: points.map((p) => [p.rank, p.order_id, p.contribution_inr, p.cumulative_inr]),
+  };
+  // The shaded band: every order ranked after the peak; together they take the running total down by `fall`.
+  const bandX = x(peakIdx);
+  const bandW = x(n - 1) - bandX;
+  const bandText = t('chart.whaleDestroy', '{{n}} orders after the peak destroy {{inr}}', { n: formatCount(afterPeak), inr: formatInr(fall) });
+  const bandAnchor = bandW > 200 ? 'middle' : 'end';
+  const bandTextX = bandAnchor === 'middle' ? bandX + bandW / 2 : W - PAD.right;
+
   return (
-    <ChartCard title="Whale curve" subtitle={subtitle} table={table}>
+    <ChartCard
+      title={t('chart.whaleTitle', 'Whale curve')}
+      subtitle={subtitle}
+      table={table}
+      csv={csv}
+      legend={[
+        { label: t('chart.runningTotal', 'Running total'), tone: 'series-1', shape: 'line' },
+        { label: t('chart.afterPeak', 'After the peak'), tone: 'loss' },
+      ]}
+    >
       <div className="chart-plot" ref={ref}>
         <svg
           className="whale-svg"
@@ -177,6 +203,15 @@ export const WhaleCurve = memo(function WhaleCurve({ points, unknownCount, chann
           <text className="axis-text" x={W - PAD.right} y={H - 6} textAnchor="end">
             Lowest ({formatCount(last.rank)})
           </text>
+          {fall > 0 && bandW > 0 ? (
+            <g className="whale-band-g">
+              <rect className="whale-band" x={bandX} y={PAD.top - 4} width={bandW} height={H - PAD.top - PAD.bottom + 4} />
+              <text className="whale-band-text" x={bandTextX} y={PAD.top - 30} textAnchor={bandAnchor}>
+                {bandText}
+              </text>
+            </g>
+          ) : null}
+          <line className="whale-peak-line" x1={peakX} x2={peakX} y1={PAD.top - 4} y2={H - PAD.bottom} />
           <path className="whale-area" d={area} />
           {fallArea ? <path className="whale-fall" d={fallArea} /> : null}
           <path className="whale-line" d={line} />
@@ -184,8 +219,8 @@ export const WhaleCurve = memo(function WhaleCurve({ points, unknownCount, chann
             <line className="crosshair" x1={x(active)} x2={x(active)} y1={PAD.top - 6} y2={H - PAD.bottom} />
           ) : null}
           <circle className="whale-dot" cx={peakX} cy={y(peak.cumulative_inr)} r={4.5} />
-          <text className="whale-label" x={peakX} y={y(peak.cumulative_inr) - 10} textAnchor={peakAnchor}>
-            Peak {formatInr(peak.cumulative_inr)} · top {formatCount(peak.rank)} {plural(peak.rank, 'order', 'orders')}
+          <text className="whale-label" x={peakX > 360 ? peakX - 8 : peakX + 8} y={PAD.top - 10} textAnchor={peakX > 360 ? 'end' : 'start'}>
+            {t('chart.whalePeak', 'Contribution peaks here: {{inr}} after the top {{n}} orders', { inr: formatInr(peak.cumulative_inr), n: formatCount(peak.rank) })}
           </text>
           {peakIdx !== n - 1 ? (
             <>
@@ -208,6 +243,11 @@ export const WhaleCurve = memo(function WhaleCurve({ points, unknownCount, chann
         </svg>
         <ChartTip tip={active !== null ? tipFor(active) : null} />
       </div>
+      {onShowAfterPeak && fall > 0 && afterPeak > 0 ? (
+        <button type="button" className="link-button whale-after" onClick={onShowAfterPeak}>
+          {t('chart.whaleShow', 'Show the {{n}} orders after the peak', { n: formatCount(afterPeak) })} →
+        </button>
+      ) : null}
     </ChartCard>
   );
 });

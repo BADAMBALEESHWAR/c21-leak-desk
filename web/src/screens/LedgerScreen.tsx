@@ -1,8 +1,8 @@
-import { memo, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { memo, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { AnalysisResponse, GroupRow, LineKey, OrderResult } from '../api/types';
-import { BarRows, type BarRow } from '../charts/BarRows';
-import { ChartCard } from '../charts/ChartCard';
+import type { AnalysisResponse, GroupRow, LeakCause, LineKey, OrderResult } from '../api/types';
+import { ChartCard, ChartTable, type TipRow } from '../charts/ChartCard';
+import { DivergingBars, type DivergingRow } from '../charts/DivergingBars';
 import { WhaleCurve } from '../charts/WhaleCurve';
 import { Pill, Unknown } from '../components/Badge';
 import { ButtonLink, LinkButton } from '../components/Button';
@@ -21,8 +21,9 @@ import { Callout, InfoTip, revealElement, StatCard } from '../components/ui';
 import { groupMarginsOf, marginsOf, rowFixedShare, unitEconomics, UnitEconomics, useFormulas } from '../components/UnitEconomics';
 import { lower } from '../i18n';
 import { formatCount, formatInr, formatMarginPct, formatPct, plural } from '../lib/format';
-import { ALLOCATED_EN, ALLOCATED_KEY, ATTRIBUTION_LABEL, fullReturnPartialRecovery, handlingEstimateUsed } from '../lib/labels';
-import { hrefFor } from '../lib/router';
+import { ALLOCATED_EN, ALLOCATED_KEY, ATTRIBUTION_LABEL, fullReturnPartialRecovery, handlingEstimateUsed, LEAK_LABELS } from '../lib/labels';
+import { formatMonth } from '../charts/scale';
+import { fromHref, hasLedgerFilter, hrefFor, ledgerHref, parseFrom, parseLedgerQuery, useHashParams, type LedgerQuery } from '../lib/router';
 import { useStore, type LedgerFilter } from '../state/store';
 
 type Filter = LedgerFilter;
@@ -169,72 +170,88 @@ const Kpis = memo(function Kpis({ a }: { a: AnalysisResponse }) {
   );
 });
 
-const ChannelChart = memo(function ChannelChart({ a }: { a: AnalysisResponse }) {
+/** Contribution by channel or by product as diverging bars around ₹0; each bar opens its orders below. */
+const ContributionChart = memo(function ContributionChart({ a }: { a: AnalysisResponse }) {
   const { t } = useTranslation();
+  const [dim, setDim] = useState<'channel' | 'product'>('channel');
   const channelMode = a.attribution === 'channel';
-  const rows: BarRow[] = a.groups.channel.map((g) => ({
-    key: g.key,
-    label: g.key,
-    sub: `${formatCount(g.orders)} ${plural(g.orders, 'order', 'orders')}${g.unknown_count ? ` · ${formatCount(g.unknown_count)} unknown` : ''}`,
-    values: [
-      { series: 'Contribution', value: g.contribution_inr, tone: 'series-1', text: g.contribution_inr === null ? 'unknown' : formatInr(g.contribution_inr) },
-      ...(channelMode
-        ? [{ series: 'Channel spend', value: g.channel_spend_inr, tone: 'series-2' as const, text: g.channel_spend_inr === null ? 'unknown' : formatInr(g.channel_spend_inr) }]
-        : []),
-    ],
-  }));
+  const groups = dim === 'channel' ? a.groups.channel : a.groups.product;
+  const totalOrders = groups.reduce((n, g) => n + g.orders, 0) || 1;
+  const ordersText = (n: number) => t('chart.ordersN', '{{n}} orders', { n: formatCount(n) });
+  const rows: DivergingRow[] = groups.map((g) => {
+    const tip: TipRow[] = [
+      { label: t('ledger.orders'), value: formatCount(g.orders) },
+      { label: t('ledger.netSales'), value: formatInr(g.net_sales_inr) },
+    ];
+    if (dim === 'channel' && channelMode) {
+      tip.push({ label: t('ledger.beforeSpend'), value: formatInr(g.contribution_before_spend_inr) });
+      tip.push({ label: `${t('ledger.channelSpend')} (${t(ALLOCATED_KEY, ALLOCATED_EN)})`, value: g.channel_spend_inr === null ? t('status.unknown') : formatInr(g.channel_spend_inr) });
+    }
+    if (g.unknown_count > 0) tip.push({ label: lower(t('status.unknown')), value: formatCount(g.unknown_count) });
+    return {
+      key: g.key,
+      label: g.key,
+      value: g.contribution_inr,
+      share: g.orders / totalOrders,
+      sub: `${ordersText(g.orders)}${g.unknown_count ? ` · ${formatCount(g.unknown_count)} ${lower(t('status.unknown'))}` : ''}`,
+      tip,
+      href: ledgerHref(dim === 'channel' ? { channel: g.key } : { product: g.key }),
+    };
+  });
+  const title = dim === 'channel' ? t('chart.byChannelTitle', 'Contribution by channel') : t('chart.byProductTitle', 'Contribution by product');
+  const dimLabel = dim === 'channel' ? t('ledger.channel') : t('ledger.product');
   const table = (
-    <table className="table table-compact">
-      <caption className="visually-hidden">Contribution by channel</caption>
-      <thead>
-        <tr>
-          <th scope="col">{t('ledger.channel')}</th>
-          <th scope="col" className="r">
-            {t('ledger.contribution')}
-          </th>
-          {channelMode ? (
-            <th scope="col" className="r">
-              {t('ledger.channelSpend')}
-            </th>
-          ) : null}
-        </tr>
-      </thead>
-      <tbody>
-        {a.groups.channel.map((g) => (
-          <tr key={g.key}>
-            <th scope="row">{g.key}</th>
-            <td className="r">
-              <Money value={g.contribution_inr} tone="contribution" />
-            </td>
-            {channelMode ? (
-              <td className="r">
-                <Money value={g.channel_spend_inr} tone="plain" />
-              </td>
-            ) : null}
-          </tr>
-        ))}
-      </tbody>
-    </table>
+    <ChartTable
+      caption={title}
+      headers={[dimLabel, t('ledger.orders'), t('chart.shareOfOrdersHead', 'Share of orders'), t('ledger.netSales'), t('ledger.contribution'), ...(dim === 'channel' && channelMode ? [t('ledger.channelSpend')] : [])]}
+      rows={groups.map((g) => ({
+        key: g.key,
+        cells: [
+          <a key="k" href={ledgerHref(dim === 'channel' ? { channel: g.key } : { product: g.key })}>{g.key}</a>,
+          formatCount(g.orders),
+          formatPct((g.orders / totalOrders) * 100),
+          <Money key="n" value={g.net_sales_inr} tone="plain" />,
+          <Money key="c" value={g.contribution_inr} tone="contribution" />,
+          ...(dim === 'channel' && channelMode ? [<Money key="s" value={g.channel_spend_inr} tone="plain" />] : []),
+        ],
+      }))}
+    />
   );
+  const csv = {
+    filename: `contribution-by-${dim}.csv`,
+    headers: [dim, 'orders', 'share_of_orders_pct', 'net_sales_inr', 'contribution_before_spend_inr', 'channel_spend_inr', 'contribution_inr', 'unknown_orders'],
+    rows: groups.map((g) => [g.key, g.orders, Math.round((g.orders / totalOrders) * 10000) / 100, g.net_sales_inr, g.contribution_before_spend_inr, g.channel_spend_inr, g.contribution_inr, g.unknown_count]),
+  };
   return (
     <ChartCard
-      title="Contribution by channel"
+      title={title}
       subtitle={
-        channelMode
-          ? t('ledger.chartChannel', 'Contribution after spend, next to the channel spend deducted once per channel. Spend is allocated, not caused.')
-          : t('ledger.chartAllocate', 'Contribution after ads allocated to each order (allocated, not caused).')
+        <>
+          {channelMode && dim === 'channel'
+            ? t('ledger.chartChannel', 'Contribution after spend, next to the channel spend deducted once per channel. Spend is allocated, not caused.')
+            : t('ledger.chartAllocate', 'Contribution after ads allocated to each order (allocated, not caused).')}{' '}
+          {t('chart.clickBar', 'Select a bar to see its orders.')}
+        </>
       }
-      legend={
-        channelMode
-          ? [
-              { label: 'Contribution', tone: 'series-1' },
-              { label: 'Channel spend', tone: 'series-2' },
-            ]
-          : undefined
-      }
+      legend={[
+        { label: t('chart.legendGain', 'Contribution ≥ ₹0'), tone: 'gain' },
+        { label: t('chart.legendLoss', 'Contribution < ₹0'), tone: 'loss' },
+        { label: t('chart.shareOfOrdersHead', 'Share of orders'), tone: 'muted', shape: 'thin' },
+      ]}
       table={table}
+      csv={csv}
+      actions={
+        <span className="chart-seg" role="group" aria-label={t('chart.groupBy', 'Group by')}>
+          <button type="button" aria-pressed={dim === 'channel'} onClick={() => setDim('channel')}>
+            {t('ledger.byChannel')}
+          </button>
+          <button type="button" aria-pressed={dim === 'product'} onClick={() => setDim('product')}>
+            {t('ledger.byProduct')}
+          </button>
+        </span>
+      }
     >
-      <BarRows rows={rows} ariaLabel="Contribution by channel" labelWidth={118} />
+      <DivergingBars rows={rows} measure={t('ledger.contribution')} ariaLabel={title} format={formatInr} labelWidth={dim === 'channel' ? 120 : 104} />
     </ChartCard>
   );
 });
@@ -249,7 +266,7 @@ function sumInr(rows: GroupRow[], pick: (r: GroupRow) => number | null): number 
   return s;
 }
 
-function OrdersTable({ orders, handlingEstimate }: { orders: OrderResult[]; handlingEstimate: number }) {
+function OrdersTable({ orders, handlingEstimate, isMatch }: { orders: OrderResult[]; handlingEstimate: number; isMatch?: (o: OrderResult) => boolean }) {
   const { openOrderResult, correctedOrderIds } = useStore();
   const corrected = new Set(correctedOrderIds ?? []);
   const { t } = useTranslation();
@@ -327,7 +344,9 @@ function OrdersTable({ orders, handlingEstimate }: { orders: OrderResult[]; hand
       rows={orders}
       rowKey={(o) => o.order_id}
       onRowClick={openOrderResult}
-      rowClassName={(o) => (fullReturnPartialRecovery(o) ? 'row-loss' : undefined)}
+      rowClassName={(o) =>
+        [fullReturnPartialRecovery(o) ? 'row-loss' : null, isMatch ? (isMatch(o) ? 'row-match' : 'row-dim') : null].filter(Boolean).join(' ') || undefined
+      }
       sheet
       className="orders-table"
       emptyText="No orders match this filter."
@@ -547,13 +566,229 @@ function ImportWarnings() {
   );
 }
 
+// ---- Click-to-cause: a filter from a leak card, a chart bar or a Pulse row ----------------------------
+
+type TFn = ReturnType<typeof useTranslation>['t'];
+
+/** Payment type travels on each order from the API (not in the typed contract). */
+const paymentOf = (o: OrderResult): string | null => (o as OrderResult & { payment_type?: string | null }).payment_type ?? null;
+
+export function matchesLedgerQuery(o: OrderResult, q: LedgerQuery): boolean {
+  if (q.cause && o.leak_cause !== q.cause) return false;
+  if (q.channel && o.channel !== q.channel) return false;
+  if (q.product && o.product_id !== q.product) return false;
+  if (q.month && o.date.slice(0, 7) !== q.month) return false;
+  if (q.payment && (paymentOf(o) ?? '').toLowerCase() !== q.payment.toLowerCase()) return false;
+  return true;
+}
+
+const lineAmount = (o: OrderResult, k: LineKey): number => Math.abs(o.lines.find((l) => l.key === k)?.amount_inr ?? 0);
+
+export interface FocusFigures {
+  orders: number;
+  netSales: number;
+  /** Over the orders whose contribution is known; `unknown` counts the rest. */
+  contribution: number;
+  losing: number;
+  /** Rupees lost across the losing orders (positive). */
+  lost: number;
+  unknown: number;
+  recovered: number;
+  productCost: number;
+  discount: number;
+  fees: number;
+  returnCosts: number;
+  /** The cause with the most rupees lost among the matching orders. */
+  topCause: LeakCause | null;
+}
+
+/** The numbers the strip's sentence quotes, summed from the matching orders. */
+export function focusFigures(orders: OrderResult[]): FocusFigures {
+  const f: FocusFigures = { orders: orders.length, netSales: 0, contribution: 0, losing: 0, lost: 0, unknown: 0, recovered: 0, productCost: 0, discount: 0, fees: 0, returnCosts: 0, topCause: null };
+  const byCause = new Map<LeakCause, number>();
+  for (const o of orders) {
+    f.netSales += o.net_sales_inr ?? 0;
+    if (o.contribution_inr === null) {
+      f.unknown += 1;
+    } else {
+      f.contribution += o.contribution_inr;
+      if (o.contribution_inr < 0) {
+        f.losing += 1;
+        f.lost += -o.contribution_inr;
+      }
+    }
+    f.recovered += o.inputs.recovered ?? 0;
+    f.productCost += o.inputs.product_cost ?? 0;
+    f.discount += o.inputs.discount ?? 0;
+    f.fees += lineAmount(o, 'shipping') + lineAmount(o, 'payment_fee') + lineAmount(o, 'handling');
+    f.returnCosts += lineAmount(o, 'return_cost');
+    if (o.leak_cause) byCause.set(o.leak_cause, (byCause.get(o.leak_cause) ?? 0) + Math.max(0, -(o.contribution_inr ?? 0)));
+  }
+  let best = -1;
+  for (const [c, v] of byCause) {
+    if (v > best) {
+      best = v;
+      f.topCause = c;
+    }
+  }
+  return f;
+}
+
+export function causeLabel(t: TFn, cause: string): string {
+  const en = (LEAK_LABELS as Record<string, string>)[cause] ?? cause.replace(/_/g, ' ');
+  return t(`focus.cause.${cause}`, en);
+}
+
+/** One sentence per leak cause, with the rupees that matter for that cause. */
+function causeSentence(t: TFn, cause: string, f: FocusFigures): string {
+  const n = formatCount(f.orders);
+  const lost = formatInr(f.lost);
+  switch (cause) {
+    case 'full_return_partial_recovery':
+      return t('focus.sentence.fullReturn', '{{n}} orders refunded in full with only {{recovered}} of {{cost}} recovered → {{lost}} lost.', {
+        n,
+        recovered: formatInr(f.recovered),
+        cost: formatInr(f.productCost),
+        lost,
+      });
+    case 'discount_exceeds_margin':
+      return t('focus.sentence.discount', '{{n}} orders where the discount ({{discount}} in total) went deeper than the margin → {{lost}} lost.', { n, discount: formatInr(f.discount), lost });
+    case 'fees_exceed_margin':
+      return t('focus.sentence.fees', '{{n}} kept orders where shipping, fees and handling ({{costs}}) cost more than the margin left → {{lost}} lost.', { n, costs: formatInr(f.fees), lost });
+    case 'other_negative':
+      return t('focus.sentence.other', '{{n}} returned orders whose return costs ({{costs}}) were not recovered → {{lost}} lost.', { n, costs: formatInr(f.returnCosts), lost });
+    case 'refund_unknown':
+      return t('focus.sentence.unknown', '{{n}} returned orders have no refund or recovery fact yet, so their loss is unknown, never counted as zero.', { n });
+    default:
+      return t('focus.sentence.otherCause', '{{n}} orders with this cause → {{lost}} lost.', { n, lost });
+  }
+}
+
+/** "Channel Amazon · Oct 2025 (by order date)": the non-cause filters in words. */
+function scopeText(t: TFn, q: LedgerQuery): string {
+  const parts: string[] = [];
+  if (q.channel) parts.push(t('focus.scope.channel', 'Channel {{name}}', { name: q.channel }));
+  if (q.product) parts.push(t('focus.scope.product', 'Product {{name}}', { name: q.product }));
+  if (q.month) parts.push(t('focus.scope.month', '{{month}} (by order date)', { month: formatMonth(q.month) }));
+  if (q.payment) parts.push(t('focus.scope.payment', 'Payment {{name}}', { name: q.payment.toLowerCase() === 'cod' ? 'COD' : q.payment }));
+  return parts.join(' · ');
+}
+
+export function focusSentence(t: TFn, q: LedgerQuery, f: FocusFigures): string {
+  const scope = scopeText(t, q);
+  if (q.cause) {
+    const body = causeSentence(t, q.cause, f);
+    return scope ? `${scope}: ${body}` : body;
+  }
+  const contribution =
+    f.unknown > 0
+      ? t('focus.withUnknown', '{{inr}} ({{n}} unknown left out)', { inr: formatInr(f.contribution), n: formatCount(f.unknown) })
+      : formatInr(f.contribution);
+  return t('focus.sentence.scope', '{{scope}}: {{n}} orders, {{net}} net sales, {{contribution}} operational contribution; {{losing}} lose money ({{lost}}).', {
+    scope,
+    n: formatCount(f.orders),
+    net: formatInr(f.netSales),
+    contribution,
+    losing: formatCount(f.losing),
+    lost: formatInr(f.lost),
+  });
+}
+
+function FocusStrip({
+  q,
+  figures,
+  showAll,
+  onShowAll,
+  stripRef,
+  onShowOrders,
+}: {
+  q: LedgerQuery;
+  figures: FocusFigures;
+  showAll: boolean;
+  onShowAll: (v: boolean) => void;
+  stripRef: RefObject<HTMLElement>;
+  onShowOrders: () => void;
+}) {
+  const { t } = useTranslation();
+  const from = parseFrom(q.from);
+  const back = fromHref(q.from);
+  const fromLabel = from ? `${t(`nav.${from.route}`, from.route)}${from.tab ? ` · ${t(`focus.tab.${from.tab}`, from.tab)}` : ''}` : null;
+  const scope = scopeText(t, q);
+  const filterLabel = [q.cause ? causeLabel(t, q.cause) : null, scope || null].filter(Boolean).join(' · ');
+  const fixCause = q.cause ?? (figures.losing > 0 ? figures.topCause : null);
+  const problem = !!q.cause || figures.losing > 0;
+  return (
+    <section ref={stripRef} className={`focus-strip${problem ? ' is-problem' : ''}`} aria-label={t('focus.region', 'Filtered orders')} tabIndex={-1}>
+      <ol className="focus-crumbs" aria-label={t('focus.breadcrumb', 'Breadcrumb')}>
+        {from && back ? (
+          <li>
+            <a href={back}>{fromLabel}</a>
+          </li>
+        ) : null}
+        <li>{filterLabel}</li>
+        <li aria-current="page">{t('nav.ledger')}</li>
+      </ol>
+      <p className="focus-sentence" role="status">
+        <strong>{q.cause ? t('focus.problem', 'Problem:') : t('focus.showing', 'Showing:')}</strong> {focusSentence(t, q, figures)}
+      </p>
+      <div className="focus-actions">
+        {fixCause ? (
+          <ButtonLink variant="primary" size="sm" href={hrefFor('leaks', { fix: fixCause })} iconRight="arrow-right">
+            {q.cause ? t('focus.fixThis', 'Fix this') : t('focus.fixTop', 'Fix the biggest leak here: {{cause}}', { cause: causeLabel(t, fixCause) })}
+          </ButtonLink>
+        ) : null}
+        <ButtonLink variant="secondary" size="sm" href={hrefFor('ledger')}>
+          {t('focus.clear', 'Clear filter')}
+        </ButtonLink>
+        <LinkButton onClick={onShowOrders}>{t('focus.showOrders', 'Go to the {{n}} orders', { n: formatCount(figures.orders) })}</LinkButton>
+        <label className="focus-toggle">
+          <input type="checkbox" checked={showAll} onChange={(e) => onShowAll(e.target.checked)} />
+          {t('focus.showAll', 'Show all orders, matches highlighted')}
+        </label>
+        {back ? (
+          <a href={back} className="focus-back">
+            ← {t('focus.back', 'Back to {{where}}', { where: fromLabel })}
+          </a>
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
 export function LedgerScreen() {
-  const { analysis, ledgerTab: tab, setLedgerTab: setTab, ledgerFilter: filter, setLedgerFilter: setFilter, tableFocus, openOrderResult, showToast } = useStore();
+  const { analysis, ledgerTab: tab, setLedgerTab: setTab, ledgerFilter: filter, setLedgerFilter: setFilter, tableFocus, openOrderResult, showToast, focusLedgerTable } = useStore();
   const { t } = useTranslation();
   const [query, setQuery] = useState('');
   const [page, setPage] = useState(1);
   const tableRef = useRef<HTMLElement>(null);
+  const stripRef = useRef<HTMLElement>(null);
   const seenFocus = useRef(lastHandledFocus);
+  const hashParams = useHashParams();
+  const lq = useMemo(() => parseLedgerQuery(hashParams), [hashParams]);
+  const focused = hasLedgerFilter(lq);
+  const focusKey = focused ? ledgerHref({ ...lq, from: undefined }) : '';
+  const [showAll, setShowAll] = useState(false);
+  const lastFocusKey = useRef<string | null>(null);
+
+  // A new filter from a link: orders view, all chips off, page 1, and the problem strip in view.
+  useEffect(() => {
+    if (!focused || lastFocusKey.current === focusKey) {
+      lastFocusKey.current = focusKey;
+      return undefined;
+    }
+    const first = lastFocusKey.current === null;
+    lastFocusKey.current = focusKey;
+    setTab('orders');
+    setFilter('all');
+    setShowAll(false);
+    setQuery('');
+    // On arrival from another step the app scrolls to the top first; the strip is there already.
+    if (first) return undefined;
+    const timer = window.setTimeout(() => revealElement(stripRef.current), 60);
+    return () => window.clearTimeout(timer);
+    // setTab and setFilter are stable store setters.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusKey, focused]);
 
   // A card, drawer or another step asked for the table: bring it into view, highlight it, focus it.
   useEffect(() => {
@@ -580,9 +815,12 @@ export function LedgerScreen() {
     }),
     [orders],
   );
+  const matching = useMemo(() => (focused ? orders.filter((o) => matchesLedgerQuery(o, lq)) : orders), [orders, lq, focused]);
+  const figures = useMemo(() => focusFigures(matching), [matching]);
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
     return orders.filter((o) => {
+      if (focused && !showAll && !matchesLedgerQuery(o, lq)) return false;
       if (q && !o.order_id.toLowerCase().includes(q)) return false;
       if (filter === 'losing') return o.contribution_inr !== null && o.contribution_inr < 0;
       if (filter === 'unknown') return o.status === 'unknown';
@@ -590,13 +828,13 @@ export function LedgerScreen() {
       if (filter === 'synthetic') return o.synthetic;
       return true;
     });
-  }, [orders, filter, query]);
+  }, [orders, filter, query, focused, showAll, lq]);
 
   // Any change to what is shown starts again at page 1.
   const analysisKey = analysis?.analysis_id ?? null;
   useEffect(() => {
     setPage(1);
-  }, [filter, query, analysisKey]);
+  }, [filter, query, analysisKey, focusKey, showAll]);
 
   if (!analysis) {
     return (
@@ -630,6 +868,92 @@ export function LedgerScreen() {
     tableRef.current?.querySelector('.table-sheet')?.scrollTo({ top: 0 });
   };
   const unknownInCurve = analysis.orders.filter((o) => o.contribution_inr === null).length;
+  const isMatch = focused && showAll ? (o: OrderResult) => matchesLedgerQuery(o, lq) : focused ? () => true : undefined;
+
+  const tableSection = (
+    <section className="card table-card table-target" aria-label="Ledger tables" ref={tableRef} tabIndex={-1}>
+      <div className="table-toolbar">
+        <Tabs label="Ledger views" idPrefix="ledger" tabs={tabs} value={tab} onChange={setTab} />
+        {tab === 'orders' ? (
+          <div className="toolbar-tools">
+            <div className="chips" role="group" aria-label="Filter orders">
+              {filters.map((f) => (
+                <button
+                  key={f.id}
+                  type="button"
+                  className={`chip-filter${filter === f.id ? ' is-on' : ''}`}
+                  aria-pressed={filter === f.id}
+                  onClick={() => setFilter(f.id)}
+                >
+                  {f.label}
+                  <span className="chip-count">{formatCount(counts[f.id])}</span>
+                </button>
+              ))}
+            </div>
+            <label className="search">
+              <Icon name="search" size={16} />
+              <span className="visually-hidden">Search order id</span>
+              <input type="search" placeholder="Search order id" value={query} onChange={(e) => setQuery(e.target.value)} />
+            </label>
+          </div>
+        ) : null}
+        <ButtonLink
+          variant="secondary"
+          size="sm"
+          icon="download"
+          href={api.ledgerExportUrl(analysis.analysis_id, 'csv')}
+          download
+          onClick={authDownload(api.ledgerExportUrl(analysis.analysis_id, 'csv'), `ledger-${analysis.analysis_id}.csv`, (e) => showToast(e.message, 'info'))}
+          className="toolbar-export"
+        >
+          {t('actions.exportCsv')}
+        </ButtonLink>
+      </div>
+      {tab === 'orders' && focused ? (
+        <div className="filter-note" role="status">
+          <Icon name="info" size={16} />
+          <span>
+            {showAll
+              ? t('focus.noteAll', '{{n}} of {{total}} orders match; they are marked on the left.', { n: formatCount(matching.length), total: formatCount(analysis.orders.length) })
+              : t('focus.noteOnly', 'Only the {{n}} matching orders are listed.', { n: formatCount(matching.length) })}
+          </span>
+          <a href={hrefFor('ledger')}>{t('focus.clear', 'Clear filter')}</a>
+        </div>
+      ) : null}
+      {tab === 'orders' && filter !== 'all' ? (
+        <div className="filter-note" role="status">
+          <Icon name="info" size={16} />
+          <span>
+            Showing {formatCount(visible.length)} {filters.find((f) => f.id === filter)?.noun} {visible.length === 1 ? 'order' : 'orders'}.
+          </span>
+          {visible.length === 1 && (filter === 'late' || filter === 'unknown') ? (
+            <LinkButton onClick={() => openOrderResult(visible[0])}>Open {visible[0].order_id}</LinkButton>
+          ) : null}
+          <LinkButton onClick={() => setFilter('all')}>Clear filter</LinkButton>
+        </div>
+      ) : null}
+      <div role="tabpanel" id={panelId('ledger', tab)} aria-labelledby={tabId('ledger', tab)} className="tabpanel">
+        {tab === 'orders' ? (
+          <>
+            <OrdersTable orders={pageRows} handlingEstimate={handlingEstimateUsed(analysis) ? analysis.config.handling_default_inr : 0} isMatch={isMatch} />
+            <div className="table-foot table-foot-pager">
+              <span>
+                {visible.length === 0
+                  ? 'No orders to show'
+                  : `Showing ${formatCount(first + 1)}–${formatCount(first + pageRows.length)} of ${formatCount(visible.length)}`}
+                {visible.length !== analysis.orders.length ? ` (filtered from ${formatCount(analysis.orders.length)})` : ''} · select a row for its waterfall
+              </span>
+              <Pagination page={current} pageCount={pageCount} onPage={goPage} label="Orders pages" />
+            </div>
+          </>
+        ) : tab === 'channel' ? (
+          <ChannelTable a={analysis} />
+        ) : (
+          <ProductTable a={analysis} />
+        )}
+      </div>
+    </section>
+  );
 
   return (
     <div className="page">
@@ -649,91 +973,32 @@ export function LedgerScreen() {
         }
       />
 
+      {focused ? (
+        <>
+          <FocusStrip q={lq} figures={figures} showAll={showAll} onShowAll={setShowAll} stripRef={stripRef} onShowOrders={() => revealElement(tableRef.current)} />
+          {tableSection}
+        </>
+      ) : null}
+
       <ReconciliationLine rec={analysis.reconciliation} />
       <Kpis a={analysis} />
       <PeriodTotals a={analysis} />
       <UnitEconomics a={analysis} />
 
       <div className="grid-2">
-        <ChannelChart a={analysis} />
+        <ContributionChart a={analysis} />
         <WhaleCurve
           points={analysis.whale}
           unknownCount={unknownInCurve}
           channelSpend={analysis.attribution === 'channel' ? analysis.totals.channel_spend_inr : null}
+          onShowAfterPeak={() => {
+            if (focused) window.location.hash = hrefFor('ledger');
+            focusLedgerTable('losing');
+          }}
         />
       </div>
 
-      <section className="card table-card table-target" aria-label="Ledger tables" ref={tableRef} tabIndex={-1}>
-        <div className="table-toolbar">
-          <Tabs label="Ledger views" idPrefix="ledger" tabs={tabs} value={tab} onChange={setTab} />
-          {tab === 'orders' ? (
-            <div className="toolbar-tools">
-              <div className="chips" role="group" aria-label="Filter orders">
-                {filters.map((f) => (
-                  <button
-                    key={f.id}
-                    type="button"
-                    className={`chip-filter${filter === f.id ? ' is-on' : ''}`}
-                    aria-pressed={filter === f.id}
-                    onClick={() => setFilter(f.id)}
-                  >
-                    {f.label}
-                    <span className="chip-count">{formatCount(counts[f.id])}</span>
-                  </button>
-                ))}
-              </div>
-              <label className="search">
-                <Icon name="search" size={16} />
-                <span className="visually-hidden">Search order id</span>
-                <input type="search" placeholder="Search order id" value={query} onChange={(e) => setQuery(e.target.value)} />
-              </label>
-            </div>
-          ) : null}
-          <ButtonLink
-            variant="secondary"
-            size="sm"
-            icon="download"
-            href={api.ledgerExportUrl(analysis.analysis_id, 'csv')}
-            download
-            onClick={authDownload(api.ledgerExportUrl(analysis.analysis_id, 'csv'), `ledger-${analysis.analysis_id}.csv`, (e) => showToast(e.message, 'info'))}
-            className="toolbar-export"
-          >
-            {t('actions.exportCsv')}
-          </ButtonLink>
-        </div>
-        {tab === 'orders' && filter !== 'all' ? (
-          <div className="filter-note" role="status">
-            <Icon name="info" size={16} />
-            <span>
-              Showing {formatCount(visible.length)} {filters.find((f) => f.id === filter)?.noun} {visible.length === 1 ? 'order' : 'orders'}.
-            </span>
-            {visible.length === 1 && (filter === 'late' || filter === 'unknown') ? (
-              <LinkButton onClick={() => openOrderResult(visible[0])}>Open {visible[0].order_id}</LinkButton>
-            ) : null}
-            <LinkButton onClick={() => setFilter('all')}>Clear filter</LinkButton>
-          </div>
-        ) : null}
-        <div role="tabpanel" id={panelId('ledger', tab)} aria-labelledby={tabId('ledger', tab)} className="tabpanel">
-          {tab === 'orders' ? (
-            <>
-              <OrdersTable orders={pageRows} handlingEstimate={handlingEstimateUsed(analysis) ? analysis.config.handling_default_inr : 0} />
-              <div className="table-foot table-foot-pager">
-                <span>
-                  {visible.length === 0
-                    ? 'No orders to show'
-                    : `Showing ${formatCount(first + 1)}–${formatCount(first + pageRows.length)} of ${formatCount(visible.length)}`}
-                  {visible.length !== analysis.orders.length ? ` (filtered from ${formatCount(analysis.orders.length)})` : ''} · select a row for its waterfall
-                </span>
-                <Pagination page={current} pageCount={pageCount} onPage={goPage} label="Orders pages" />
-              </div>
-            </>
-          ) : tab === 'channel' ? (
-            <ChannelTable a={analysis} />
-          ) : (
-            <ProductTable a={analysis} />
-          )}
-        </div>
-      </section>
+      {focused ? null : tableSection}
 
       <LateRefunds a={analysis} />
 

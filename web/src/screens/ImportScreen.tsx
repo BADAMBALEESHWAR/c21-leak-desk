@@ -1,13 +1,14 @@
 import { useEffect, useRef, useState, type DragEvent, type FormEvent, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { api, ApiError, toErrorInfo, type DatasetInput, type DatasetOptions, type ErrorInfo } from '../api/client';
-import type { AttributionMode, DatasetResponse, OrderResult, RowCorrection, ValidationFlag, WorkspaceDataset } from '../api/types';
+import type { AttributionMode, ColumnMapping, DatasetResponse, ImportMapResult, ImportProfile, OrderResult, RowCorrection, ValidationFlag, WorkspaceDataset } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
+import { AiBadge } from '../components/AiBadge';
 import { Pill } from '../components/Badge';
 import { Button, ButtonLink } from '../components/Button';
 import { Drawer } from '../components/Drawer';
 import { Icon } from '../components/Icon';
-import { Integrations } from '../components/Integrations';
+import { Integrations, REPORT_IMPORTERS } from '../components/Integrations';
 import { Money } from '../components/Money';
 import { Provenance } from '../components/Provenance';
 import { AttributionSegmented, Callout, Collapsible, ErrorCallout, InfoTip, revealElement, Skeleton, StatCard } from '../components/ui';
@@ -46,6 +47,92 @@ const OPTIONAL_FIELDS: Array<[string, string]> = [
   ['handling_inr', '₹ per order; else config default'],
   ['refund_date', 'YYYY-MM-DD; after period end is pending'],
 ];
+
+// ---- Column mapping -------------------------------------------------------------------------------------------------
+
+/** Header variants the API accepts without a mapping (api/src/schema/orders.ts COLUMN_ALIASES). */
+const COLUMN_ALIASES: Record<string, string> = {
+  orderid: 'order_id',
+  'order id': 'order_id',
+  order_date: 'date',
+  'order date': 'date',
+  gross: 'gross_inr',
+  discount: 'discount_inr',
+  refund: 'refund_inr',
+  refund_amount: 'refund_inr',
+  net_sales: 'net_sales_inr',
+  'net sales': 'net_sales_inr',
+  product_cost: 'product_cost_inr',
+  cogs: 'product_cost_inr',
+  recovered_product_cost: 'recovered_product_cost_inr',
+  recovered_cost: 'recovered_product_cost_inr',
+  shipping: 'shipping_inr',
+  shipping_cost: 'shipping_inr',
+  payment_fee: 'payment_fee_inr',
+  gateway_fee: 'payment_fee_inr',
+  return_cost: 'return_cost_inr',
+  is_returned: 'returned',
+  sku: 'product_id',
+  product: 'product_id',
+  ads: 'ads_inr',
+  ad_spend: 'ads_inr',
+  handling: 'handling_inr',
+};
+
+/** The schema field a header stands for, or null. */
+export function canonicalField(header: string, schema: Set<string>): string | null {
+  const n = header.replace(/^﻿/, '').trim().toLowerCase().replace(/\s+/g, ' ');
+  const u = n.replace(/[\s-]+/g, '_');
+  if (schema.has(n)) return n;
+  if (schema.has(u)) return u;
+  return COLUMN_ALIASES[n] ?? COLUMN_ALIASES[u] ?? null;
+}
+
+/** True when every required field is a header or a known alias: the file uploads without a mapping step. */
+export function headersMatchSchema(headers: string[], required: string[], schema: Set<string>): boolean {
+  const found = new Set(headers.map((h) => canonicalField(h, schema)).filter(Boolean));
+  return required.every((f) => found.has(f));
+}
+
+function splitCsvLine(line: string): string[] {
+  const out: string[] = [];
+  let cur = '';
+  let quoted = false;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (quoted) {
+      if (c === '"') {
+        if (line[i + 1] === '"') {
+          cur += '"';
+          i++;
+        } else quoted = false;
+      } else cur += c;
+    } else if (c === '"') quoted = true;
+    else if (c === ',') {
+      out.push(cur.trim());
+      cur = '';
+    } else cur += c;
+  }
+  out.push(cur.trim());
+  return out;
+}
+
+/** The header row and the first rows of a CSV, read from its first 64 KB. */
+async function readCsvHead(file: File): Promise<{ headers: string[]; rows: string[][] }> {
+  const text = await file.slice(0, 64 * 1024).text();
+  const lines = text.replace(/^﻿/, '').split(/\r?\n/).filter((l) => l.trim() !== '');
+  return { headers: lines.length ? splitCsvLine(lines[0]) : [], rows: lines.slice(1, 6).map(splitCsvLine) };
+}
+
+interface PendingMapping {
+  files: File[];
+  what: string;
+  headers: string[];
+  result: ImportMapResult;
+  chosen: ColumnMapping;
+  profile: string | null;
+  appendTo?: string;
+}
 
 /** Translation keys for the reason pills. */
 const REASON_TAG: Record<ValidationFlag['reason'], string> = {
@@ -917,6 +1004,128 @@ function SavedData({ onOpened }: { onOpened: () => void }) {
   );
 }
 
+const SCHEMA_FIELDS: Array<[string, string, 'required' | 'nullable' | 'optional']> = [
+  ...REQUIRED_FIELDS.map(([f, d]): [string, string, 'required'] => [f, d, 'required']),
+  ...NULLABLE_FIELDS.map(([f, d]): [string, string, 'nullable'] => [f, d, 'nullable']),
+  ...OPTIONAL_FIELDS.map(([f, d]): [string, string, 'optional'] => [f, d, 'optional']),
+];
+const SCHEMA_SET = new Set(SCHEMA_FIELDS.map(([f]) => f));
+const REQUIRED_NAMES = REQUIRED_FIELDS.map(([f]) => f);
+
+function pct(v: number): string {
+  return `${Math.round((v <= 1 ? v * 100 : v) as number)}%`;
+}
+
+/** Schema field → column, confirmed once. AI suggestions are marked; nothing uploads until "Confirm mapping". */
+function MappingPanel({
+  pending,
+  profileLabel,
+  onChange,
+  onConfirm,
+  onCancel,
+}: {
+  pending: PendingMapping;
+  profileLabel: string | null;
+  onChange: (field: string, column: string | null) => void;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  const { t } = useTranslation();
+  const { result, chosen, headers } = pending;
+  const extra = Object.keys(result.mapping).filter((f) => !SCHEMA_SET.has(f));
+  const rows: Array<[string, string, 'required' | 'nullable' | 'optional']> = [...SCHEMA_FIELDS, ...extra.map((f): [string, string, 'optional'] => [f, '', 'optional'])];
+  const missing = REQUIRED_NAMES.filter((f) => !chosen[f]);
+  const perField = result.confidence && typeof result.confidence === 'object' ? result.confidence : null;
+  const overall = typeof result.confidence === 'number' ? result.confidence : null;
+  const sourceBadge =
+    result.source === 'ai' ? (
+      <AiBadge source="ai" />
+    ) : (
+      <Pill tone={result.source === 'saved' ? 'success' : 'primary'}>
+        {result.source === 'profile'
+          ? t('mapping.srcProfile', 'Report profile: {{name}}', { name: profileLabel ?? result.profile ?? '' })
+          : result.source === 'saved'
+            ? t('mapping.srcSaved', 'Your saved mapping')
+            : t('mapping.srcAlias', 'Matched by column name')}
+      </Pill>
+    );
+  return (
+    <section className="card mapping-card" aria-labelledby="mapping-title">
+      <div className="mapping-head">
+        <div>
+          <h2 id="mapping-title" className="card-title">
+            {t('mapping.title', 'Match your columns')}
+          </h2>
+          <p className="card-sub">
+            {t('mapping.sub', '{{file}} does not use the template’s column names. Check each field once; Profyn remembers the mapping for the next file.', { file: pending.what })}
+          </p>
+        </div>
+        <div className="mapping-badges">
+          {sourceBadge}
+          {overall !== null ? <Pill tone="neutral">{t('mapping.confidence', 'Confidence {{pct}}', { pct: pct(overall) })}</Pill> : null}
+        </div>
+      </div>
+      {missing.length > 0 ? (
+        <Callout tone="warning" title={t('mapping.missingTitle', 'Required fields without a column: {{fields}}', { fields: missing.join(', ') })}>
+          <p className="callout-hint">{t('mapping.missingHint', 'Pick a column for each, or confirm anyway: rows without them are reported on the validation report, never guessed.')}</p>
+        </Callout>
+      ) : null}
+      <div className="table-scroll">
+        <table className="table mapping-table">
+          <caption className="visually-hidden">{t('mapping.caption', 'Schema field, the column in your file, and how sure the match is')}</caption>
+          <thead>
+            <tr>
+              <th scope="col">{t('mapping.field', 'Profyn field')}</th>
+              <th scope="col">{t('mapping.column', 'Column in your file')}</th>
+              <th scope="col" className="r">
+                {t('mapping.match', 'Match')}
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(([field, desc, kind]) => {
+              const value = chosen[field] ?? '';
+              const conf = perField?.[field];
+              const selectId = `map-${field}`;
+              return (
+                <tr key={field} className={kind === 'required' && !value ? 'is-missing' : undefined}>
+                  <th scope="row">
+                    <label htmlFor={selectId} className="mapping-field">
+                      <code>{field}</code>
+                      {kind === 'required' ? <span className="mapping-req">{t('mapping.required', 'required')}</span> : null}
+                    </label>
+                    {desc ? <span className="cell-sub">{desc}</span> : null}
+                  </th>
+                  <td>
+                    <select id={selectId} className="input mapping-select" value={value} onChange={(e) => onChange(field, e.target.value || null)}>
+                      <option value="">{t('mapping.none', '— not in the file —')}</option>
+                      {headers.map((h) => (
+                        <option key={h} value={h}>
+                          {h}
+                        </option>
+                      ))}
+                    </select>
+                  </td>
+                  <td className="r num">{typeof conf === 'number' && value ? pct(conf) : value ? '✓' : '—'}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      <div className="mapping-actions">
+        <Button variant="primary" icon="check-circle" onClick={onConfirm}>
+          {t('mapping.confirm', 'Confirm mapping')}
+        </Button>
+        <Button variant="ghost" onClick={onCancel}>
+          {t('mapping.cancel', 'Cancel')}
+        </Button>
+        <span className="muted small">{t('mapping.note', 'Only the column names were sent to suggest this; nothing is imported until you confirm.')}</span>
+      </div>
+    </section>
+  );
+}
+
 export function ImportScreen() {
   const auth = useAuth();
   const account = auth.mode === 'account';
@@ -933,8 +1142,43 @@ export function ImportScreen() {
   const [loadedHere, setLoadedHere] = useState(false);
   const [appendOn, setAppendOn] = useState(true);
   const [uploadNote, setUploadNote] = useState<UploadNote | null>(null);
+  const [pendingMap, setPendingMap] = useState<PendingMapping | null>(null);
+  const [profiles, setProfiles] = useState<ImportProfile[]>([]);
   const fileRef = useRef<HTMLInputElement>(null);
+  /** The report profile picked with a marketplace button, for the file chosen next. */
+  const pickProfile = useRef<string | null>(null);
+  const mapRef = useRef<HTMLDivElement>(null);
+  const mapShown = pendingMap !== null;
+  // The mapping step opens below the options: bring it into view.
+  useEffect(() => {
+    if (mapShown) revealElement(mapRef.current);
+  }, [mapShown]);
   const { t } = useTranslation();
+
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .importProfiles()
+      .then((list) => !cancelled && Array.isArray(list) && setProfiles(list))
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  /** The server's profile id for a marketplace button: exact id, else the first profile naming that marketplace. */
+  const profileIdFor = (id: string): string => {
+    if (profiles.some((p) => p.id === id)) return id;
+    const market = id.split('_')[0];
+    return profiles.find((p) => `${p.marketplace} ${p.id}`.toLowerCase().includes(market))?.id ?? id;
+  };
+  const profileLabel = (id: string | null): string | null => {
+    if (!id) return null;
+    const p = profiles.find((x) => x.id === id);
+    if (p) return p.label;
+    const r = REPORT_IMPORTERS.find((x) => x.id === id);
+    return r ? t(r.nameKey, r.name) : id;
+  };
 
   useEffect(() => {
     if (dataset) setPeriodEnd(dataset.period_end);
@@ -976,10 +1220,59 @@ export function ImportScreen() {
     }
   };
 
+  /**
+   * A CSV whose headers are not the template's (or one picked with a marketplace button) goes through the mapping step:
+   * POST /import/map suggests a column for each field and the person confirms once. A saved mapping applies directly.
+   * A server without the mapping endpoint gets the file as before.
+   */
+  const prepare = async (files: File[], what: string, profile: string | null, options?: DatasetOptions) => {
+    const csv = files[0] && /\.csv$/i.test(files[0].name) ? files[0] : null;
+    if (!csv) return void load(files.length === 1 ? files[0] : files, what, options);
+    let headers: string[] = [];
+    try {
+      headers = (await readCsvHead(csv)).headers;
+    } catch {
+      return void load(files.length === 1 ? files[0] : files, what, options);
+    }
+    if (!profile && headersMatchSchema(headers, REQUIRED_NAMES, SCHEMA_SET)) return void load(files.length === 1 ? files[0] : files, what, options);
+    setValidating('mapping');
+    setLoadError(null);
+    setUploadNote(null);
+    let result: ImportMapResult | null = null;
+    try {
+      result = await api.importMap({ headers, ...(profile ? { profile } : {}) });
+    } catch {
+      result = null;
+    } finally {
+      setValidating(null);
+    }
+    const withProfile = { ...options, ...(profile ? { profile } : {}) };
+    if (!result || !result.mapping) return void load(files.length === 1 ? files[0] : files, what, profile ? withProfile : options);
+    const chosen: ColumnMapping = { ...result.mapping };
+    const usedProfile = result.profile ?? profile;
+    if (result.source === 'saved' && result.unmapped_required.length === 0) {
+      return void load(files.length === 1 ? files[0] : files, what, { ...options, mapping: chosen, ...(usedProfile ? { profile: usedProfile } : {}) });
+    }
+    setPendingMap({ files, what, headers, result, chosen, profile: usedProfile, appendTo: options?.appendTo });
+  };
+
+  const confirmMapping = () => {
+    const p = pendingMap;
+    if (!p) return;
+    setPendingMap(null);
+    void api.saveMapping({ headers: p.headers, mapping: p.chosen, ...(p.profile ? { profile: p.profile } : {}) }).catch(() => undefined);
+    void load(p.files.length === 1 ? p.files[0] : p.files, p.what, {
+      ...(p.appendTo ? { appendTo: p.appendTo } : {}),
+      mapping: p.chosen,
+      ...(p.profile ? { profile: p.profile } : {}),
+    });
+  };
+
   /** One file, or several (e.g. one CSV per month) that the API merges into one dataset. */
-  const onFiles = (list: FileList | null | undefined) => {
+  const onFiles = (list: FileList | null | undefined, profile: string | null = null) => {
     const files = Array.from(list ?? []);
     if (files.length === 0) return;
+    setPendingMap(null);
     const wrong = files.filter((f) => !/\.(json|csv)$/i.test(f.name));
     if (wrong.length) {
       setLoadError({
@@ -993,7 +1286,7 @@ export function ImportScreen() {
       setLoadError({ message: `${files.length} files were selected; up to ${MAX_FILES} can be merged at once.`, hint: 'Upload a year of monthly files at most.', issues: [] });
       return;
     }
-    void load(files.length === 1 ? files[0] : files, files.length === 1 ? files[0].name : `${files.length} files`, appendOn && target ? { appendTo: target.id } : undefined);
+    void prepare(files, files.length === 1 ? files[0].name : `${files.length} files`, profile, appendOn && target ? { appendTo: target.id } : undefined);
   };
 
   const onDrop = (e: DragEvent<HTMLDivElement>) => {
@@ -1002,7 +1295,8 @@ export function ImportScreen() {
     onFiles(e.dataTransfer.files);
   };
 
-  const onContinue = async () => {
+  /** Runs the analysis, then opens the overview (or the ledger, for "Continue to ledger"). */
+  const onContinue = async (to: 'overview' | 'ledger' = 'overview') => {
     const id = dataset?.dataset_id ?? datasetId;
     if (!id) return;
     setContinueError(null);
@@ -1013,7 +1307,7 @@ export function ImportScreen() {
     }
     try {
       await runAnalysis(attribution, periodEnd || undefined, id, h);
-      navigate('ledger');
+      navigate(to);
     } catch (err) {
       setContinueError(toErrorInfo(err));
     }
@@ -1043,7 +1337,10 @@ export function ImportScreen() {
   const busy = validating !== null;
   const canContinue = (dataset ? dataset.rows_kept > 0 : datasetId !== null) && !busy && !analysing;
   const firstUpload = account && workspaceStatus === 'ready' && saved.length === 0 && !dataset;
-  const browse = () => fileRef.current?.click();
+  const browse = (profile: string | null = null) => {
+    pickProfile.current = profile;
+    fileRef.current?.click();
+  };
 
   const demoHero = (
     <section className="hero card" aria-labelledby="import-title">
@@ -1100,7 +1397,7 @@ export function ImportScreen() {
           account, then the owner dashboard opens on your own numbers.
         </p>
         <div className="hero-actions">
-          <Button variant="primary" size="lg" icon="upload-cloud" onClick={browse} disabled={busy}>
+          <Button variant="primary" size="lg" icon="upload-cloud" onClick={() => browse()} disabled={busy}>
             {t('actions.chooseFiles')}
           </Button>
           <ButtonLink variant="secondary" size="lg" icon="download" href={api.templateUrl()} download="profyn-orders-template.csv">
@@ -1170,7 +1467,7 @@ export function ImportScreen() {
             <p className="dropzone-title">{target && appendOn ? `Drop new orders to add to ${target.name}` : t('actions.dropFile')}</p>
             <p className="dropzone-sub">One file, or up to {MAX_FILES} at once (e.g. one per month), merged into one dataset · template column names · 50 MB each, 1,00,000 orders in total</p>
             <span className="dropzone-actions">
-              <Button variant="secondary" icon="file" onClick={browse} disabled={busy}>
+              <Button variant="secondary" icon="file" onClick={() => browse()} disabled={busy}>
                 {t('actions.browseFiles')}
               </Button>
               <ButtonLink variant="ghost" icon="download" href={api.templateUrl()} download="profyn-orders-template.csv">
@@ -1186,7 +1483,8 @@ export function ImportScreen() {
               tabIndex={-1}
               aria-hidden="true"
               onChange={(e) => {
-                onFiles(e.target.files);
+                onFiles(e.target.files, pickProfile.current);
+                pickProfile.current = null;
                 e.target.value = '';
               }}
             />
@@ -1221,6 +1519,19 @@ export function ImportScreen() {
           <p className="alias-note" title={HEADER_ALIASES.map(([a, b]) => `${a} → ${b}`).join(', ')}>
             Header aliases accepted: {HEADER_ALIASES.map(([a]) => a).join(', ')} …
           </p>
+          <section className="card market-card" aria-labelledby="market-title">
+            <h2 id="market-title" className="card-title">
+              {t('import.marketTitle', 'Marketplace and payment reports')}
+            </h2>
+            <p className="card-sub">{t('import.marketSub', 'Pick the report, then the file. Its columns are matched for you and you confirm them once.')}</p>
+            <div className="market-grid">
+              {REPORT_IMPORTERS.map((r) => (
+                <Button key={r.id} variant="secondary" size="sm" icon="file" onClick={() => browse(profileIdFor(r.id))} disabled={busy} data-profile={r.id}>
+                  {t(`import.mp.${r.id}`, `Import ${r.name}`)}
+                </Button>
+              ))}
+            </div>
+          </section>
           {loadError ? <LoadErrorPanel error={loadError} /> : null}
         </div>
 
@@ -1253,13 +1564,28 @@ export function ImportScreen() {
               <input id="handling-default" type="number" inputMode="decimal" min={0} step={1} value={handling} onChange={(e) => setHandling(e.target.value)} />
             </span>
           </div>
-          <Button variant="primary" size="lg" className="btn-block" iconRight="arrow-right" onClick={() => void onContinue()} disabled={!canContinue}>
-            {analysing ? t('actions.analysing') : t('actions.continueLedger')}
+          <Button variant="primary" size="lg" className="btn-block" iconRight="arrow-right" onClick={() => void onContinue('overview')} disabled={!canContinue}>
+            {analysing ? t('actions.analysing') : t('import.continueOverview', 'Continue to overview')}
+          </Button>
+          <Button variant="ghost" size="sm" className="btn-block continue-ledger" onClick={() => void onContinue('ledger')} disabled={!canContinue}>
+            {t('actions.continueLedger')}
           </Button>
           {!dataset && !datasetId ? <p className="muted small">{account ? 'Upload a file or open saved data first.' : 'Load a sample or a file first.'}</p> : null}
           <ErrorCallout error={continueError} />
         </section>
       </div>
+
+      {pendingMap ? (
+        <div ref={mapRef} tabIndex={-1} className="reveal-target">
+          <MappingPanel
+            pending={pendingMap}
+            profileLabel={profileLabel(pendingMap.profile)}
+            onChange={(field, column) => setPendingMap((p) => (p ? { ...p, chosen: { ...p.chosen, [field]: column } } : p))}
+            onConfirm={confirmMapping}
+            onCancel={() => setPendingMap(null)}
+          />
+        </div>
+      ) : null}
 
       <div aria-live="polite">
         {validating ? (

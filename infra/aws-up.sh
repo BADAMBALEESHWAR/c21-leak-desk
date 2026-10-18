@@ -29,11 +29,13 @@ say "S3 buckets $WEB_BUCKET and $UPLOADS_BUCKET (private)"
 for b in "$WEB_BUCKET" "$UPLOADS_BUCKET"; do
   aws s3api head-bucket --bucket "$b" 2>/dev/null || aws s3api create-bucket --bucket "$b" --create-bucket-configuration LocationConstraint="$REGION" >/dev/null
   aws s3api put-public-access-block --bucket "$b" --public-access-block-configuration BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true
+  # Encryption at rest, stated explicitly (S3 has applied SSE-S3 to new objects by default since January 2023).
+  aws s3api put-bucket-encryption --bucket "$b" --server-side-encryption-configuration '{"Rules":[{"ApplyServerSideEncryptionByDefault":{"SSEAlgorithm":"AES256"}}]}'
 done
 
 say "SSM parameters (fill GEMINI_API_KEY yourself: aws ssm put-parameter --name /leakdesk/GEMINI_API_KEY --type SecureString --value ... --overwrite)"
 aws ssm put-parameter --name /leakdesk/AI_DISABLED --type String --value 1 --overwrite >/dev/null
-aws ssm put-parameter --name /leakdesk/GEMINI_MODEL --type String --value gemini-2.5-flash --overwrite >/dev/null
+aws ssm put-parameter --name /leakdesk/GEMINI_MODEL --type String --value gemini-3.5-flash --overwrite >/dev/null
 aws ssm get-parameter --name /leakdesk/GEMINI_API_KEY >/dev/null 2>&1 || aws ssm put-parameter --name /leakdesk/GEMINI_API_KEY --type SecureString --value none >/dev/null
 
 say "IAM instance role leakdesk-ec2 (S3 uploads, SSM read, ECR pull, logs; SSM agent for deploys)"
@@ -76,7 +78,7 @@ USERDATA=${USERDATA/__COMPOSE__/$COMPOSE}
 case "$USERDATA" in *__COMPOSE__*|*__REGION__*|*__ACCOUNT__*|*__UPLOADS_BUCKET__*) echo "user-data still has a placeholder" >&2; exit 1 ;; esac
 INSTANCE=$(aws ec2 run-instances --image-id "$AMI" --instance-type "$INSTANCE_TYPE" --security-group-ids "$SG" \
   --iam-instance-profile Name=leakdesk-ec2 --user-data "$USERDATA" \
-  --block-device-mappings 'DeviceName=/dev/sda1,Ebs={VolumeSize=20,VolumeType=gp3}' \
+  --block-device-mappings 'DeviceName=/dev/sda1,Ebs={VolumeSize=20,VolumeType=gp3,Encrypted=true}' \
   --tag-specifications 'ResourceType=instance,Tags=[{Key=Name,Value=leakdesk-api},{Key=app,Value=leakdesk}]' \
   --query 'Instances[0].InstanceId' --output text)
 fi

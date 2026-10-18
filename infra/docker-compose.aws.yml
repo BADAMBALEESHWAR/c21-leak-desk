@@ -19,10 +19,18 @@ services:
     restart: unless-stopped
     # A 1,00,000-order upload needs about 1 GB while it is analysed (t3.small has 2 GB plus swap).
     mem_limit: 1400m
-    env_file: /opt/leakdesk/.env
+    # .env: the v1 settings written by refresh.sh; .env.platform: v2 sign-in settings written by env-platform.sh
+    # (optional, so an instance that has not been given them yet still starts).
+    env_file:
+      - path: /opt/leakdesk/.env
+        required: true
+      - path: /opt/leakdesk/.env.platform
+        required: false
     environment:
       PORT: 8080
       NODE_OPTIONS: --max-old-space-size=1200
+      # refresh.sh exports it; the S3 client and GET /health (region) read it.
+      AWS_REGION: ${AWS_REGION}
     # Local fallback for uploads and large records if S3 is ever unreachable; kept across deploys.
     volumes:
       - uploads:/app/data/uploads

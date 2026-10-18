@@ -1,0 +1,789 @@
+/*
+ * Analytical charts (diverging bars, month columns, treemap, stacked leaks, margin bridge, whale annotations)
+ * and the ledger's click-to-cause strip. Colours come from tokens.css only; marks are flat (no gradients).
+ * Selectors carry one extra class where they refine components.css, which loads after this file.
+ */
+
+/* ---- Card actions: Table view + CSV ---------------------------------------------------------- */
+
+.chart-card .chart-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.chart-csv {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  color: var(--text-2);
+  font: inherit;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.chart-csv:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.chart-csv:focus-visible,
+.chart-seg button:focus-visible {
+  outline: 2px solid var(--primary-bright);
+  outline-offset: 2px;
+}
+
+.legend .legend-thin {
+  width: 14px;
+  height: 3px;
+  border-radius: 2px;
+}
+
+.chart-card .legend .legend-line {
+  width: 14px;
+  height: 2px;
+}
+
+/* Small segmented switch inside a chart card (By channel / By product, Treemap / Quadrant). */
+.chart-seg {
+  display: inline-flex;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-pill);
+  background: var(--surface-2);
+}
+
+.chart-seg button {
+  height: 26px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: var(--r-pill);
+  background: transparent;
+  color: var(--text-2);
+  font: inherit;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.chart-seg button[aria-pressed='true'] {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow-xs);
+}
+
+/* Mark fills by sign, on the shared chart classes. */
+.chart-card .tone-gain,
+.tone-gain {
+  fill: var(--success-fill);
+}
+
+.chart-card .tone-loss,
+.tone-loss {
+  fill: var(--danger-fill);
+}
+
+/* ---- Diverging bars ------------------------------------------------------------------------ */
+
+.dv {
+  position: relative;
+  display: grid;
+  gap: 2px;
+  font-variant-numeric: tabular-nums;
+}
+
+.dv-axis {
+  display: grid;
+  grid-template-columns: var(--dv-label-w, 132px) minmax(0, 1fr);
+  gap: 12px;
+  align-items: end;
+  padding: 0 8px 4px;
+  font-size: 11px;
+  color: var(--text-3);
+}
+
+.dv-axis-unit {
+  text-align: right;
+  font-weight: 500;
+}
+
+.dv-axis-track,
+.mb-axis-track {
+  position: relative;
+  height: 16px;
+}
+
+.dv-tick {
+  position: absolute;
+  bottom: 0;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  font-size: 11px;
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.dv-tick.is-zero {
+  color: var(--text-2);
+  font-weight: 600;
+}
+
+.dv-rows {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dv-row {
+  display: grid;
+  grid-template-columns: var(--dv-label-w, 132px) minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 46px;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.dv-row:hover,
+.dv-row:focus-visible {
+  background: var(--chart-hover);
+}
+
+.dv-row:focus-visible {
+  outline: 2px solid var(--primary-bright);
+  outline-offset: -2px;
+}
+
+.dv-label {
+  display: grid;
+  min-width: 0;
+  text-align: right;
+}
+
+.dv-label-text {
+  overflow: hidden;
+  color: var(--text);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dv-label-sub {
+  color: var(--text-3);
+  font-size: 11px;
+  line-height: 1.3;
+}
+
+.dv-track,
+.mb-track {
+  position: relative;
+  height: 30px;
+}
+
+.dv-grid {
+  position: absolute;
+  top: -9px;
+  bottom: -9px;
+  width: 1px;
+  background: var(--grid);
+}
+
+.dv-grid.is-zero {
+  width: 1.5px;
+  background: var(--text-3);
+}
+
+.dv-bar {
+  position: absolute;
+  top: 4px;
+  height: 14px;
+}
+
+.dv-bar.is-pos {
+  border-radius: 0 4px 4px 0;
+  background: var(--success-fill);
+}
+
+.dv-bar.is-neg {
+  border-radius: 4px 0 0 4px;
+  background: var(--danger-fill);
+}
+
+.dv-value {
+  position: absolute;
+  top: 2px;
+  padding: 0 6px;
+  color: var(--text);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  line-height: 18px;
+  white-space: nowrap;
+}
+
+.dv-value.is-neg {
+  color: var(--danger);
+}
+
+.dv-value.is-unknown {
+  color: var(--text-3);
+  font-style: italic;
+}
+
+.dv-share {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 3px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--neutral-bg);
+}
+
+.dv-share-fill {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--series-muted);
+}
+
+/* ---- Month columns -------------------------------------------------------------------------- */
+
+.mc-month,
+.sl-seg,
+.sl-month,
+.tm-link {
+  cursor: pointer;
+  outline: none;
+}
+
+.mc-hit {
+  fill: transparent;
+}
+
+.mc-month:focus-visible .mc-hit {
+  fill: var(--chart-hover);
+  stroke: var(--primary-bright);
+  stroke-width: 2;
+}
+
+.mc-note {
+  fill: var(--text);
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  paint-order: stroke;
+  stroke: var(--surface);
+  stroke-width: 3px;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+
+.mc-note-worst {
+  fill: var(--danger);
+}
+
+/* ---- Stacked leaks -------------------------------------------------------------------------- */
+
+.sl-seg:focus-visible rect,
+.sl-seg:hover rect {
+  stroke: var(--text);
+  stroke-width: 1.5;
+}
+
+.sl-month:focus-visible .sl-month-text,
+.sl-month:hover .sl-month-text {
+  fill: var(--primary);
+  font-weight: 700;
+  text-decoration: underline;
+}
+
+.sl-total {
+  fill: none;
+  stroke: var(--text);
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  pointer-events: none;
+}
+
+.sl-total-dot {
+  fill: var(--text);
+  stroke: var(--surface);
+  stroke-width: 2;
+  pointer-events: none;
+}
+
+/* ---- Treemap -------------------------------------------------------------------------------- */
+
+.tm-svg {
+  display: block;
+  max-width: 100%;
+}
+
+.tm-tile {
+  stroke: none;
+}
+
+.tm-link:hover .tm-tile,
+.tm-link:focus-visible .tm-tile {
+  stroke: var(--text);
+  stroke-width: 2;
+}
+
+/* Diverging scale for contribution per unit: loss (n3…n1), neutral (0), gain (1…3). */
+.tm-step-n3 { fill: var(--danger); background: var(--danger); }
+.tm-step-n2 { fill: var(--danger-border); background: var(--danger-border); }
+.tm-step-n1 { fill: var(--danger-bg); background: var(--danger-bg); }
+.tm-step-0 { fill: var(--neutral-bg); background: var(--neutral-bg); }
+.tm-step-1 { fill: var(--success-bg); background: var(--success-bg); }
+.tm-step-2 { fill: var(--success-border); background: var(--success-border); }
+.tm-step-3 { fill: var(--success); background: var(--success); }
+
+.tm-label {
+  fill: var(--text);
+  font-size: 12px;
+  pointer-events: none;
+}
+
+.tm-label.is-dark {
+  fill: var(--on-dark);
+}
+
+.tm-name {
+  font-weight: 700;
+}
+
+.tm-num {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.tm-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  margin-top: 10px;
+  font-size: var(--fs-xs);
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.tm-legend-steps {
+  display: inline-flex;
+  gap: 2px;
+}
+
+.tm-swatch {
+  display: inline-block;
+  width: 18px;
+  height: 10px;
+  border-radius: 2px;
+}
+
+.tm-legend-caption {
+  color: var(--text-3);
+}
+
+/* ---- Margin bridge -------------------------------------------------------------------------- */
+
+.mb {
+  display: grid;
+  gap: 2px;
+  margin-top: 16px;
+  font-variant-numeric: tabular-nums;
+}
+
+.mb-axis {
+  display: grid;
+  grid-template-columns: minmax(150px, 220px) minmax(0, 1fr);
+  gap: 12px;
+  padding-bottom: 4px;
+  font-size: 11px;
+  color: var(--text-3);
+}
+
+.mb-axis-unit {
+  text-align: right;
+}
+
+.mb-rows {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.mb-row {
+  display: grid;
+  grid-template-columns: minmax(150px, 220px) minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  min-height: 32px;
+}
+
+.mb-label {
+  display: grid;
+  min-width: 0;
+  text-align: right;
+  font-size: var(--fs-sm);
+  color: var(--text-2);
+}
+
+.mb-label-text {
+  line-height: 1.25;
+}
+
+.mb-subtotal .mb-label,
+.mb-start .mb-label {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.mb-note {
+  color: var(--text-3);
+  font-size: 11px;
+}
+
+.mb-track {
+  height: 26px;
+}
+
+.mb-bar {
+  position: absolute;
+  top: 5px;
+  height: 16px;
+  border-radius: 2px;
+}
+
+.mb-bar.is-start {
+  background: var(--series-1);
+}
+
+.mb-bar.is-drop {
+  background: var(--danger-fill);
+}
+
+.mb-bar.is-pos {
+  background: var(--success-fill);
+}
+
+.mb-bar.is-neg {
+  background: var(--danger);
+}
+
+.mb-value {
+  position: absolute;
+  top: 4px;
+  color: var(--text);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  line-height: 18px;
+  white-space: nowrap;
+}
+
+.mb-value.is-neg {
+  color: var(--danger);
+}
+
+.mb-pct {
+  color: var(--text-3);
+  font-weight: 500;
+}
+
+.mb-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.mb-head .section-label {
+  margin: 0;
+}
+
+/* Unit-economics tiles: a compact row that wraps instead of clipping the last tile. */
+.ue-card .ue-grid {
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+}
+
+.ue-card .ue-tile {
+  padding: 10px 12px;
+  gap: 4px;
+}
+
+.ue-card .ue-value {
+  font-size: 22px;
+}
+
+/* ---- Whale annotations --------------------------------------------------------------------- */
+
+.whale-band {
+  fill: var(--loss-wash);
+}
+
+.whale-band-text {
+  fill: var(--danger);
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.whale-peak-line {
+  stroke: var(--text-2);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+}
+
+.whale-after {
+  align-self: flex-start;
+  margin-top: 8px;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+
+/* ---- Click-to-cause: the ledger's problem strip -------------------------------------------- */
+
+.focus-strip {
+  display: grid;
+  gap: 10px;
+  padding: 14px 18px;
+  border: 1px solid var(--primary-border);
+  border-left: 4px solid var(--primary);
+  border-radius: var(--r-card);
+  background: var(--primary-25);
+}
+
+.focus-strip.is-problem {
+  border-color: var(--danger-border);
+  border-left-color: var(--danger-fill);
+  background: var(--danger-bg);
+}
+
+.focus-crumbs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--fs-xs);
+  color: var(--text-3);
+}
+
+.focus-crumbs li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.focus-crumbs li + li::before {
+  content: '→';
+  color: var(--text-3);
+}
+
+.focus-crumbs a {
+  color: var(--primary);
+  font-weight: 600;
+}
+
+.focus-crumbs [aria-current='page'] {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.focus-sentence {
+  margin: 0;
+  color: var(--text);
+  font-size: var(--fs-md);
+  line-height: 1.5;
+  font-variant-numeric: tabular-nums;
+}
+
+.focus-sentence strong {
+  font-weight: 700;
+}
+
+.focus-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+}
+
+.focus-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.focus-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  font-size: var(--fs-xs);
+  color: var(--text-2);
+}
+
+.focus-chip strong {
+  color: var(--text);
+}
+
+.focus-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--fs-sm);
+  color: var(--text-2);
+}
+
+/* Rows that match the filter carry an accent on the left, beside the full-return wash where both apply. */
+.table tbody tr.row-match th:first-child {
+  box-shadow: inset 3px 0 0 var(--primary);
+}
+
+.table tbody tr.row-match.row-loss th:first-child {
+  box-shadow: inset 3px 0 0 var(--danger-fill);
+}
+
+.table tbody tr.row-dim th,
+.table tbody tr.row-dim td {
+  color: var(--text-3);
+}
+
+/* ---- Order drawer: why this order leaks ---------------------------------------------------- */
+
+.why-leak {
+  display: grid;
+  gap: 6px;
+  padding: 12px 14px;
+  border: 1px solid var(--danger-border);
+  border-radius: var(--r-sm);
+  background: var(--danger-bg);
+  font-size: var(--fs-sm);
+  color: var(--text);
+}
+
+.why-leak-title {
+  margin: 0;
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--danger);
+}
+
+:root[lang='hi'] .why-leak-title,
+:root[lang='te'] .why-leak-title {
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.why-leak p {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- Pulse rows that open the ledger ------------------------------------------------------- */
+
+.row-link {
+  color: var(--primary);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.row-link:hover,
+.row-link:focus-visible {
+  text-decoration: underline;
+}
+
+.row-link::after {
+  content: ' →';
+  font-weight: 400;
+}
+
+@media (max-width: 1100px) {
+  .mb-axis,
+  .mb-row {
+    grid-template-columns: minmax(120px, 170px) minmax(0, 1fr);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dv-row,
+  .chart-csv,
+  .tm-tile,
+  .sl-seg rect {
+    transition: none;
+  }
+}
+
+.tip-key-ink {
+  background: var(--text);
+}
+
+.cell-link {
+  text-decoration: none;
+}
+
+.cell-link:hover,
+.cell-link:focus-visible {
+  text-decoration: underline;
+  text-decoration-color: var(--danger);
+}
+
+.dv-share-text {
+  position: absolute;
+  top: -5px;
+  padding-left: 4px;
+  color: var(--text-3);
+  font-size: 10px;
+  line-height: 12px;
+  white-space: nowrap;
+}
+
+.focus-strip {
+  scroll-margin-top: calc(var(--topbar-h) + 16px);
+}
+
+/*
+ * The order and period drawers overlay the right of the page. While one is open on a laptop-width screen the
+ * unit-economics card keeps its content clear of it, so the five tiles wrap into view instead of being cut off.
+ */
+@media (min-width: 1200px) and (max-width: 1680px) {
+  body:has(.drawer[data-open='true']) .ue-card {
+    padding-right: calc(var(--drawer-w) - 16px);
+  }
+
+  body:has(.drawer[data-open='true']) .ue-card .ue-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}

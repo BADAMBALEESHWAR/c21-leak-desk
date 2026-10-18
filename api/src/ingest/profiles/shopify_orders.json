@@ -1,0 +1,40 @@
+{
+  "id": "shopify_orders",
+  "label": "Shopify orders export",
+  "marketplace": "shopify",
+  "match_headers": ["Name", "Email", "Financial Status", "Created at", "Subtotal", "Discount Amount", "Total", "Refunded Amount", "Lineitem quantity", "Lineitem sku", "Payment Method"],
+  "group_by": "Name",
+  "sum_columns": ["Lineitem quantity"],
+  "map": {
+    "order_id": "Name",
+    "date": ["Created at", "Paid at"],
+    "gross_inr": "Subtotal",
+    "discount_inr": "Discount Amount",
+    "refund_inr": "Refunded Amount",
+    "returned": "Financial Status",
+    "payment_type": ["Payment Method", "Payment Gateway"],
+    "product_id": "Lineitem sku",
+    "units": "Lineitem quantity",
+    "customer_id": "Email",
+    "channel": "Source",
+    "product_cost_inr": null,
+    "shipping_inr": null,
+    "payment_fee_inr": null,
+    "return_cost_inr": null,
+    "recovered_product_cost_inr": null
+  },
+  "transforms": {
+    "date": { "op": "date" },
+    "gross_inr": { "op": "add", "column": "Discount Amount" },
+    "returned": { "op": "match", "pattern": "refunded" },
+    "customer_id": { "op": "hash" }
+  },
+  "notes": [
+    "One row per line item: rows with the same Name are merged into one order; quantities are added, the first SKU is kept.",
+    "Shopify's Subtotal is after discounts, so gross = Subtotal + Discount Amount.",
+    "Shipping is what the customer paid, not what shipping cost the brand, so shipping_inr stays unknown until a courier file (Shiprocket) or a column is mapped.",
+    "Product cost, payment fee and return cost are not in the orders export: they stay unknown (null), never zero.",
+    "returned is read from Financial Status (refunded or partially_refunded): a refund is used as the sign of a return.",
+    "Email is hashed into customer_id; the address itself is not stored."
+  ]
+}

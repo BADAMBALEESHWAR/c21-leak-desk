@@ -1,10 +1,12 @@
-import { useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { LeakCause, LeakGroup, OrderResult } from '../api/types';
 import { BarRows, type BarRow } from '../charts/BarRows';
-import { Pill, SourceTag } from '../components/Badge';
-import { ButtonLink, LinkButton } from '../components/Button';
+import { AiBadge } from '../components/AiBadge';
+import { Pill } from '../components/Badge';
+import { Button, LinkButton } from '../components/Button';
 import { NeedsAnalysis } from '../components/EmptyState';
+import { FixAdvisor } from '../components/FixAdvisor';
 import { Icon } from '../components/Icon';
 import { Money } from '../components/Money';
 import { FullReturnChip } from '../components/OrderDrawer';
@@ -14,7 +16,7 @@ import { EmptyPanel, revealElement } from '../components/ui';
 import { lower } from '../i18n';
 import { formatInr, plural } from '../lib/format';
 import { fullReturnPartialRecovery, LEAK_LABELS } from '../lib/labels';
-import { hrefFor } from '../lib/router';
+import { hrefFor, ledgerHref, useHashLocation } from '../lib/router';
 import { useStore } from '../state/store';
 
 /** Full return with partial recovery leads; then the largest known loss; unknown amounts last. */
@@ -97,12 +99,14 @@ function LeakCard({
   why,
   source,
   onOpen,
+  onFix,
   contributionOf,
 }: {
   g: LeakGroup;
   why: string;
   source: 'template' | 'ai';
   onOpen: (id: string) => void;
+  onFix: (cause: LeakCause) => void;
   contributionOf: (id: string) => number | null;
 }) {
   const { t } = useTranslation();
@@ -152,12 +156,16 @@ function LeakCard({
         })}
         {more > 0 ? <span className="muted small">+{more} more</span> : null}
       </div>
-      <p className="leak-why">
-        {why} <SourceTag source={source} />
-      </p>
-      <ButtonLink variant="ghost" href={hrefFor('scenario')} iconRight="arrow-right" className="leak-link">
-        {t('actions.simulateFix')}
-      </ButtonLink>
+      <p className="leak-why">{why}</p>
+      <AiBadge source={source} compact />
+      <div className="leak-actions">
+        <Button variant="secondary" size="sm" icon="sparkles" className="leak-fix" onClick={() => onFix(g.cause)} aria-haspopup="dialog">
+          {t('leaks.fixThis', 'Fix this')}
+        </Button>
+        <a className="leak-link leak-orders-link" href={ledgerHref({ cause: g.cause, from: 'leaks' })}>
+          {t('leaks.seeOrders', 'See the orders')} <Icon name="arrow-right" size={14} />
+        </a>
+      </div>
     </article>
   );
 }
@@ -169,6 +177,32 @@ export function LeaksScreen() {
   const byId = useMemo(() => new Map((analysis?.orders ?? []).map((o) => [o.order_id, o])), [analysis]);
   const losing = useMemo(() => sortLosingOrders(analysis?.orders ?? []), [analysis]);
   const contributionOf = (id: string) => byId.get(id)?.contribution_inr ?? null;
+
+  // The Fix Advisor: "Fix this" on a card, or a link to #/leaks?fix=<cause> from the overview or a chart.
+  const loc = useHashLocation();
+  const fixParam = loc.route === 'leaks' ? loc.params.get('fix') : null;
+  const [fixCause, setFixCause] = useState<string | null>(null);
+  const [fixOpen, setFixOpen] = useState(false);
+  useEffect(() => {
+    if (!fixParam || !analysis) return;
+    setFixCause(fixParam);
+    setFixOpen(true);
+  }, [fixParam, analysis]);
+  const openFix = useCallback((cause: string) => {
+    setFixCause(cause);
+    setFixOpen(true);
+  }, []);
+  const closeFix = useCallback(() => {
+    setFixOpen(false);
+    // Drop ?fix= so a reload does not open the panel again; the next link to it fires hashchange as usual.
+    if (/[?&]fix=/.test(window.location.hash)) {
+      try {
+        window.history.replaceState(window.history.state, '', `${window.location.pathname}${window.location.search}${hrefFor('leaks')}`);
+      } catch {
+        // Some embedded browsers block replaceState.
+      }
+    }
+  }, []);
 
   if (!analysis) {
     return (
@@ -230,7 +264,9 @@ export function LeaksScreen() {
             {leaks.map((g) => {
               const ai = narration?.leaks[g.cause];
               const useAi = ai !== undefined && ai.why_source === 'ai';
-              return <LeakCard key={g.cause} g={g} why={useAi ? ai.why : g.why} source={useAi ? 'ai' : g.why_source} onOpen={openOrder} contributionOf={contributionOf} />;
+              return (
+                <LeakCard key={g.cause} g={g} why={useAi ? ai.why : g.why} source={useAi ? 'ai' : g.why_source} onOpen={openOrder} onFix={openFix} contributionOf={contributionOf} />
+              );
             })}
           </div>
 
@@ -241,6 +277,8 @@ export function LeaksScreen() {
       <NextStep route="scenario" label={t('scenario.pageTitle')}>
         Change one assumption — recovery, return rate, shipping — and see which fix pays most.
       </NextStep>
+
+      <FixAdvisor cause={fixCause} open={fixOpen && fixCause !== null} onClose={closeFix} />
     </div>
   );
 }

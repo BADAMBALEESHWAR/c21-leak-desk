@@ -3,11 +3,12 @@ import { useTranslation } from 'react-i18next';
 import { Icon } from './Icon';
 
 /**
- * The data-source roadmap. Only CSV / JSON upload works today; every other source is planned and shown greyed out.
- * Nothing here links to a vendor, shows a connected state or asks for a token.
+ * The data sources. Files work today: the CSV / JSON template and the marketplace and payment report importers.
+ * Direct API connectors are planned, each with what it needs before it can be built. Nothing here links to a vendor,
+ * shows a connected state or asks for a token.
  */
 
-export type PlannedId = 'shopify' | 'meta_ads' | 'google_ads' | 'shiprocket' | 'razorpay';
+export type PlannedId = 'shopify' | 'amazon' | 'flipkart' | 'myntra' | 'meta_ads' | 'google_ads';
 
 interface Planned {
   id: PlannedId;
@@ -15,21 +16,50 @@ interface Planned {
   nameKey: string;
   data: string;
   dataKey: string;
+  /** What has to exist before the connector can be built; ends with "Not connected." */
   note: string;
   noteKey: string;
-  phase: 1 | 2;
+  /** The first connector to build. */
+  first?: boolean;
 }
 
 export const PLANNED: Planned[] = [
   {
     id: 'shopify',
-    name: 'Shopify',
-    nameKey: 'integrations.shopify',
+    name: 'Shopify API',
+    nameKey: 'integrations.shopifyApi',
     data: 'orders, refunds, product costs',
     dataKey: 'integrations.shopifyData',
-    note: 'Phase 1: would read orders, refunds and product costs from your store. Not connected.',
-    noteKey: 'integrations.shopifyNote',
-    phase: 1,
+    note: 'Needs a custom app token from your Shopify admin. Built first. Not connected.',
+    noteKey: 'integrations.shopifyPrereq',
+    first: true,
+  },
+  {
+    id: 'amazon',
+    name: 'Amazon SP-API',
+    nameKey: 'integrations.amazonApi',
+    data: 'orders, fees, settlements',
+    dataKey: 'integrations.amazonData',
+    note: 'Needs SP-API developer registration and your seller authorisation. Not connected.',
+    noteKey: 'integrations.amazonPrereq',
+  },
+  {
+    id: 'flipkart',
+    name: 'Flipkart Seller API',
+    nameKey: 'integrations.flipkartApi',
+    data: 'orders, returns, commissions',
+    dataKey: 'integrations.flipkartData',
+    note: 'Needs a Flipkart Seller API key. Not connected.',
+    noteKey: 'integrations.flipkartPrereq',
+  },
+  {
+    id: 'myntra',
+    name: 'Myntra partner API',
+    nameKey: 'integrations.myntraApi',
+    data: 'orders, returns',
+    dataKey: 'integrations.myntraData',
+    note: 'Needs a partner invitation from Myntra. Not connected.',
+    noteKey: 'integrations.myntraPrereq',
   },
   {
     id: 'meta_ads',
@@ -37,9 +67,8 @@ export const PLANNED: Planned[] = [
     nameKey: 'integrations.metaAds',
     data: 'ad spend by campaign',
     dataKey: 'integrations.metaAdsData',
-    note: 'Phase 1: would read ad spend by campaign, allocated to orders. Not connected.',
-    noteKey: 'integrations.metaAdsNote',
-    phase: 1,
+    note: 'Would read ad spend by campaign, allocated to orders. Not connected.',
+    noteKey: 'integrations.metaAdsPrereq',
   },
   {
     id: 'google_ads',
@@ -47,30 +76,19 @@ export const PLANNED: Planned[] = [
     nameKey: 'integrations.googleAds',
     data: 'ad spend',
     dataKey: 'integrations.googleAdsData',
-    note: 'Phase 2: would read ad spend by campaign. Not connected.',
-    noteKey: 'integrations.googleAdsNote',
-    phase: 2,
+    note: 'Would read ad spend by campaign. Not connected.',
+    noteKey: 'integrations.googleAdsPrereq',
   },
-  {
-    id: 'shiprocket',
-    name: 'Shiprocket / courier',
-    nameKey: 'integrations.shiprocket',
-    data: 'shipping, RTO, recovery',
-    dataKey: 'integrations.shiprocketData',
-    note: 'Phase 2: would read shipping, RTO and recovered stock per order. Not connected.',
-    noteKey: 'integrations.shiprocketNote',
-    phase: 2,
-  },
-  {
-    id: 'razorpay',
-    name: 'Razorpay / payment gateway',
-    nameKey: 'integrations.razorpay',
-    data: 'payment fees, refunds',
-    dataKey: 'integrations.razorpayData',
-    note: 'Phase 2: would read payment fees and refunds per order. Not connected.',
-    noteKey: 'integrations.razorpayNote',
-    phase: 2,
-  },
+];
+
+/** Report files the importer maps today (Import → the marketplace buttons). */
+export const REPORT_IMPORTERS: Array<{ id: string; name: string; nameKey: string }> = [
+  { id: 'amazon_settlement', name: 'Amazon settlement report', nameKey: 'integrations.rAmazon' },
+  { id: 'flipkart_orders', name: 'Flipkart orders report', nameKey: 'integrations.rFlipkart' },
+  { id: 'myntra_orders', name: 'Myntra orders report', nameKey: 'integrations.rMyntra' },
+  { id: 'shopify_orders', name: 'Shopify orders export', nameKey: 'integrations.rShopify' },
+  { id: 'razorpay_payments', name: 'Razorpay payments', nameKey: 'integrations.rRazorpay' },
+  { id: 'shiprocket_shipments', name: 'Shiprocket shipments', nameKey: 'integrations.rShiprocket' },
 ];
 
 const NOTIFY_KEY = 'profyn.notifyMe';
@@ -187,9 +205,9 @@ function NotifyMe() {
 function Timeline() {
   const { t } = useTranslation();
   const steps: Array<[string, string, string]> = [
-    ['now', t('integrations.now', 'Now'), t('integrations.nowWhat', 'CSV / JSON')],
-    ['next', t('integrations.next', 'Next (Phase 1)'), t('integrations.nextWhat', 'Shopify + Meta Ads')],
-    ['later', t('integrations.later', 'Later (Phase 2)'), t('integrations.laterWhat', 'Shiprocket, Razorpay, Google Ads')],
+    ['now', t('integrations.now', 'Now'), t('integrations.nowWhatV2', 'CSV / JSON and report files')],
+    ['next', t('integrations.nextV2', 'Next'), t('integrations.nextWhatV2', 'Shopify API, then Meta Ads')],
+    ['later', t('integrations.laterV2', 'Later'), t('integrations.laterWhatV2', 'Amazon, Flipkart and Myntra APIs, Google Ads')],
   ];
   return (
     <ol className="intg-timeline" aria-label={t('integrations.timeline', 'Integration timeline')}>
@@ -204,10 +222,11 @@ function Timeline() {
   );
 }
 
-/** Import screen (full) and landing (compact): what works now and what is planned. Visible, never clickable. */
+/** Import screen (full) and a compact list: what works now and what is planned. Visible, never clickable. */
 export function Integrations({ compact = false }: { compact?: boolean }) {
   const { t } = useTranslation();
   const headId = useId();
+  const available = t('integrations.availableNow', 'Available now');
   return (
     <section className={`card intg${compact ? ' intg-compact' : ''}`} aria-labelledby={headId}>
       <div className="intg-head">
@@ -216,11 +235,15 @@ export function Integrations({ compact = false }: { compact?: boolean }) {
             {t('integrations.title', 'Data sources')}
           </h2>
           {compact ? null : (
-            <p className="card-sub">{t('integrations.sub', 'Upload works today. Direct connections are on the roadmap; none is connected or asks for a key.')}</p>
+            <p className="card-sub">
+              {t('integrations.subV2', 'Files work today: the template and the marketplace and payment reports. Direct API connectors are planned; none is connected or asks for a key.')}
+            </p>
           )}
         </div>
         {compact ? null : <NotifyMe />}
       </div>
+
+      <h3 className="intg-group">{available}</h3>
       <ul className="intg-list">
         <li className="intg-item is-live">
           <span className="intg-mark intg-mark-live" aria-hidden="true">
@@ -235,6 +258,25 @@ export function Integrations({ compact = false }: { compact?: boolean }) {
             {t('integrations.working', 'working')}
           </span>
         </li>
+        {REPORT_IMPORTERS.map((r) => (
+          <li key={r.id} className="intg-item is-live is-report" data-importer={r.id}>
+            <span className="intg-mark intg-mark-live" aria-hidden="true">
+              <Icon name="file" size={15} />
+            </span>
+            <span className="intg-text">
+              <span className="intg-name">{t(r.nameKey, r.name)}</span>
+              <span className="intg-data">{t('integrations.reportData', 'report file, columns mapped on import')}</span>
+            </span>
+            <span className="pill pill-success">
+              <span className="pill-dot" aria-hidden="true" />
+              {available}
+            </span>
+          </li>
+        ))}
+      </ul>
+
+      <h3 className="intg-group">{t('integrations.plannedApis', 'Planned API connectors')}</h3>
+      <ul className="intg-list">
         {PLANNED.map((p) => (
           <li key={p.id} className="intg-item is-planned" aria-disabled="true" tabIndex={compact ? undefined : 0} aria-describedby={compact ? undefined : `${headId}-${p.id}`}>
             <span className="intg-mark" aria-hidden="true">
@@ -243,13 +285,16 @@ export function Integrations({ compact = false }: { compact?: boolean }) {
             <span className="intg-text">
               <span className="intg-name">{t(p.nameKey, p.name)}</span>
               <span className="intg-data">{t(p.dataKey, p.data)}</span>
+              {compact ? null : (
+                <span id={`${headId}-${p.id}`} className="intg-prereq">
+                  {t(p.noteKey, p.note)}
+                </span>
+              )}
             </span>
-            <span className="pill pill-neutral intg-soon">{t('integrations.soon', 'Coming soon')}</span>
-            {compact ? null : (
-              <span id={`${headId}-${p.id}`} role="tooltip" className="intg-note">
-                {t(p.noteKey, p.note)}
-              </span>
-            )}
+            <span className="intg-pills">
+              {p.first ? <span className="pill pill-primary">{t('integrations.buildFirst', 'Build first')}</span> : null}
+              <span className="pill pill-neutral intg-soon">{t('integrations.planned', 'Planned')}</span>
+            </span>
           </li>
         ))}
       </ul>

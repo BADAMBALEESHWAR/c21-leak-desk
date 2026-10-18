@@ -2,6 +2,7 @@ import type { ErrorRequestHandler, NextFunction, Request, RequestHandler, Respon
 import { ZodError } from 'zod';
 import { config } from './config.js';
 import { AttributionConflict, OverrideInvalid } from './engine/types.js';
+import { messageLang, translate } from './i18n/index.js';
 
 // Error catalogue (Blueprint §16.1). Body: {error:{code, message, path?, hint?, issues?}}.
 export type ErrorCode =
@@ -14,6 +15,9 @@ export type ErrorCode =
   | 'attribution_conflict'
   | 'db_unavailable'
   | 'unauthorized'
+  | 'invalid_state'
+  | 'provider_disabled'
+  | 'oauth_failed'
   | 'internal';
 
 export interface Issue {
@@ -80,12 +84,25 @@ export function errorResponse(err: unknown): ErrorResponse | null {
   return null;
 }
 
+/** The same error in Hindi or Telugu (Accept-Language or ?lang=); English stays exactly as written. */
+export function localizeError(known: ErrorResponse, lang: ReturnType<typeof messageLang>): ErrorResponse {
+  if (lang === 'en') return known;
+  const extra = { ...known.extra };
+  if (extra.hint) extra.hint = translate(extra.hint, lang);
+  if (extra.issues) extra.issues = extra.issues.map((i) => ({ ...i, message: translate(i.message, lang) }));
+  return { ...known, message: translate(known.message, lang), extra };
+}
+
 export const errorHandler: ErrorRequestHandler = (err, req, res, _next) => {
-  const known = errorResponse(err);
-  if (known) {
+  const lang = messageLang(req);
+  res.vary('Accept-Language');
+  if (lang !== 'en') res.setHeader('Content-Language', lang);
+  const found = errorResponse(err);
+  if (found) {
+    const known = localizeError(found, lang);
     res.status(known.status).json({ error: { code: known.code, message: known.message, ...known.extra } });
     return;
   }
   req.log?.error({ err }, 'unhandled error');
-  res.status(500).json({ error: { code: 'internal', message: 'Something failed on the server. The request id is in the logs.', hint: `request_id ${String(req.id)}` } });
+  res.status(500).json({ error: { code: 'internal', message: translate('Something failed on the server. The request id is in the logs.', lang), hint: `request_id ${String(req.id)}` } });
 };

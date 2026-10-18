@@ -2,9 +2,10 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { api } from '../api/client';
 import { addDays, monthOf, monthStart, readMargins, formatPct2, type Margins } from '../api/proof';
-import type { AnalysisResponse, DecisionSummary, PulseLeaks, PulseOverview } from '../api/types';
+import type { AnalysisResponse, DecisionSummary, Digest, PulseLeaks, PulseOverview } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
 import { BRAND } from '../brand';
+import { AiBadge } from '../components/AiBadge';
 import { Pill } from '../components/Badge';
 import { Button, ButtonLink } from '../components/Button';
 import { LogoMark } from '../components/LogoMark';
@@ -74,6 +75,26 @@ function useReportData(analysis: AnalysisResponse | null, month: string | null):
     };
   }, [id, month]);
   return extra;
+}
+
+/** GET /analyses/:id/digest in the UI language; null while loading, on a server without it, or on failure. */
+function useDigest(analysisId: string | null, lang: string): Digest | null {
+  const [digest, setDigest] = useState<Digest | null>(null);
+  useEffect(() => {
+    setDigest(null);
+    if (!analysisId) return undefined;
+    let cancelled = false;
+    api
+      .digest(analysisId, lang)
+      .then((d) => {
+        if (!cancelled && d && Array.isArray(d.sections)) setDigest(d);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [analysisId, lang]);
+  return digest;
 }
 
 function Section({ n, title, meta, children }: { n: number; title: string; meta?: ReactNode; children: ReactNode }) {
@@ -204,6 +225,7 @@ export function ReportScreen() {
   const month = asked && months.includes(asked) ? asked : months[months.length - 1] ?? null;
   const extra = useReportData(analysis, month);
   const locale = localeFor(i18n.language);
+  const digest = useDigest(analysis?.analysis_id ?? null, i18n.resolvedLanguage ?? i18n.language);
 
   if (!analysis) {
     if (restoring || analysing || importing) {
@@ -361,6 +383,27 @@ export function ReportScreen() {
             <Metric label={t('report.h.contribution', 'Contribution')} value={<Money value={headline.contribution_inr} tone="contribution" />} />
             <Metric label={t('report.h.returns', 'Return rate')} value={headline.return_pct !== null ? formatPct(headline.return_pct) : '—'} />
           </div>
+        ) : null}
+
+        {digest && digest.sections.length > 0 ? (
+          <section className="report-section report-digest" aria-labelledby="report-digest-title">
+            <header className="report-section-head">
+              <h2 id="report-digest-title" className="report-section-title">
+                {t('report.digestTitle', 'The month in brief')}
+              </h2>
+              <span className="report-section-meta">
+                <AiBadge source={digest.source} />
+              </span>
+            </header>
+            <div className="report-digest-body">
+              {digest.sections.map((s) => (
+                <div key={s.key} className="report-digest-item">
+                  <h3 className="report-digest-h">{s.title}</h3>
+                  <p>{s.text}</p>
+                </div>
+              ))}
+            </div>
+          </section>
         ) : null}
 
         <Section n={1} title={t('report.s1', 'Unit economics')} meta={margins?.orders_counted != null ? t('report.ordersCounted', '{{n}} orders counted', { n: formatCount(margins.orders_counted) }) : undefined}>

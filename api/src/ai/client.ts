@@ -6,6 +6,7 @@ import { dbState } from '../db.js';
 import { logger } from '../logger.js';
 import { AiCacheModel } from '../models/index.js';
 import { LANGUAGE_NAMES, type Lang } from './templates.js';
+import { recordAi } from './guardlog.js';
 
 // Optional narration (Blueprint §13). The engine decides; the model may only reword a template sentence.
 
@@ -114,7 +115,7 @@ export function compose(kind: NarrationInput['kind'], n: NarrationOutput): strin
 
 function geminiClient(): ModelClient | null {
   if (config.aiDisabled || !process.env.GEMINI_API_KEY) return null;
-  const name = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+  const name = process.env.GEMINI_MODEL || 'gemini-3.5-flash';
   const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
   const model = genAI.getGenerativeModel({
     model: name,
@@ -174,12 +175,16 @@ export async function narrate(input: NarrationInput, client: ModelClient | null 
   try {
     const raw = await withTimeout(client.generate(SYSTEM_PROMPT, userPrompt(input)), TIMEOUT_MS);
     const checked = guard(raw, input);
+    recordAi('narration', 'call');
+    recordAi('narration', checked.ok ? 'accepted' : 'rejected');
     logger.info({ model: client.model, ai_ms: Date.now() - started, guard: checked.ok ? 'pass' : checked.reason }, 'ai narration');
     if (!checked.ok) return { ...template, reason: checked.reason };
     await cacheSet(key, client.model, checked.value);
     return { text: compose(input.kind, checked.value), source: 'ai' };
   } catch (err) {
     lastFailureAt = Date.now();
+    recordAi('narration', 'call');
+    recordAi('narration', 'error');
     const reason = (err as Error).message === 'timeout' ? 'timeout' : /429|quota|rate/i.test((err as Error).message) ? 'quota' : 'error';
     logger.warn({ model: client.model, ai_ms: Date.now() - started, err: (err as Error).message }, 'ai narration failed; template used');
     if (reason !== 'error') scheduleRetry(key, input, client);

@@ -483,3 +483,36 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* ---- Google / GitHub sign-in ------------------------------------------------------------------ */
+
+.lg-providers {
+  display: grid;
+  gap: 10px;
+}
+
+.lg-provider {
+  gap: 10px;
+  justify-content: center;
+}
+
+.lg-provider svg {
+  flex: none;
+}
+
+.lg-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 4px 0;
+  font-size: var(--fs-sm);
+  color: var(--text-3);
+}
+
+.lg-divider::before,
+.lg-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}

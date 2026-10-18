@@ -1,0 +1,35 @@
+{
+  "id": "shiprocket_shipments",
+  "label": "Shiprocket shipments export",
+  "marketplace": "shiprocket",
+  "match_headers": ["Order ID", "Shiprocket Created At", "Channel", "Status", "Channel SKU", "Product Quantity", "Payment Method", "Order Total", "AWB Code", "Courier Company", "Freight Total Amount", "RTO Initiated Date"],
+  "map": {
+    "order_id": ["Order ID", "Channel Order ID", "Order Id"],
+    "date": ["Shiprocket Created At", "Channel Created At", "Order Date", "Created At"],
+    "gross_inr": ["Order Total", "Product Price"],
+    "discount_inr": ["Discount Value", "Discount"],
+    "shipping_inr": ["Freight Total Amount", "Freight Total", "Freight Charges", "Shipping Charges"],
+    "return_cost_inr": ["RTO Freight Charges", "RTO Charges", "RTO Amount"],
+    "returned": ["Status", "Shipment Status"],
+    "payment_type": ["Payment Method", "Payment Mode"],
+    "product_id": ["Channel SKU", "Master SKU", "SKU"],
+    "units": ["Product Quantity", "Quantity"],
+    "channel": "Channel",
+    "customer_id": ["Customer Email", "Customer Mobile"],
+    "product_cost_inr": null,
+    "payment_fee_inr": null,
+    "refund_inr": null,
+    "recovered_product_cost_inr": null
+  },
+  "transforms": {
+    "date": { "op": "date" },
+    "returned": { "op": "match", "pattern": "rto|return", "or_present": ["RTO Initiated Date", "RTO Delivered Date"] },
+    "customer_id": { "op": "hash" }
+  },
+  "notes": [
+    "Freight Total is the forward shipping cost the brand paid; RTO freight becomes return_cost_inr.",
+    "A status containing RTO or RETURN, or an RTO date, counts as returned.",
+    "Payment fees and product cost are not in a shipments export: they stay unknown (null), never zero.",
+    "Customer email (or mobile) is hashed into customer_id; the value itself is not stored."
+  ]
+}

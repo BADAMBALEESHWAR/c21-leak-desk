@@ -240,3 +240,189 @@ Owner analytics over the same reconciled orders as the ledger (`api/src/engine/p
 `bridge` (period waterfall over computed orders) lists Gross sales → Discounts → Refunds → Net sales (subtotal) → Net product cost → Shipping → Payment fees → Return costs → Handling → Ads on orders → Channel spend (channel mode) → Contribution (total). Its start and deduction lines sum to `totals.contribution_inr`; its gross can be lower than `totals.gross_inr`, which also counts unknown orders.
 
 Exact expected values for every sample: `data/expected.json`. The engine is pure: the same rows, options and engine version give byte-identical output.
+
+## v2 AI endpoints
+
+The engine computes every number; the model (Gemini `gemini-2.5-flash`, JSON mode, 6 s timeout, cached by input hash) may only reword a template that is already correct. Every AI text passes the number-grounding guard: any figure that is not in the engine JSON it was given is a rejection, and the template is used instead. Every text carries `source: "ai" | "template"`. With `AI_DISABLED=1` or no `GEMINI_API_KEY` everything works with the deterministic templates (English, Hindi, Telugu).
+
+**AI switch, per request.** Templates only when the request has `X-Profyn-AI: off`, or the signed-in user's `consent.ai` is `false`. With no stated consent, AI is on only for demo data (a built-in sample, or a file whose rows are all labelled `synthetic`); uploaded customer data needs `consent.ai === true`. The same switch applies to `POST /analyses/{id}/narrate`.
+
+| Method | Path | Body / query | Returns |
+|---|---|---|---|
+| POST | `/datasets/{id}/autopilot` | `{attribution?, lang?}` (also `config`, `channel_spend`, `period_end` as for analyses) | 201 autopilot document |
+| GET | `/autopilot/{id}` | | the same document |
+| GET | `/autopilot/{id}/events` | | `text/event-stream`: `stage` events, then `done` |
+| POST | `/autopilot/{id}/accept` | `{rank: 1-3, owner?}` | 201, the body `POST /analyses/{id}/decisions` returns |
+| POST | `/analyses/{id}/advisor` | `{cause, lang?}` | Fix Advisor for one leak cause |
+| POST | `/analyses/{id}/ask` | `{question, lang?}` | Ask Profyn answer with its tool call |
+| GET | `/analyses/{id}/digest` | `?lang=` | Monthly digest, four sections |
+| GET | `/ai/status` | `?dataset_id=` (optional) | AI transparency: model, counters, fields sent |
+
+`lang` in a body wins over `?lang=` and `Accept-Language`; default `en`.
+
+### Autopilot (`POST /datasets/{id}/autopilot`)
+
+One job: analyse (persisted exactly as `POST /datasets/{id}/analyses`, so `analysis_id` works everywhere) → leaks → the four engine candidate scenarios → margins → Pulse. Numbers are filled before the response; explanations follow. A bad body or an attribution conflict is refused (422 / 409) before anything is stored.
+
+```json
+{
+  "autopilot_id": "…", "dataset_id": "…", "analysis_id": "…",
+  "status": "running | done | error",
+  "stages": { "analysis": "done", "leaks": "done", "scenarios": "done", "margins": "done", "pulse": "done", "explanations": "pending | done | error" },
+  "headline": { "contribution_inr": 7053, "net_sales_inr": 19900, "orders": 27, "unknown_orders": 1, "partial": true, "margins": { "…": "Margins" } },
+  "top_leaks": [{ "cause": "full_return_partial_recovery", "label": "Full return, partial recovery", "orders": 5, "inr_at_stake": 1384 }],
+  "actions": [{
+    "rank": 1, "candidate_id": "raise_recovery_via_inspection", "intervention": "raise_recovery_via_inspection",
+    "label": "Raise recovery via inspection", "overrides": { "recovery_pct": 90 }, "expected_delta_inr": 390,
+    "confidence": "unknown", "driving_orders": 5,
+    "explanation": { "text": "Returns currently recover 71.4% of product cost. …", "source": "template" },
+    "decision_draft": { "intervention": "raise_recovery_via_inspection", "expected_delta_inr": 390, "test_30d": "…", "stop_rule": "…" }
+  }],
+  "pulse": { "month": "2026-09", "headline": { "…": "…" }, "deltas": null, "months_compared": 1 },
+  "accepted": [{ "rank": 2, "decision_id": "…" }],
+  "lang": "en", "created_at": "…"
+}
+```
+
+- `actions` are exactly the top three engine candidates by expected ₹ delta (ties keep the engine order), including a candidate whose delta is 0 or negative (its explanation then says it does not improve contribution).
+- `confidence`: the recommended candidate keeps the engine's confidence; others follow the engine rule (`unknown` when any order is unknown, `low` under 5 driving orders or no gain, else `high`). Accept records the same confidence on the decision.
+- `overrides`: the single scenario override that expresses the change (only inspection → `recovery_pct: 90`); `null` when no override does. The expected delta is always the engine's candidate evaluation.
+- Fields beyond the v2 contract: `driving_orders`, `pulse`, `accepted`, `lang`, `error` (on failure).
+- Stored in Mongo `autopilots` (memory fallback), scoped by account like analyses.
+
+**Events.** `GET /autopilot/{id}/events` sends `event: stage` with `{"stage","status"}` for each stage, then `event: done` with the full document, and closes. A finished run sends `done` at once. Headers: `Cache-Control: no-cache, no-transform`, `X-Accel-Buffering: no` (no compression or proxy buffering).
+
+**Accept.** `POST /autopilot/{id}/accept {rank, owner?}` saves the action's decision draft through the decisions code path (starting state, expected impact, 30-day check-in; `owner` defaults to `"Owner"`), with `assumptions.client_notes = {source: "autopilot", autopilot_id, rank, candidate_id, explanation_source}`. 422 for a rank the run does not have.
+
+### Fix Advisor (`POST /analyses/{id}/advisor`)
+
+`cause` is a leak cause the engine uses: `full_return_partial_recovery`, `refund_unknown`, `fees_exceed_margin`, `discount_exceeds_margin`, `other_negative` (422 otherwise; 404 when this analysis has no such leak).
+
+```json
+{
+  "analysis_id": "…", "cause": "full_return_partial_recovery", "label": "Full return, partial recovery",
+  "summary": { "text": "5 orders were refunded in full and only ₹ 1,500 of ₹ 2,100 product cost came back as stock. …", "source": "template" },
+  "facts": { "orders": 5, "inr_at_stake": 1384, "example_ids": ["O05", "O10", "O15"], "product_cost_inr": 2100, "recovered_inr": 1500, "refund_inr": 4700, "return_cost_inr": 280 },
+  "interventions": [
+    { "candidate_id": "raise_recovery_via_inspection", "intervention": "raise_recovery_via_inspection", "label": "Raise recovery via inspection", "overrides": { "recovery_pct": 90 }, "expected_delta_inr": 390, "confidence": "unknown" },
+    { "candidate_id": "charge_return_shipping", "intervention": "charge_return_shipping", "label": "Charge return shipping", "overrides": null, "expected_delta_inr": 280, "confidence": "unknown" }
+  ],
+  "test_30d": { "text": "…", "source": "template" },
+  "stop_rule": { "text": "…", "source": "template" },
+  "lang": "en"
+}
+```
+
+Interventions by cause (2–3, filled with the best remaining candidates by delta): full return → inspection, charge return shipping; discount → cap discount; fees → add handling to price + `shipping_change` (scenario `shipping_inr` = 90% of the observed average shipping, priced by `scenarioFor`); refund unknown → `record_facts` (no ₹ estimate, confidence `unknown`) + `assume_unknown_refund` (scenario `{assume_unknown_refund: true}`); other → the best three candidates. `facts` adds per-cause input totals (`product_cost_inr`, `recovered_inr`, `refund_inr`, `return_cost_inr`; `discount_inr`, `gross_inr`; `shipping_inr`, `payment_fee_inr`; or `missing_facts` counts). The 30-day test and stop rule are for the first intervention.
+
+### Ask Profyn (`POST /analyses/{id}/ask`)
+
+Five read-only tools over the stored analysis: `leaks {cause?, month?}`, `pulse.months {month?}`, `pulse.products {month?, product?, order?: lowest_contribution|highest_contribution|net_sales}`, `pulse.channels {channel?}`, `scenario.run {override + value | policy}` or `{intervention}` (one override, or one engine candidate). With AI, Gemini function calling picks the tool (an invalid call falls back to the keyword router), the API runs it, and the model phrases the answer from the tool JSON only. Without AI, a keyword router (English, Hindi, Telugu) picks the tool and a template answers.
+
+```json
+{
+  "answer": "In 2026-09, P2 lost most: −₹ 435 contribution on 64 orders.",
+  "source": "ai | template | table",
+  "tool": { "name": "pulse.products", "args": { "month": "2026-09", "order": "lowest_contribution" } },
+  "result": { "month": "2026-09", "order": "lowest_contribution", "products": ["…top 5 rows…"], "focus": null, "total_products": 6 },
+  "link": { "route": "ledger", "params": { "product": "P2", "month": "2026-09" } },
+  "rejected": false,
+  "lang": "en"
+}
+```
+
+Guard: every figure in the model's answer must appear in the tool result (or its arguments or the question). Otherwise `answer: null`, `source: "table"`, `rejected: true`, `message: "AI could not phrase this safely"` (in the language) and the UI shows `result` as a table. `link.route` is `ledger` (with `cause`, `channel`, `product`, `month` filters), `leaks`, `pulse` or `scenario`.
+
+### Monthly digest (`GET /analyses/{id}/digest?lang=`)
+
+```json
+{
+  "analysis_id": "…",
+  "sections": [
+    { "key": "changed", "title": "What changed", "text": "In 2026-09, 240 orders brought ₹ 2,86,984 net sales and ₹ 30,550 contribution, against ₹ 56,418 in 2026-08.", "source": "template" },
+    { "key": "leaked", "title": "Where money leaked", "text": "…", "source": "template" },
+    { "key": "decided", "title": "What was decided", "text": "…", "source": "template" },
+    { "key": "check", "title": "What to check in 30 days", "text": "…", "source": "template" }
+  ],
+  "source": "template",
+  "badge": "Summary · numbers from the engine",
+  "lang": "en"
+}
+```
+
+Built from the Pulse overview (latest month against the one before), the two largest leaks, the decisions saved on this analysis, and the latest decision's 30-day check-in (else the recommendation's 30-day test). `source` is `ai` when any section is AI text; `badge` is then `"AI summary · numbers from the engine"`. No email is sent.
+
+### AI status (`GET /ai/status`)
+
+```json
+{
+  "enabled": false, "model": "gemini-2.5-flash", "provider": "Gemini",
+  "region_note": "Orders, analyses and decisions are stored in AWS ap-south-1 (Mumbai). …",
+  "calls": 0, "accepted": 0, "rejected": 0, "failed": 0,
+  "by_feature": { "narration": { "calls": 0, "accepted": 0, "rejected": 0, "failed": 0 }, "autopilot": {}, "advisor": {}, "ask": {}, "digest": {} },
+  "fields_sent": { "narration": ["cause", "count", "lost_inr", "…"], "autopilot": ["…"], "advisor": ["…"], "ask": ["…"], "digest": ["…"] },
+  "all_time": null,
+  "switch": { "header": null, "consent": null, "default_policy": "AI is on only for demo data …" },
+  "policy": { "allowed": true, "reason": "demo_data" }
+}
+```
+
+`calls` counts model calls; `accepted` / `rejected` count AI texts the guard passed or refused; `failed` counts timeouts and errors (template used). Counters are in memory since start; `all_time` is the Mongo counter document (`ai_counters`) when a database is connected. `policy` appears with `?dataset_id=` and is one of `disabled`, `switched_off`, `consent_off`, `consent_on`, `demo_data`, `customer_data`. `fields_sent` lists exactly which fields each feature sends: aggregates only (counts, ₹ totals, labels, order and product IDs), never a raw order row.
+
+## v2 platform endpoints
+
+Column mapping, Google/GitHub sign-in, the owner's account (audit log, export, delete) and localized errors.
+Code: `api/src/ingest/mapper.ts`, `api/src/auth-oauth.ts`, `api/src/routes/{import,auth,account}.ts`, `api/src/audit.ts`, `api/src/i18n/`. Trust summary: [docs/TRUST.md](TRUST.md).
+
+### Import mapping
+
+| Method and path | Request | Response | Errors |
+|---|---|---|---|
+| `GET /import/profiles` | — | `[{id, label, marketplace, fields_mapped: string[], notes: string[]}]` for `shopify_orders`, `amazon_settlement`, `flipkart_orders`, `myntra_orders`, `razorpay_payments`, `shiprocket_shipments` | — |
+| `POST /import/map` | `{headers: string[], sample_rows?: (object \| array)[], profile?}` (≤ 50 sample rows) | `{profile: string\|null, source: "profile"\|"saved"\|"alias"\|"ai", mapping: {<schema field>: column\|null}, confidence: {<field>: 0–1}, unmapped_required: string[], saved: boolean, header_signature, notes: string[]}` | 422 (`profile` unknown, `headers` missing) |
+| `POST /import/mappings` | `{headers or header_signature, mapping: {<field>: column\|null}, profile?}` | 201 `{header_signature, mapping, profile, saved: true, workspace}` — saved for the account (guests: the shared demo workspace) | 422 (field outside the schema, column not in `headers`) |
+
+- **Order of evidence** for `/import/map`: an explicit `profile` → the account's saved mapping for this header signature (same columns, any order or case) → a profile recognised from its tell-tale headers (≥ 60 % present) → template names and the column-alias table → the AI. `saved` says whether a saved mapping exists for these headers.
+- `mapping` lists every schema field. A field no column holds is `null`: unknown, never zero. Product cost is in none of the six exports, so it is always in `unmapped_required` until the owner maps a column.
+- **AI** is used only when it is configured, not switched off (`X-Profyn-AI: off`), and the caller has `consent.ai: true` (uploaded data). It receives the header names and each column's masked shape — type, size band (`hundreds`, `thousands`, `lakhs`…), date format, text length and shape — never a value from the file. Each attempt is written to the audit log (`ai_call`, `fields_sent: ["headers", "column_types"]`). AI-filled fields have confidence 0.6.
+- **Profiles** (`api/src/ingest/profiles/*.json`): `{id, label, marketplace, match_headers, map: {field: column | [candidates]}, transforms?, constants?, filter?, group_by?, sum_columns?, pivot?, notes}`. Shopify line items merge by `Name`; Amazon settlement amount rows pivot by `order-id` (tab-separated `.txt` accepted); Razorpay keeps captured/refunded payments; e-mail and phone columns are hashed into `customer_id`.
+
+`POST /datasets` also takes `mapping` (object, or JSON text in a multipart field) and `profile`, next to the existing body: multipart fields `mapping`/`profile` with `file` (`.csv`, `.tsv`, `.txt`, `.json`); JSON `{records: {orders}} | {orders} | {rows}` plus `mapping`/`profile`; `text/csv` with `?profile=` and `?mapping=<JSON>`. The mapping is applied before validation; the owner's `mapping` overrides the profile field by field. The 201 response adds `mapped: {profile, mapping: boolean}`. Without `mapping` or `profile`, uploads behave exactly as before.
+
+### Sign-in with Google or GitHub
+
+| Method and path | Request | Response | Errors |
+|---|---|---|---|
+| `GET /auth/providers` | — | `{google: boolean, github: boolean, email: boolean}` (email = Cognito) | — |
+| `GET /auth/google` · `GET /auth/github` | `?return=/app/…` (same-site path; anything else becomes `/app/`) | 302 to the provider; sets `profyn_oauth` (signed state, 10 minutes, `Path=/api/v1/auth`) | 404 `provider_disabled` |
+| `GET /auth/{google,github}/callback` | `?code&state` from the provider | 302 to the return path with `Set-Cookie: profyn_session=<HS256 JWT>; Path=/; Max-Age=604800; HttpOnly; SameSite=Lax; Secure` (not Secure for a localhost `PUBLIC_URL`). A refused or failed exchange returns to `<return>?auth_error=access_denied\|provider_error\|oauth_failed` | 400 `invalid_state` (missing, expired or mismatched state), 404 |
+| `POST /auth/logout` | — | 204, clears `profyn_session` | — |
+| `GET /me` | cookie or Bearer | `{user: {_id, sub, provider, email, name, avatar_url, locale, created_at, last_login_at, consent}, logins: [{at, provider, user_agent, ip_hash}] (last 20), consent: {ai, email_digest}, auth_enabled, workspace: "account"}` | 401 for a guest, with body `{error, user: null, auth_enabled, workspace: "demo"}` |
+| `PATCH /me/consent` | `{ai?: boolean, email_digest?: boolean}` | `{consent}` | 401, 422 |
+
+- The code is exchanged on the server (Google: `openid email profile`; GitHub: `read:user user:email`, primary verified e-mail). Redirect URI: `PUBLIC_URL + /api/v1/auth/{provider}/callback`.
+- The session cookie and a Cognito Bearer token resolve to the same `req.user`: `{sub, email, provider, name, avatar_url, consent}`. `sub` is the account every record is saved under. Cognito users are recorded in `users` (provider `email`) on first sight. A tampered or expired cookie is cleared and the request continues as a guest. Consent defaults to `{ai: false, email_digest: false}`.
+- Guests share one demo workspace (account `guest`), so signing in has no guest-owned records to move.
+- Collections: `users {_id, provider, provider_id, email, name, avatar_url, locale, created_at, last_login_at, consent}`, `logins {user_id, provider, ip_hash (sha256 of ip + SESSION_SECRET), user_agent, at}`.
+
+### Account (trust)
+
+| Method and path | Request | Response | Errors |
+|---|---|---|---|
+| `GET /me/audit` | — | `[{at, kind, action, detail, data}]`, newest first (200 max). `kind`: `login`, `import`, `ai_call`, `decision`, `export`, `consent`, `mapping`; `detail` is one readable line, `data` the recorded fields | 401 |
+| `GET /me/export` | — | JSON attachment `profyn-export-<date>.json`: `{exported_at, account, user, consent, logins, datasets (with rows), analyses, scenarios, decisions, column_mappings, autopilots, audit}` | 401, 503 |
+| `DELETE /me` | `{confirm: "DELETE"}` | 204; every record owned by the account, its uploads and stored bodies (`uploads/<dataset>-*`, `blobs/…`), mappings, sign-ins, audit log and user are deleted; the session cookie is cleared | 401, 422 (`path: "confirm"`), 503 |
+
+AI features record calls with `audit.record(req, {kind: "ai_call", feature, model, fields_sent, accepted, reason?})` (field names only, never values). Guests keep no audit log.
+
+`GET /health` adds `region`: `AWS_REGION` (default `ap-south-1`) when storage is S3, else `local`. Every response carries `Strict-Transport-Security: max-age=31536000; includeSubDomains` with the other helmet headers.
+
+### Localized errors
+
+Error `message`, `hint` and `issues[].message` follow `?lang=` or `Accept-Language` (`en`, `hi`, `te`; English by default and unchanged). Values inside a message (file names, ids, field names, numbers) are kept as written; a message without a translation stays in English. Translated responses carry `Content-Language`. Catalogues: `api/src/i18n/messages.{en,hi,te}.json`.
+
+```json
+{ "error": { "code": "schema_invalid", "message": "headers అవసరం", "path": "headers", "hint": "పేర్కొన్న ఫీల్డ్‌ను సరిచేసి మళ్లీ పంపండి.", "issues": [{ "path": "headers", "message": "అవసరం" }] } }
+```
+
+New error codes: 400 `invalid_state` (sign-in state), 404 `provider_disabled` (provider not configured).

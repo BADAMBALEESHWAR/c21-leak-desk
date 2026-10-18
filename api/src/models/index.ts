@@ -91,3 +91,57 @@ export const AnalysisModel = mongoose.model('Analysis', AnalysisSchema, 'analyse
 export const ScenarioModel = mongoose.model('Scenario', ScenarioSchema, 'scenarios');
 export const DecisionModel = mongoose.model('Decision', DecisionSchema, 'decisions');
 export const AiCacheModel = mongoose.model('AiCache', AiCacheSchema, 'ai_cache');
+
+// Autopilot run (v2 §1.1): engine numbers plus explanation texts, scoped by account like analyses.
+const AutopilotSchema = new Schema(
+  {
+    _id: String,
+    account: { type: String, index: true },
+    dataset_id: { type: String, index: true },
+    analysis_id: { type: String, index: true },
+    lang: String,
+    status: String,
+    stages: Mixed,
+    headline: Mixed,
+    top_leaks: Mixed,
+    actions: Mixed,
+    pulse: Mixed,
+    accepted: Mixed,
+    error: String,
+    created_at: Date,
+    updated_at: Date,
+  },
+  opts,
+);
+// AI guard log counters (v2 §5.1): one document, $inc only.
+const AiCounterSchema = new Schema({ _id: String, calls: Number, accepted: Number, rejected: Number, failed: Number, by_feature: Mixed, updated_at: Date }, opts);
+export const AutopilotModel = mongoose.model('Autopilot', AutopilotSchema, 'autopilots');
+export const AiCounterModel = mongoose.model('AiCounter', AiCounterSchema, 'ai_counters');
+
+// Platform (v2): accounts, sign-ins, the per-account audit log and saved column mappings.
+const UserSchema = new Schema(
+  {
+    _id: String,
+    provider: String,
+    provider_id: String,
+    email: String,
+    name: String,
+    avatar_url: String,
+    locale: String,
+    created_at: Date,
+    last_login_at: Date,
+    consent: Mixed,
+  },
+  opts,
+);
+UserSchema.index({ provider: 1, provider_id: 1 }, { unique: true });
+const LoginSchema = new Schema({ _id: String, user_id: { type: String, index: true }, provider: String, ip_hash: String, user_agent: String, at: Date }, opts);
+const AuditEventSchema = new Schema({ _id: String, account: { type: String, index: true }, at: Date, kind: String, detail: Mixed }, opts);
+const ColumnMappingSchema = new Schema(
+  { _id: String, account: { type: String, index: true }, header_signature: String, headers: [String], mapping: Mixed, profile: String, created_at: Date, updated_at: Date },
+  opts,
+);
+export const UserModel = mongoose.model('User', UserSchema, 'users');
+export const LoginModel = mongoose.model('Login', LoginSchema, 'logins');
+export const AuditEventModel = mongoose.model('AuditEvent', AuditEventSchema, 'audit');
+export const ColumnMappingModel = mongoose.model('ColumnMapping', ColumnMappingSchema, 'column_mappings');

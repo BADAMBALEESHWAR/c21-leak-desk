@@ -23,7 +23,7 @@ vi.mock('../web/src/state/store', () => ({
 }));
 
 const DICT = { en, hi, te };
-const NAV = ['import', 'ledger', 'leaks', 'scenario', 'decision', 'pulse'] as const;
+const NAV = ['overview', 'import', 'ledger', 'leaks', 'scenario', 'decision', 'pulse'] as const;
 
 const navLabels = (root: HTMLElement) => Array.from(root.querySelectorAll('.nav-label')).map((el) => el.textContent);
 

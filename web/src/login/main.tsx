@@ -1,5 +1,6 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
+import '../i18n';
 import { Login } from './Login';
 import '../styles/tokens.css';
 import '../landing/base.css';

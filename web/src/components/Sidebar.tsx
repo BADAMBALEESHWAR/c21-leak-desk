@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next';
+import { useOptionalAuth } from '../auth/AuthContext';
 import { BRAND } from '../brand';
 import { LANGS, setLanguage, type Lang } from '../i18n';
 import { hrefFor, navigate, type Route } from '../lib/router';
@@ -15,9 +16,12 @@ export const STEPS: Array<{ route: Route; label: string; icon: IconName; hint: s
 ];
 
 /** Proof and reporting pages, below the checks card. */
-const FOOT_LINKS: Array<{ route: Route; key: string; label: string; icon: IconName }> = [
+const FOOT_LINKS: Array<{ route: Route; key: string; label: string; icon: IconName; account?: boolean }> = [
   { route: 'checks', key: 'nav.checks', label: 'Checks', icon: 'check-circle' },
   { route: 'report', key: 'nav.report', label: 'Monthly report', icon: 'file' },
+  { route: 'ai', key: 'nav.ai', label: 'Why Profyn AI', icon: 'sparkles' },
+  { route: 'trust', key: 'nav.trust', label: 'Trust and privacy', icon: 'lock' },
+  { route: 'profile', key: 'nav.profile', label: 'Your profile', icon: 'user', account: true },
 ];
 
 /** Shown in the collapsed sidebar, where the full names do not fit; the full name stays the accessible name. */
@@ -51,6 +55,8 @@ function LanguageSwitch() {
 export function Sidebar({ route }: { route: Route }) {
   const { t } = useTranslation();
   const { datasetId, analysis, scenario, decisionSavedFor, engineVersion, checks, openAbout } = useStore();
+  const auth = useOptionalAuth();
+  const account = Boolean(auth?.ready && auth.mode === 'account');
 
   const done: Record<Route, boolean> = {
     import: datasetId !== null,
@@ -62,9 +68,15 @@ export function Sidebar({ route }: { route: Route }) {
     checks: false,
     changelog: false,
     report: false,
+    overview: false,
+    trust: false,
+    ai: false,
+    profile: false,
   };
   const pulseCurrent = route === 'pulse';
+  const overviewCurrent = route === 'overview';
   const allPass = checks !== null && checks.passed === checks.total;
+  const footLinks = FOOT_LINKS.filter((l) => !l.account || account);
 
   return (
     <nav className="sidebar" aria-label="Steps">
@@ -77,6 +89,19 @@ export function Sidebar({ route }: { route: Route }) {
           <span className="brand-sub">{t('tagline')}</span>
         </span>
       </button>
+
+      <a
+        href={hrefFor('overview')}
+        className={`nav-item nav-overview ${overviewCurrent ? 'is-active' : datasetId || analysis ? 'is-done-quiet' : 'is-future'}`}
+        aria-current={overviewCurrent ? 'page' : undefined}
+        data-tip={t('nav.overview', 'Overview')}
+      >
+        <Icon name="activity" size={19} />
+        <span className="nav-text">
+          <span className="nav-label">{t('nav.overview', 'Overview')}</span>
+          <span className="nav-hint">{t('nav.hint.overview', 'Findings and top 3 actions')}</span>
+        </span>
+      </a>
 
       <ol className="nav">
         {STEPS.map((s, i) => {
@@ -149,7 +174,7 @@ export function Sidebar({ route }: { route: Route }) {
           </button>
         ) : null}
         <ul className="foot-links" aria-label={t('nav.more', 'More')}>
-          {FOOT_LINKS.map((l) => (
+          {footLinks.map((l) => (
             <li key={l.route}>
               <a
                 href={hrefFor(l.route)}
