@@ -141,7 +141,7 @@ export const FAQ: Array<{ q: string; a: string }> = [
   },
   {
     q: 'Do I need to connect my store?',
-    a: 'No. Upload the reports you already have: Shopify, Amazon, Flipkart, Myntra, Razorpay or Shiprocket exports are mapped automatically, and any other CSV is mapped once with AI help. Live store connectors are on the roadmap, not something we offer today.',
+    a: 'No. Upload the reports you already have: Shopify, Amazon, Flipkart, Myntra, Razorpay or Shiprocket exports are mapped automatically, and any other CSV is mapped once with AI help. Shopify stores can also connect directly with a read-only access token; Amazon, Flipkart and Myntra connectors are on the roadmap.',
   },
   {
     q: 'What files can I upload?',
