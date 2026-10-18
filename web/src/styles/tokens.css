@@ -152,3 +152,8 @@
 :root[lang='te'] body {
   line-height: 1.6;
 }
+
+/* Telugu labels run longest: the expanded sidebar grows from 248px to 260px. Below 1200px it is the 72px icon rail in every language. */
+:root[lang='te'] {
+  --sidebar-w: 260px;
+}
