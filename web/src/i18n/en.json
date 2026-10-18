@@ -1767,7 +1767,7 @@
     "contribution": "Operational contribution: {{inr}}",
     "actions": "Top actions (expected change):",
     "pdfNote": "Profyn report for {{month}}",
-    "pdfSaved": "PDF saved. Attach it in WhatsApp.",
+    "pdfSaved": "PDF saved in your Downloads. In WhatsApp, tap the attach (clip) button and choose it.",
     "pdfFailed": "Could not make the PDF. Use Print / Save as PDF.",
     "pdfMaking": "Making PDF…",
     "pdfButton": "Send {{month}} report on WhatsApp",
