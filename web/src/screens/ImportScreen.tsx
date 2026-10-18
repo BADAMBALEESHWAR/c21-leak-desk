@@ -1,15 +1,18 @@
-import { useEffect, useRef, useState, type DragEvent, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type DragEvent, type FormEvent, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { api, toErrorInfo, type DatasetInput, type DatasetOptions, type ErrorInfo } from '../api/client';
-import type { AttributionMode, DatasetResponse, ValidationFlag, WorkspaceDataset } from '../api/types';
+import { api, ApiError, toErrorInfo, type DatasetInput, type DatasetOptions, type ErrorInfo } from '../api/client';
+import type { AttributionMode, DatasetResponse, OrderResult, RowCorrection, ValidationFlag, WorkspaceDataset } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
 import { Pill } from '../components/Badge';
 import { Button, ButtonLink } from '../components/Button';
+import { Drawer } from '../components/Drawer';
 import { Icon } from '../components/Icon';
+import { Integrations } from '../components/Integrations';
 import { Money } from '../components/Money';
+import { Provenance } from '../components/Provenance';
 import { AttributionSegmented, Callout, Collapsible, ErrorCallout, InfoTip, revealElement, Skeleton, StatCard } from '../components/ui';
-import { compressIds, formatCount, formatDate, plural } from '../lib/format';
-import { ATTRIBUTION_LABEL, datasetName, DRILL_TAGS, HEADER_ALIASES } from '../lib/labels';
+import { compressIds, formatCount, formatDate, formatInr, plural } from '../lib/format';
+import { ATTRIBUTION_TIP_EN, ATTRIBUTION_TIP_KEY, datasetName, DRILL_TAGS, HEADER_ALIASES } from '../lib/labels';
 import { navigate } from '../lib/router';
 import { useStore } from '../state/store';
 
@@ -91,6 +94,409 @@ function noteFor(ds: DatasetResponse, target: string | null): UploadNote | null 
   };
 }
 
+/** The paid sample audit opens only when a payment link is configured at build time. */
+const AUDIT_LINK = (import.meta.env.VITE_RAZORPAY_LINK ?? '').trim();
+
+interface FailedRow {
+  key: string;
+  line: string;
+  order: string | null;
+  field: string;
+  reason: string;
+}
+
+/** "records.orders[3].gross_inr" -> gross_inr; "product_cost_inr" -> product_cost_inr. */
+function fieldOfPath(path: string | undefined | null): string {
+  if (!path) return '';
+  const parts = path.split(/[.[\]]+/).filter((x) => x && !/^\d+$/.test(x));
+  const last = parts[parts.length - 1] ?? '';
+  return last === 'orders' || last === 'records' ? '' : last;
+}
+
+/** A line number from an issue path or message ("line 4", "row 4"); a JSON index counts the header-less record. */
+function lineOfIssue(path: string, message: string): string {
+  const m = /\b(?:line|row)\s*(\d+)/i.exec(`${path} ${message}`);
+  if (m) return m[1];
+  const idx = /\[(\d+)\]/.exec(path);
+  return idx ? String(Number(idx[1]) + 1) : '';
+}
+
+/** Every failed row: line, field and reason, with the CSV template one click away. The page never goes blank. */
+function ValidationPanel({ title, sub, rows, tone = 'danger' }: { title: string; sub?: ReactNode; rows: FailedRow[]; tone?: 'danger' | 'warning' }) {
+  const { t } = useTranslation();
+  return (
+    <section className={`card vpanel vpanel-${tone}`} aria-labelledby="vpanel-title" role="region">
+      <div className="vpanel-head">
+        <div className="card-head">
+          <span className={`icon-chip icon-chip-${tone}`} aria-hidden="true">
+            <Icon name="alert-triangle" size={18} />
+          </span>
+          <div>
+            <h3 id="vpanel-title" className="card-title">
+              {title}
+            </h3>
+            {sub ? <p className="card-sub">{sub}</p> : null}
+          </div>
+        </div>
+        <ButtonLink variant="secondary" size="sm" icon="download" href={api.templateUrl()} download="profyn-orders-template.csv">
+          {t('actions.downloadTemplate')}
+        </ButtonLink>
+      </div>
+      {rows.length > 0 ? (
+        <div className="table-scroll">
+          <table className="table">
+            <caption className="visually-hidden">{t('import.failedCaption', 'Failed rows with line number, field and reason')}</caption>
+            <thead>
+              <tr>
+                <th scope="col">{t('import.line', 'Line')}</th>
+                <th scope="col">{t('ledger.order')}</th>
+                <th scope="col">{t('import.field', 'Field')}</th>
+                <th scope="col">{t('import.reason')}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.slice(0, 200).map((r) => (
+                <tr key={r.key}>
+                  <th scope="row" className="num">
+                    {r.line || '—'}
+                  </th>
+                  <td>{r.order ?? '—'}</td>
+                  <td className="vpanel-field">{r.field ? <code>{r.field}</code> : <span className="cell-muted">{t('import.wholeRow', 'whole row')}</span>}</td>
+                  <td className="cell-wrap">{r.reason}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
+      {rows.length > 200 ? <p className="table-foot">{t('import.first200', 'Showing the first 200 of {{n}}.', { n: formatCount(rows.length) })}</p> : null}
+    </section>
+  );
+}
+
+/** A file problem (the API's field issues, or a hint that points at the template), not a network or server failure. */
+function isFileProblem(error: ErrorInfo): boolean {
+  return error.issues.length > 0 || /template|column|JSON or CSV/i.test(`${error.hint ?? ''} ${error.message}`);
+}
+
+/** A load the API refused (bad schema, wrong type, nothing valid): the same panel, from the error's issues. */
+function LoadErrorPanel({ error }: { error: ErrorInfo }) {
+  const { t } = useTranslation();
+  // The API could not be reached, or failed: say so plainly; there are no rows to fix.
+  if (!isFileProblem(error)) return <ErrorCallout error={error} className="error-under-drop" />;
+  const rows: FailedRow[] = error.issues.map((i, n) => ({
+    key: `${i.path}-${n}`,
+    line: lineOfIssue(i.path, i.message) || (/column|header/i.test(i.message) ? t('import.header', 'header') : ''),
+    order: null,
+    field: fieldOfPath(i.path),
+    reason: i.message,
+  }));
+  return (
+    <ValidationPanel
+      title={error.message}
+      sub={
+        <>
+          {error.hint ? `${error.hint} ` : ''}
+          {rows.length > 0
+            ? t('import.nothingImported', 'Nothing from this file was imported; fix the rows below or start from the CSV template.')
+            : t('import.nothingImportedNoRows', 'Nothing from this file was imported; start from the CSV template.')}
+        </>
+      }
+      rows={rows}
+    />
+  );
+}
+
+// ---- Editing a flagged row ----------------------------------------------------------------
+
+/** One Edit target: an order (all its flags together) or, without an order id, one line. */
+interface EditTarget {
+  key: string;
+  orderId: string | null;
+  line: number;
+  flags: ValidationFlag[];
+}
+
+const editLabel = (orderId: string | null, line: number) => orderId ?? `line ${line}`;
+
+/** The field a flag is about; a duplicate is about its order id. */
+function flagField(f: ValidationFlag): string {
+  return f.field ?? (fieldOfPath(f.path) || (f.reason === 'duplicate' ? 'order_id' : ''));
+}
+
+type FieldKind = 'money' | 'date' | 'bool' | 'text';
+const kindOfField = (field: string): FieldKind =>
+  field.endsWith('_inr') ? 'money' : field === 'date' || field.endsWith('_date') ? 'date' : field === 'returned' || field === 'synthetic' ? 'bool' : 'text';
+
+/** Where the analysis keeps each field of the order, for the current value of a kept row. */
+const INPUT_OF: Record<string, keyof OrderResult['inputs']> = {
+  gross_inr: 'gross',
+  discount_inr: 'discount',
+  refund_inr: 'refund',
+  product_cost_inr: 'product_cost',
+  recovered_product_cost_inr: 'recovered',
+  shipping_inr: 'shipping',
+  payment_fee_inr: 'fee',
+  return_cost_inr: 'return_cost',
+  handling_inr: 'handling',
+  ads_inr: 'ads',
+};
+
+function currentValue(field: string, target: EditTarget, raw: Record<string, unknown> | null, order: OrderResult | null): unknown {
+  if (raw && field in raw) return raw[field];
+  if (!order) return null;
+  if (INPUT_OF[field]) return order.inputs[INPUT_OF[field]];
+  if (field === 'refund_date') return order.refund_date;
+  if (field === 'date') return order.date;
+  if (field === 'returned') return order.returned;
+  if (field === 'channel' || field === 'product_id' || field === 'order_id') return (order as unknown as Record<string, unknown>)[field] ?? target.orderId;
+  return null;
+}
+
+const asText = (v: unknown): string => (v === null || v === undefined ? '' : String(v));
+
+function parseField(kind: FieldKind, s: string): { value: string | number | boolean | null; ok: boolean } {
+  const v = s.trim();
+  if (v === '') return { value: null, ok: true };
+  if (kind === 'money') {
+    const n = Number(v);
+    return Number.isFinite(n) ? { value: n, ok: true } : { value: null, ok: false };
+  }
+  if (kind === 'bool') return { value: v === 'true', ok: v === 'true' || v === 'false' };
+  return { value: v, ok: true };
+}
+
+function shown(kind: FieldKind, v: unknown): string {
+  if (v === null || v === undefined || v === '') return 'unknown';
+  if (kind === 'money' && typeof v === 'number') return formatInr(v);
+  return String(v);
+}
+
+function RowEditor({ target, onClose }: { target: EditTarget; onClose: () => void }) {
+  const { t } = useTranslation();
+  const { dataset, analysis, correctRow, showToast } = useStore();
+  const id = editLabel(target.orderId, target.line);
+  const raw =
+    dataset?.rejected_rows?.find((r) => r.line === target.line && (!target.orderId || !r.order_id || r.order_id === target.orderId))?.raw ??
+    (target.orderId ? dataset?.rejected_rows?.find((r) => r.order_id === target.orderId)?.raw : undefined) ??
+    null;
+  const order =
+    analysis && dataset && analysis.dataset_id === dataset.dataset_id && target.orderId
+      ? analysis.orders.find((o) => o.order_id === target.orderId) ?? analysis.late_refunds.orders.find((o) => o.order_id === target.orderId) ?? null
+      : null;
+  const flagged = [...new Set(target.flags.map(flagField).filter(Boolean))];
+  const fields = flagged.length > 0 ? flagged : raw ? Object.keys(raw) : [];
+  const initial = Object.fromEntries(fields.map((f) => [f, currentValue(f, target, raw, order)]));
+  const [values, setValues] = useState<Record<string, string>>(() => Object.fromEntries(fields.map((f) => [f, asText(initial[f])])));
+  const [note, setNote] = useState('');
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [formError, setFormError] = useState<ErrorInfo | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  const changes: Record<string, string | number | boolean | null> = {};
+  const invalid: Record<string, string> = {};
+  for (const f of fields) {
+    const kind = kindOfField(f);
+    const parsed = parseField(kind, values[f] ?? '');
+    if (!parsed.ok) {
+      invalid[f] = kind === 'money' ? t('import.editMoneyInvalid', 'Enter a rupee amount, for example 200, or leave it empty for unknown.') : t('import.editInvalid', 'Enter a valid value.');
+      continue;
+    }
+    const before = initial[f] === undefined || initial[f] === '' ? null : initial[f];
+    if (parsed.value !== before && String(parsed.value) !== String(before)) changes[f] = parsed.value;
+  }
+  const canSave = Object.keys(changes).length > 0 && Object.keys(invalid).length === 0 && !saving;
+
+  const save = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!canSave) return;
+    setSaving(true);
+    setErrors({});
+    setFormError(null);
+    try {
+      await correctRow({
+        ...(target.orderId ? { order_id: target.orderId } : {}),
+        line: target.line,
+        changes,
+        ...(note.trim() ? { note: note.trim() } : {}),
+      });
+      const what = Object.entries(changes)
+        .map(([f, v]) => `${f}: ${shown(kindOfField(f), initial[f])} → ${shown(kindOfField(f), v)}`)
+        .join('; ');
+      showToast(t('import.editToast', 'Corrected {{id}} · {{changes}}. Saved as a new version; the original is kept.', { id, changes: what }));
+      onClose();
+    } catch (err) {
+      const info = toErrorInfo(err);
+      const next: Record<string, string> = {};
+      const paths = [...info.issues.map((i) => ({ path: i.path, message: i.message })), ...(err instanceof ApiError && err.path ? [{ path: err.path, message: info.message }] : [])];
+      for (const p of paths) {
+        const f = fields.find((x) => p.path === x || p.path.endsWith(`.${x}`) || fieldOfPath(p.path) === x);
+        if (f && !next[f]) next[f] = p.message;
+      }
+      if (Object.keys(next).length === 0 && fields.length === 1 && err instanceof ApiError && err.status === 422) next[fields[0]] = info.message;
+      setErrors(next);
+      if (Object.keys(next).length === 0) setFormError(info);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <form className="row-editor" onSubmit={save} noValidate>
+      <div className="row-editor-reasons">
+        {target.flags.map((f, i) => (
+          <p key={`${f.line}-${f.reason}-${i}`} className="row-editor-reason">
+            <Pill tone={REASON_TONE[f.reason] ?? 'neutral'} dot>
+              {REASON_TAG[f.reason] ? t(REASON_TAG[f.reason]) : f.reason}
+            </Pill>
+            <span>{f.detail}</span>
+          </p>
+        ))}
+      </div>
+      {raw ? (
+        <div className="row-editor-raw">
+          <h3 className="section-label">{t('import.editRaw', 'Row as read from the file (line {{line}})', { line: target.line })}</h3>
+          <dl className="kv">
+            {Object.entries(raw).map(([k, v]) => (
+              <div key={k}>
+                <dt>
+                  <code>{k}</code>
+                </dt>
+                <dd>{asText(v) || <span className="cell-muted">{t('import.editEmpty', 'empty')}</span>}</dd>
+              </div>
+            ))}
+          </dl>
+        </div>
+      ) : null}
+      {fields.length === 0 ? <p className="muted small">{t('import.editNoField', 'This flag names no single field; fix the row in the file and upload it again.')}</p> : null}
+      {fields.map((f) => {
+        const kind = kindOfField(f);
+        const inputId = `edit-${f}`;
+        const err = errors[f] ?? invalid[f];
+        return (
+          <div className="field" key={f}>
+            <label className="field-label" htmlFor={inputId}>
+              <code>{f}</code>
+            </label>
+            {kind === 'money' ? (
+              <span className="num-field num-field-wide">
+                <span className="num-affix" aria-hidden="true">
+                  ₹
+                </span>
+                <input
+                  id={inputId}
+                  type="number"
+                  inputMode="decimal"
+                  step="any"
+                  placeholder={t('import.editUnknown', 'unknown')}
+                  value={values[f] ?? ''}
+                  onChange={(e) => setValues((v) => ({ ...v, [f]: e.target.value }))}
+                  aria-invalid={err ? true : undefined}
+                  aria-describedby={err ? `${inputId}-error` : undefined}
+                />
+              </span>
+            ) : kind === 'bool' ? (
+              <select id={inputId} className="input" value={values[f] ?? ''} onChange={(e) => setValues((v) => ({ ...v, [f]: e.target.value }))} aria-invalid={err ? true : undefined} aria-describedby={err ? `${inputId}-error` : undefined}>
+                <option value="">{t('import.editUnknown', 'unknown')}</option>
+                <option value="true">true</option>
+                <option value="false">false</option>
+              </select>
+            ) : (
+              <input
+                id={inputId}
+                className={`input${kind === 'date' ? ' input-date' : ''}`}
+                type={kind === 'date' ? 'date' : 'text'}
+                placeholder={t('import.editUnknown', 'unknown')}
+                value={values[f] ?? ''}
+                onChange={(e) => setValues((v) => ({ ...v, [f]: e.target.value }))}
+                aria-invalid={err ? true : undefined}
+                aria-describedby={err ? `${inputId}-error` : undefined}
+              />
+            )}
+            {err ? (
+              <p id={`${inputId}-error`} className="field-error" role="alert">
+                <Icon name="alert-triangle" size={14} /> {err}
+              </p>
+            ) : (
+              <p className="field-hint">
+                {t('import.editWas', 'In the data now: {{value}}', { value: shown(kind, initial[f]) })}
+              </p>
+            )}
+          </div>
+        );
+      })}
+      <div className="field">
+        <label className="field-label" htmlFor="edit-note">
+          {t('import.editNote', 'Note')} <span className="field-optional">{t('import.editOptional', 'optional')}</span>
+        </label>
+        <input id="edit-note" className="input" type="text" value={note} onChange={(e) => setNote(e.target.value)} placeholder={t('import.editNotePlaceholder', 'Why the value changed, e.g. checked against the courier report')} />
+      </div>
+      <p className="field-hint">
+        <Provenance kind="corrected" /> {t('import.editProvenance', 'Saved values count as entered by you, not observed. A new version is saved; the original stays as it was.')}
+      </p>
+      <ErrorCallout error={formError} />
+      <div className="card-actions">
+        <Button variant="primary" type="submit" icon="check" disabled={!canSave}>
+          {saving ? t('actions.saving') : t('import.editSave', 'Save correction')}
+        </Button>
+        <Button variant="secondary" onClick={onClose}>
+          {t('import.editCancel', 'Cancel')}
+        </Button>
+      </div>
+    </form>
+  );
+}
+
+/** The corrections made so far on this dataset, newest last. */
+function Corrections({ list }: { list: RowCorrection[] }) {
+  const { t } = useTranslation();
+  if (list.length === 0) return null;
+  return (
+    <section className="card table-card" aria-labelledby="corrections-title">
+      <div className="table-card-head">
+        <div>
+          <h3 id="corrections-title" className="card-title">
+            {t('import.correctionsTitle', 'Corrected rows')}
+          </h3>
+          <p className="card-sub">{t('import.correctionsSub', 'Each correction saved a new version; the original values are kept.')}</p>
+        </div>
+      </div>
+      <div className="table-scroll">
+        <table className="table">
+          <caption className="visually-hidden">{t('import.correctionsCaption', 'Corrections with field, old and new value')}</caption>
+          <thead>
+            <tr>
+              <th scope="col">{t('ledger.order')}</th>
+              <th scope="col">{t('import.field', 'Field')}</th>
+              <th scope="col">{t('import.editChange', 'Change')}</th>
+              <th scope="col">{t('import.editNote', 'Note')}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {list.map((c, i) => (
+              <tr key={`${c.order_id}-${c.field}-${c.at}-${i}`}>
+                <th scope="row" className="cell-stack">
+                  <span>
+                    {c.order_id ?? '—'} <Provenance kind="corrected" />
+                  </span>
+                  {c.line ? <span className="cell-sub">line {c.line}</span> : null}
+                </th>
+                <td>
+                  <code>{c.field}</code>
+                </td>
+                <td className="num">
+                  {shown(kindOfField(c.field), c.from)} → {shown(kindOfField(c.field), c.to)}
+                </td>
+                <td className="cell-wrap">{c.note || <span className="cell-muted">—</span>}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
 function Report({ dataset, reveal, name, note }: { dataset: DatasetResponse; reveal: boolean; name: string; note: UploadNote | null }) {
   const { t } = useTranslation();
   const appended = Boolean(dataset.appended_to);
@@ -100,10 +506,22 @@ function Report({ dataset, reveal, name, note }: { dataset: DatasetResponse; rev
   const keptRef = useRef<HTMLDivElement>(null);
   const [flagView, setFlagView] = useState<'all' | 'removed' | 'kept'>('all');
   const [showKept, setShowKept] = useState(false);
+  const [editing, setEditing] = useState<EditTarget | null>(null);
+  const corrected = new Set(dataset.corrected_order_ids ?? []);
+  // An order with several flags is edited once, with all its flagged fields; rows without an order id by line.
+  const groupKey = (f: ValidationFlag) => (f.order_id ? `o:${f.order_id}` : `l:${f.file ?? ''}:${f.line}`);
+  const targetFor = (f: ValidationFlag): EditTarget => {
+    const flags = dataset.flags.filter((x) => groupKey(x) === groupKey(f));
+    return { key: groupKey(f), orderId: f.order_id, line: f.line, flags };
+  };
   const removedFlags = dataset.flags.filter((f) => f.action !== 'kept');
   const keptFlags = dataset.flags.filter((f) => f.action === 'kept');
   const shownFlags = flagView === 'removed' ? removedFlags : flagView === 'kept' ? keptFlags : dataset.flags;
   const rejectedHere = dataset.flags.filter((f) => f.action === 'rejected').length;
+  // Rows that failed validation (not duplicates, which are set aside on purpose): line, field and reason.
+  const failed: FailedRow[] = dataset.flags
+    .filter((f) => f.action !== 'kept' && f.reason !== 'duplicate')
+    .map((f, i) => ({ key: `${f.line}-${f.field ?? ''}-${i}`, line: `${f.file ? `${f.file} · ` : ''}${f.line}`, order: f.order_id, field: f.field ?? fieldOfPath(f.path), reason: f.detail }));
 
   const toFlags = (view: 'all' | 'removed') => {
     setFlagView(view);
@@ -220,6 +638,14 @@ function Report({ dataset, reveal, name, note }: { dataset: DatasetResponse; rev
         </div>
       )}
 
+      {failed.length > 0 ? (
+        <ValidationPanel
+          title={t('import.failedTitle', '{{n}} rows failed validation', { n: formatCount(failed.length) })}
+          sub={t('import.failedSub', 'Rejected rows are left out of every total; the other rows were imported. Fix these lines in the file and upload it again.')}
+          rows={failed}
+        />
+      ) : null}
+
       {showKept ? (
         <div className="card kept-card reveal-target" ref={keptRef} tabIndex={-1} aria-labelledby="kept-title">
           <div className="table-card-head kept-head">
@@ -269,16 +695,32 @@ function Report({ dataset, reveal, name, note }: { dataset: DatasetResponse; rev
                   <th scope="col">{t('import.detail')}</th>
                   <th scope="col">{t('import.reason')}</th>
                   <th scope="col">{t('import.action')}</th>
+                  <th scope="col">
+                    <span className="visually-hidden">{t('import.editColumn', 'Edit')}</span>
+                  </th>
                 </tr>
               </thead>
               <tbody>
-                {shownFlags.slice(0, 100).map((f, i) => (
-                  <tr key={`${f.line}-${f.reason}-${f.field ?? ''}-${i}`}>
+                {shownFlags.slice(0, 100).map((f, i, all) => {
+                  const firstOfGroup = all.findIndex((x) => groupKey(x) === groupKey(f)) === i;
+                  return (
+                  <tr key={`${f.line}-${f.reason}-${f.field ?? ''}-${i}`} className={firstOfGroup ? undefined : 'row-grouped'}>
                     <th scope="row" className="cell-stack">
-                      <span>{f.order_id ?? '—'}</span>
+                      <span>
+                        {f.order_id ?? '—'} {f.order_id && corrected.has(f.order_id) ? <Provenance kind="corrected" /> : null}
+                      </span>
                       <span className="cell-sub">{f.file ? `${f.file} · ` : ''}line {f.line}</span>
                     </th>
-                    <td className="cell-wrap">{f.detail}</td>
+                    <td className="cell-wrap">
+                      {f.reason === 'duplicate' && f.order_id ? (
+                        <span className="cell-stack">
+                          <span className="dup-line">{t('import.duplicateDetail', '{{id}} duplicate — second copy ignored', { id: f.order_id })}</span>
+                          <span className="cell-sub">{f.detail}</span>
+                        </span>
+                      ) : (
+                        f.detail
+                      )}
+                    </td>
                     <td>
                       <Pill tone={REASON_TONE[f.reason] ?? 'neutral'} dot>
                         {REASON_TAG[f.reason] ? t(REASON_TAG[f.reason]) : f.reason}
@@ -287,8 +729,16 @@ function Report({ dataset, reveal, name, note }: { dataset: DatasetResponse; rev
                     <td>
                       <Pill tone={f.action === 'kept' ? 'warning' : 'danger'}>{f.action}</Pill>
                     </td>
+                    <td className="r">
+                      {firstOfGroup ? (
+                        <Button variant="secondary" size="sm" onClick={() => setEditing(targetFor(f))} aria-label={t('import.editRow', 'Edit {{id}}', { id: editLabel(f.order_id, f.line) })}>
+                          {t('import.editColumn', 'Edit')}
+                        </Button>
+                      ) : null}
+                    </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -297,6 +747,17 @@ function Report({ dataset, reveal, name, note }: { dataset: DatasetResponse; rev
       ) : (
         <Callout tone="success" title="No rows flagged." />
       )}
+
+      <Corrections list={dataset.corrections ?? []} />
+
+      <Drawer
+        open={editing !== null}
+        onClose={() => setEditing(null)}
+        title={editing ? t('import.editTitle', 'Edit {{id}}', { id: editLabel(editing.orderId, editing.line) }) : ''}
+        meta={editing ? <span className="drawer-date">{t('import.editMeta', 'Line {{line}} · saved as a new version', { line: editing.line })}</span> : null}
+      >
+        {editing ? <RowEditor key={editing.key} target={editing} onClose={() => setEditing(null)} /> : null}
+      </Drawer>
 
       {dataset.warnings.length > 0 ? (
         <Callout tone="info" title="Warnings">
@@ -736,27 +1197,31 @@ export function ImportScreen() {
             </p>
           ) : (
             <p className="storage-note">
-              <Icon name="info" size={14} /> Uploads are stored, but not tied to an account.{' '}
+              <Icon name="info" size={14} /> {t('import.demoStorage', 'Uploads are saved to the demo database.')}{' '}
               {auth.hasSession ? (
-                <a
-                  href="/app/?mode=account"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    auth.backToWorkspace();
-                  }}
-                >
-                  Go back to your workspace
-                </a>
+                <>
+                  <a
+                    href="/app/?mode=account"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      auth.backToWorkspace();
+                    }}
+                  >
+                    {t('import.backToWorkspace', 'Go back to your workspace')}
+                  </a>{' '}
+                  {t('import.keepInAccount', 'to keep them in your own account.')}
+                </>
               ) : (
-                <a href={auth.loginUrl}>{t('actions.signIn')}</a>
-              )}{' '}
-              to keep your data together.
+                <>
+                  <a href={auth.loginUrl}>{t('actions.signIn')}</a> {t('import.keepInAccount', 'to keep them in your own account.')}
+                </>
+              )}
             </p>
           )}
           <p className="alias-note" title={HEADER_ALIASES.map(([a, b]) => `${a} → ${b}`).join(', ')}>
             Header aliases accepted: {HEADER_ALIASES.map(([a]) => a).join(', ')} …
           </p>
-          <ErrorCallout error={loadError} className="error-under-drop" />
+          {loadError ? <LoadErrorPanel error={loadError} /> : null}
         </div>
 
         <section className="card options-card" aria-labelledby="options-title">
@@ -765,7 +1230,7 @@ export function ImportScreen() {
           </h2>
           <div className="field">
             <span className="field-label" id="attr-label">
-              Attribution <InfoTip text={ATTRIBUTION_LABEL} label="About attribution" />
+              Attribution <InfoTip text={t(ATTRIBUTION_TIP_KEY, ATTRIBUTION_TIP_EN)} label="About attribution" />
             </span>
             <AttributionSegmented value={attribution} onChange={setAttribution} compact />
           </div>
@@ -865,6 +1330,17 @@ export function ImportScreen() {
           </div>
         </div>
       </Collapsible>
+
+      {AUDIT_LINK ? (
+        <div className="audit-row">
+          <ButtonLink variant="secondary" icon="arrow-up-right" href={AUDIT_LINK} target="_blank" rel="noopener noreferrer">
+            {t('import.paidAudit', 'Paid sample audit — ₹199')}
+          </ButtonLink>
+          <span className="muted small">{t('import.paidAuditNote', 'Opens the payment page in a new tab.')}</span>
+        </div>
+      ) : null}
+
+      <Integrations />
     </div>
   );
 }

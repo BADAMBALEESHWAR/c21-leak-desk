@@ -9,6 +9,7 @@ import type {
   OrderResult,
   OverrideKey,
   Sample,
+  RowCorrectionRequest,
   ScenarioOverrides,
   ScenarioResponse,
   TextSource,
@@ -51,8 +52,31 @@ export const FALLBACK_SAMPLES: Sample[] = [
   { source: 'refund_over_gross', label: 'Refund over gross', description: 'O03 refund above gross. Expect O03 invalid and excluded.' },
   { source: 'recovery_400', label: 'Full recovery', description: 'Recovered cost 400 on returns. Expect returns at −130.' },
   { source: 'bad_schema', label: 'Bad schema (CSV)', description: 'No product_cost_inr column. Expect 422 with the field path.' },
+  { source: 'bad_values', label: 'Bad values (CSV)', description: 'A negative cost, a text amount and a bad date. Expect those rows rejected, each with its line, field and reason.' },
   { source: 'demo_12m', label: '12-month demo brand (synthetic)', description: '3,000 labelled synthetic orders over twelve months, for the Pulse owner analytics.' },
 ];
+
+/** Drills the UI always offers, even when the API's sample list predates them. */
+const ALWAYS_LISTED: Sample['source'][] = ['bad_values'];
+
+function withAlwaysListed(list: Sample[]): Sample[] {
+  const missing = FALLBACK_SAMPLES.filter((s) => ALWAYS_LISTED.includes(s.source) && !list.some((x) => x.source === s.source));
+  if (missing.length === 0) return list;
+  // Before the 12-month demo, so the drills stay together.
+  const at = list.findIndex((s) => s.source === 'demo_12m');
+  return at < 0 ? [...list, ...missing] : [...list.slice(0, at), ...missing, ...list.slice(at)];
+}
+
+const FIXED_COSTS_KEY = 'profyn.fixedCosts';
+
+function storedFixedCosts(): number {
+  try {
+    const n = Number(window.localStorage.getItem(FIXED_COSTS_KEY));
+    return Number.isFinite(n) && n > 0 ? n : 0;
+  } catch {
+    return 0;
+  }
+}
 
 export const OVERRIDE_KEYS: OverrideKey[] = ['return_rate_pct', 'recovery_pct', 'shipping_inr', 'refund_policy', 'ads_per_order'];
 
@@ -126,6 +150,11 @@ interface StoreValue {
   /** The dataset being opened from the saved list. */
   openingId: string | null;
 
+  /** Fix one flagged row of the loaded dataset: loads the new version and clears the analysis so it is re-run. */
+  correctRow: (body: RowCorrectionRequest) => Promise<DatasetResponse>;
+  /** Orders whose values were corrected on the import report (user-entered, not observed). */
+  correctedOrderIds: string[];
+
   /** appendTo: add the upload to that saved dataset; orders already saved are skipped. */
   importDataset: (input: DatasetInput, options?: DatasetOptions) => Promise<DatasetResponse>;
   /** handling: ₹ per order for rows without handling_inr (config.handling_default_inr). */
@@ -157,6 +186,10 @@ interface StoreValue {
 
   decisionSavedFor: string | null;
   markDecisionSaved: (analysisId: string) => void;
+
+  /** Fixed costs per period (salaries, rent, tools) in ₹: an assumption for the estimated net margin. 0 = not set. */
+  fixedCosts: number;
+  setFixedCosts: (inr: number) => void;
 }
 
 const StoreContext = createContext<StoreValue | null>(null);
@@ -219,6 +252,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [toast, setToast] = useState<{ id: number; text: string; tone: 'success' | 'info' } | null>(null);
   const [decisionSavedFor, setDecisionSavedFor] = useState<string | null>(null);
+  const [fixedCosts, setFixedCostsState] = useState<number>(storedFixedCosts);
   // Deep links may name a tab (?tab=channel); read before App cleans the hash.
   const [ledgerTab, setLedgerTab] = useState<LedgerTab>(() => {
     const t = parseHash(window.location.hash).params.get('tab');
@@ -264,7 +298,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     api
       .samples()
       .then((list) => {
-        if (!cancelled && Array.isArray(list) && list.length > 0) setSamples(list);
+        if (!cancelled && Array.isArray(list) && list.length > 0) setSamples(withAlwaysListed(list));
       })
       .catch(() => undefined);
     return () => {
@@ -464,6 +498,26 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     return ds;
   }, [refreshWorkspace]);
 
+  const correctRow = useCallback(
+    async (body: RowCorrectionRequest) => {
+      const id = datasetIdRef.current;
+      if (!id) throw new Error('Load a dataset first.');
+      const ds = await api.correctRow(id, body);
+      if (accountRef.current) void refreshWorkspace();
+      setDataset((prev) => ({ ...ds, files: ds.files ?? prev?.files }));
+      setDatasetId(ds.dataset_id);
+      // The corrected version needs its own analysis: "Continue to ledger" runs it.
+      analysisSeq.current++;
+      setAnalysis(null);
+      setAnalysing(false);
+      setNarration(null);
+      resetScenario();
+      setDrawerOpen(false);
+      return ds;
+    },
+    [refreshWorkspace],
+  );
+
   const runAnalysis = useCallback(async (attribution: AttributionMode, periodEnd?: string, dsId?: string, handling?: number) => {
     const id = dsId ?? datasetIdRef.current;
     if (!id) throw new Error('Load a dataset first.');
@@ -591,6 +645,19 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const markDecisionSaved = useCallback((id: string) => setDecisionSavedFor(id), []);
 
+  const setFixedCosts = useCallback((inr: number) => {
+    const v = Number.isFinite(inr) && inr > 0 ? inr : 0;
+    setFixedCostsState(v);
+    try {
+      if (v > 0) window.localStorage.setItem(FIXED_COSTS_KEY, String(v));
+      else window.localStorage.removeItem(FIXED_COSTS_KEY);
+    } catch {
+      // Blocked storage: the value lasts for this visit.
+    }
+  }, []);
+
+  const correctedOrderIds = useMemo(() => dataset?.corrected_order_ids ?? [], [dataset]);
+
   const value = useMemo<StoreValue>(
     () => ({
       apiStatus,
@@ -625,6 +692,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       overrides,
       setOverrides,
       importDataset,
+      correctRow,
+      correctedOrderIds,
       runAnalysis,
       runScenario,
       drawer,
@@ -647,6 +716,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       showToast,
       decisionSavedFor,
       markDecisionSaved,
+      fixedCosts,
+      setFixedCosts,
     }),
     [
       apiStatus,
@@ -679,6 +750,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       scenarioError,
       overrides,
       importDataset,
+      correctRow,
+      correctedOrderIds,
       runAnalysis,
       runScenario,
       drawer,
@@ -699,6 +772,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       showToast,
       decisionSavedFor,
       markDecisionSaved,
+      fixedCosts,
+      setFixedCosts,
     ],
   );
 
