@@ -145,11 +145,19 @@ export function FixAdvisor({ cause, open, onClose }: { cause: string | null; ope
   const adv = loaded?.advisor ?? null;
   const group = analysis?.leaks.find((l) => l.cause === cause) ?? null;
   const picked = adv?.interventions[choice] ?? null;
-  const canApply = Boolean(picked?.overrides && isRunnable(picked.overrides));
+  // A fix with one Scenario control runs that scenario; any other engine fix shows its exact engine gain on the baseline.
+  const canApply = Boolean((picked?.overrides && isRunnable(picked.overrides)) || (picked && picked.expected_delta_inr !== null && analysis?.totals.contribution_inr != null));
   const title = adv?.label || (cause ? LEAK_LABELS[cause as keyof typeof LEAK_LABELS] ?? cause : '');
 
   const apply = async () => {
-    if (!analysis || !picked?.overrides) return;
+    if (!analysis || !picked) return;
+    if (!picked.overrides || !isRunnable(picked.overrides)) {
+      const base = analysis.totals.contribution_inr;
+      const gain = picked.expected_delta_inr;
+      if (base == null || gain === null) return;
+      setApplied({ analysis_id: analysis.analysis_id, baseline: { contribution_inr: base }, scenario: { contribution_inr: base + gain }, delta: { contribution_inr: gain } } as unknown as ScenarioResponse);
+      return;
+    }
     setApplying(true);
     setApplyError(null);
     try {
