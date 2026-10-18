@@ -569,7 +569,7 @@ function DecisionForm({ a, s, rec, candidates, onSaved }: FormProps) {
                 </span>
               </span>
               <span className="choice-rule">{apiText(o.rule)}</span>
-              {!s && a.evidence?.[o.key] ? <EvidenceBadge evidence={a.evidence[o.key]} /> : null}
+              {!s && isRec && a.evidence?.[o.key] ? <EvidenceBadge evidence={a.evidence[o.key]} /> : null}
             </label>
           );
         })}
