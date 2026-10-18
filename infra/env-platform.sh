@@ -9,7 +9,7 @@ REGION=${1:?usage: env-platform.sh <region>}
 OUT=/opt/leakdesk/.env.platform
 param() { aws ssm get-parameter --region "$REGION" --with-decryption --name "/leakdesk/$1" --query Parameter.Value --output text 2>/dev/null || true; }
 TMP=$(mktemp)
-for NAME in GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET GITHUB_CLIENT_ID GITHUB_CLIENT_SECRET SHOPIFY_CLIENT_ID SHOPIFY_CLIENT_SECRET SESSION_SECRET PUBLIC_URL; do
+for NAME in GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET GITHUB_CLIENT_ID GITHUB_CLIENT_SECRET SHOPIFY_CLIENT_ID SHOPIFY_CLIENT_SECRET RAZORPAY_KEY_ID RAZORPAY_KEY_SECRET SESSION_SECRET PUBLIC_URL; do
   VALUE=$(param "$NAME")
   case "$VALUE" in "" | None | none) ;; *) echo "$NAME=$VALUE" >> "$TMP" ;; esac
 done
