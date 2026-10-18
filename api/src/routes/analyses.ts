@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { aiStatus, MAX_CALLS_PER_ANALYSIS, narrate } from '../ai/client.js';
+import { aiPolicy } from '../ai/grounded.js';
 import { langOf, localizeAnalysis } from '../ai/localize.js';
 import type { Lang } from '../ai/templates.js';
 import { analyze } from '../engine/analyze.js';
@@ -161,9 +162,11 @@ analysesRouter.post(
     const { analysis, dataset } = await loadAnalysis(req.params.id, req.user);
     const a = analysis.result;
     const text = localizeAnalysis(a, dataset.rows, lang);
+    // Per-request AI switch (X-Profyn-AI: off, consent, demo-data default): null = template text only.
+    const client = aiPolicy(req, dataset).allowed ? undefined : null;
     const leaks = await Promise.all(
       text.leaks.slice(0, MAX_CALLS_PER_ANALYSIS - 1).map(async (l) => {
-        const n = await narrate({ kind: 'leak', data: { cause: l.cause, count: l.count, lost_inr: l.lost_inr, order_ids: l.order_ids }, template: l.why, lang });
+        const n = await narrate({ kind: 'leak', data: { cause: l.cause, count: l.count, lost_inr: l.lost_inr, order_ids: l.order_ids }, template: l.why, lang }, client);
         return { cause: l.cause, why: n.text, why_source: n.source, reason: n.reason };
       }),
     );
@@ -173,7 +176,7 @@ analysesRouter.post(
       data: { intervention: r.intervention, rule: r.rule, expected_delta_inr: r.expected_delta_inr, confidence: r.confidence },
       template: r.why,
       lang,
-    });
+    }, client);
     res.json({ ai: aiStatus(), lang, leaks, recommendation: { why: rec.text, why_source: rec.source, reason: rec.reason } });
   }),
 );
