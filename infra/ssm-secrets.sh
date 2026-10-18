@@ -18,8 +18,10 @@ put GITHUB_CLIENT_SECRET "$(val GITHUB_CLIENT_SECRET)" SecureString
 put GOOGLE_CLIENT_ID "$(val GOOGLE_CLIENT_ID)" String
 put GOOGLE_CLIENT_SECRET "$(val GOOGLE_CLIENT_SECRET)" SecureString
 put GEMINI_API_KEY "$(val GEMINI_API_KEY)" SecureString
-put GEMINI_MODEL gemini-3.8-flash String
+put GEMINI_MODEL gemini-3.5-flash String
 put PUBLIC_URL https://d2gmrabs4sk8gk.cloudfront.net String
+# AI on: the v2 API still keeps it off for uploaded data unless the signed-in owner consents (demo data only by default).
+put AI_DISABLED 0 String
 if aws ssm get-parameter --name /leakdesk/SESSION_SECRET >/dev/null 2>&1; then echo "kept /leakdesk/SESSION_SECRET"; else
   put SESSION_SECRET "$(node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))")" SecureString; fi
 echo "done: $(aws ssm get-parameters-by-path --path /leakdesk/ --query 'length(Parameters)' --output text) parameters under /leakdesk/"

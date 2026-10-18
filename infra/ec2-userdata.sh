@@ -38,6 +38,8 @@ param() { aws ssm get-parameter --region $REGION --with-decryption --name "\$1" 
   echo "COGNITO_DOMAIN=\$(param /leakdesk/COGNITO_DOMAIN)"
 } > /opt/leakdesk/.env
 chmod 600 /opt/leakdesk/.env
+# v2 sign-in settings (.env.platform) once a deploy has shipped env-platform.sh; compose treats the file as optional.
+if [ -x /opt/leakdesk/env-platform.sh ]; then /opt/leakdesk/env-platform.sh $REGION || true; fi
 aws ecr get-login-password --region $REGION | docker login --username AWS --password-stdin $REGISTRY
 cd /opt/leakdesk
 export API_IMAGE=$REGISTRY/leakdesk-api:\${1:-latest} AWS_REGION=$REGION
