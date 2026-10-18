@@ -12,6 +12,21 @@ export const HERO = {
   ticks: ['CSV & JSON, no integration', 'Unknowns shown, never zero', 'Every rupee traceable'],
 };
 
+/**
+ * The demo recording, served from web/public/media/. The player falls back on its own while the files are missing.
+ * Set hasCaptions once profyn-demo.en.vtt is added, and youtubeUrl to an unlisted link to show "Prefer YouTube?" in the FAQ.
+ */
+export const DEMO_MEDIA = {
+  video: '/media/profyn-demo.mp4',
+  poster: '/media/profyn-demo-poster.jpg',
+  captions: '/media/profyn-demo.en.vtt',
+  hasCaptions: false as boolean,
+  youtubeUrl: '' as string,
+};
+
+/** The change log in the app: refund and recovery semantics, before and after. */
+export const CHANGELOG_URL = `${APP_PATH}#/changelog`;
+
 export const SOURCES: Array<{ label: string; icon: IconName }> = [
   { label: 'Shopify orders', icon: 'store' },
   { label: 'Marketplace reports', icon: 'bag' },
