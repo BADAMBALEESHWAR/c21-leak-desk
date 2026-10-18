@@ -545,7 +545,7 @@ function DecisionForm({ a, s, rec, candidates, onSaved }: FormProps) {
         </legend>
         <p id="d-intervention-hint" className="field-hint">
           {ev
-            ? t('decision.evidenceHint', '{{word}}: {{reason}}', { word: ev.level === 'high' ? t('evidence.high', 'High confidence') : ev.level === 'medium' ? t('evidence.medium', 'Medium confidence') : t('evidence.low', 'Low confidence'), reason: apiText(ev.reason) })
+            ? t('decision.evidenceHint', '{{word}}: {{reason}}', { word: ev.level === 'high' ? t('evidence.high', 'High confidence') : ev.level === 'medium' ? t('evidence.medium', 'Medium confidence') : t('evidence.low', 'Low confidence'), reason: apiText(ev.reason) }) + ' ' + t('evidence.useBoth', 'Use this recommendation to save a decision or to test it in the Scenario.')
             : rec.preselect
             ? t('decision.preselected', 'Pre-selected: the recommendation has high confidence.')
             : t('decision.notPreselected', 'Not pre-selected: confidence is {{confidence}}. {{reason}}', { confidence: confidenceWord, reason: apiText(rec.confidence_reason) })}

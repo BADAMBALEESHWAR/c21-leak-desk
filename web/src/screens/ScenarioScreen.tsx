@@ -447,7 +447,7 @@ function RecommendationCard({ rec, scenario, why, whySource, evidence }: { rec: 
         </div>
       </div>
       <p className="rec-confidence">
-        {evidence && !scenario ? (<><EvidenceBadge evidence={evidence} /><span>{apiText(evidence.reason)}</span></>) : (<><ConfidenceBadge confidence={rec.confidence} prefix={lower(t('scenario.confidence'))} /><span>{apiText(rec.confidence_reason)}</span></>)}
+        {evidence && !scenario ? (<><EvidenceBadge evidence={evidence} /><span>{apiText(evidence.reason)} {t('evidence.useBoth', 'Use this recommendation to save a decision or to test it in the Scenario.')}</span></>) : (<><ConfidenceBadge confidence={rec.confidence} prefix={lower(t('scenario.confidence'))} /><span>{apiText(rec.confidence_reason)}</span></>)}
       </p>
       <p className="rec-why">
         {why} <SourceTag source={whySource} />
