@@ -1672,3 +1672,36 @@ body .toast-region {
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
+
+/* Scenario: what the change moved, and the recommendation note. */
+.impact-card {
+  display: grid;
+  gap: 10px;
+}
+
+.impact-sum {
+  margin: 0;
+  font-size: 15px;
+}
+
+.impact-margins {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+  margin: 0;
+}
+
+.impact-margins dt {
+  color: var(--text-3);
+  font-size: 12px;
+}
+
+.impact-margins dd {
+  margin: 0;
+}
+
+.rec-note {
+  margin: 0 0 6px;
+  color: var(--text-2);
+  font-size: 14px;
+}

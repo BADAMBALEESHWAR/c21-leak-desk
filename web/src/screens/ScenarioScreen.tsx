@@ -6,6 +6,7 @@ import { BarRows, type BarRow } from '../charts/BarRows';
 import { ChartCard } from '../charts/ChartCard';
 import { ConfidenceBadge, Pill, SourceTag, Unknown } from '../components/Badge';
 import { EvidenceBadge } from '../components/EvidenceBadge';
+import { recommendationNote, ScenarioImpact } from '../components/ScenarioImpact';
 import { Button, ButtonLink } from '../components/Button';
 import { NeedsAnalysis } from '../components/EmptyState';
 import { ErrorNote } from '../components/ErrorNote';
@@ -406,7 +407,7 @@ function ContributionCards({
   );
 }
 
-function RecommendationCard({ rec, scenario, why, whySource, evidence }: { rec: Recommendation; scenario: ScenarioResponse | null; why: string; whySource: 'template' | 'ai'; evidence?: Evidence | null }) {
+function RecommendationCard({ rec, scenario, why, whySource, evidence, note }: { rec: Recommendation; scenario: ScenarioResponse | null; why: string; whySource: 'template' | 'ai'; evidence?: Evidence | null; note?: string | null }) {
   const { t } = useTranslation();
   const before = scenario?.baseline_recommendation;
   return (
@@ -449,6 +450,7 @@ function RecommendationCard({ rec, scenario, why, whySource, evidence }: { rec: 
       <p className="rec-confidence">
         {evidence && !scenario ? (<><EvidenceBadge evidence={evidence} /><span>{apiText(evidence.reason)} {t('evidence.useBoth', 'Use this recommendation to save a decision or to test it in the Scenario.')}</span></>) : (<><ConfidenceBadge confidence={rec.confidence} prefix={lower(t('scenario.confidence'))} /><span>{apiText(rec.confidence_reason)}</span></>)}
       </p>
+      {note ? <p className="rec-note">{note}</p> : null}
       <p className="rec-why">
         {why} <SourceTag source={whySource} />
       </p>
@@ -459,14 +461,15 @@ function RecommendationCard({ rec, scenario, why, whySource, evidence }: { rec: 
   );
 }
 
-function CandidatesChart({ rec, candidates }: { rec: Recommendation; candidates: Candidate[] }) {
+function CandidatesChart({ rec, candidates, baseline }: { rec: Recommendation; candidates: Candidate[]; baseline?: Candidate[] | null }) {
+  const was = (key: string) => baseline?.find((c) => c.intervention === key)?.delta_inr ?? null;
   const { t } = useTranslation();
   const rows: BarRow[] = candidates.map((c) => ({
     key: c.intervention,
     label: c.label,
     sub: `${apiText(c.rule)} · ${t('leaks.orderCount', { count: c.driving_orders })}`,
     emphasis: c.intervention === rec.intervention,
-    values: [{ series: t('scenario.changeInContribution', 'Change in contribution'), value: c.delta_inr, tone: c.intervention === rec.intervention ? 'series-1' : 'muted', text: formatSignedInr(c.delta_inr) }],
+    values: [{ series: t('scenario.changeInContribution', 'Change in contribution'), value: c.delta_inr, tone: c.intervention === rec.intervention ? 'series-1' : 'muted', text: baseline && was(c.intervention) !== null && was(c.intervention) !== c.delta_inr ? `${formatSignedInr(c.delta_inr)} (${t('impact.was', 'was {{v}}', { v: formatSignedInr(was(c.intervention) as number) })})` : formatSignedInr(c.delta_inr) }],
   }));
   const table = (
     <table className="table table-compact">
@@ -475,6 +478,7 @@ function CandidatesChart({ rec, candidates }: { rec: Recommendation; candidates:
         <tr>
           <th scope="col">{t('decision.intervention')}</th>
           <th scope="col">{t('scenario.rule')}</th>
+          {baseline ? (<th scope="col" className="r">{t('impact.atBaseline', 'At baseline')}</th>) : null}
           <th scope="col" className="r">
             {t('scenario.delta')}
           </th>
@@ -488,6 +492,7 @@ function CandidatesChart({ rec, candidates }: { rec: Recommendation; candidates:
           <tr key={c.intervention}>
             <th scope="row">{apiText(c.label)}</th>
             <td className="cell-wrap">{apiText(c.rule)}</td>
+            {baseline ? (<td className="r num">{was(c.intervention) === null ? '—' : formatSignedInr(was(c.intervention) as number)}</td>) : null}
             <td className="r num">{formatSignedInr(c.delta_inr)}</td>
             <td className="r num">{c.driving_orders}</td>
           </tr>
@@ -645,8 +650,9 @@ export function ScenarioScreen() {
 
         <Results loading={scenarioLoading && current !== null}>
           <ContributionCards a={analysis} s={current} loading={scenarioLoading} onCompare={openCompare} onControls={toControls} />
-          <RecommendationCard rec={rec} scenario={current} why={aiWhy ?? rec.why} whySource={aiWhy ? 'ai' : rec.why_source} evidence={analysis.evidence?.[rec.intervention]} />
-          <CandidatesChart rec={rec} candidates={candidates} />
+          <RecommendationCard rec={rec} scenario={current} why={aiWhy ?? rec.why} whySource={aiWhy ? 'ai' : rec.why_source} evidence={analysis.evidence?.[rec.intervention]} note={current ? recommendationNote(t, analysis.candidates, current.candidates, rec.intervention) : null} />
+          {current ? <ScenarioImpact s={current} /> : null}
+          <CandidatesChart rec={rec} candidates={candidates} baseline={current ? analysis.candidates : null} />
           {current && current.assumptions.length > 0 ? (
             <Callout tone="info" title={t('scenario.notes', 'Scenario notes')}>
               <ul className="plain-list">
