@@ -408,6 +408,7 @@ export const api = {
   logout: () => request<unknown>('POST', '/auth/logout', {}, false),
   profile: () => request<MeProfile>('GET', '/me'),
   setConsent: (body: Consent) => request<unknown>('PATCH', '/me/consent', body),
+  dataSummary: () => request<{ database: string; region: string; file_storage: string; backups: string; counts: { datasets: number; analyses: number; scenarios: number; decisions: number; sign_ins: number; audit_events: number } }>('GET', '/me/data'),
   audit: () => request<AuditEntry[] | { entries: AuditEntry[] }>('GET', '/me/audit'),
   meExportUrl: () => `${API_BASE}/me/export`,
   deleteMe: () => request<unknown>('DELETE', '/me', { confirm: 'DELETE' }),
