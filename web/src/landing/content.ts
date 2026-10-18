@@ -61,6 +61,22 @@ export const FEATURES: Array<{ tag: string; title: string; text: string; icon: I
   },
 ];
 
+/** Why Profyn and not a chat model, and the data promise: shown on the landing page (moved out of the app sidebar). */
+export const TRUST = {
+  why: [
+    'Every rupee comes from a tested engine with 360+ automated tests; the AI only explains the numbers.',
+    'Any AI sentence with a figure the engine did not produce is rejected before you see it.',
+    'Thousands of orders reconcile to channel and product totals, the same way every month.',
+    'Each decision is saved with the numbers it was based on and a 30-day check.',
+  ],
+  promise: [
+    'Stored in India on AWS Mumbai; uploaded files are encrypted at rest and every connection uses HTTPS.',
+    'Your account only: other accounts cannot read your data, and we never sell it.',
+    'The AI sees totals by cause, never your order rows, and it is off for your uploads unless you switch it on.',
+    'Export or delete everything at any time.',
+  ],
+};
+
 export const STEPS: Array<{ title: string; text: string; icon: IconName; href: string }> = [
   {
     title: 'Upload your exports',
