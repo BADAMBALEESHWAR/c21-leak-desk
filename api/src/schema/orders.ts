@@ -153,6 +153,7 @@ export const SAMPLE_SOURCES = [
   'refund_over_gross',
   'recovery_400',
   'bad_schema',
+  'bad_values',
   'demo_12m',
 ] as const;
 
@@ -210,6 +211,8 @@ export const DecisionRequestSchema = z.object({
   owner: z.string().trim().min(1, 'name an owner'),
   notes: z.string().optional(),
   assumptions: z.record(z.string(), z.unknown()).optional(),
+  /** Fixed costs per period (salaries, rent, tools), entered by the owner; an assumed input for the estimated net margin. */
+  fixed_costs_inr: Inr.optional(),
 });
 
 export type DecisionRequest = z.infer<typeof DecisionRequestSchema>;

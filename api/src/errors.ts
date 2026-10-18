@@ -47,38 +47,45 @@ export function zodIssues(err: ZodError, prefix = ''): Issue[] {
   return err.issues.map((i) => ({ path: [prefix, ...i.path.map(String)].filter(Boolean).join('.'), message: i.message }));
 }
 
-function send(res: Response, status: number, code: ErrorCode, message: string, extra: HttpError['extra'] = {}) {
-  res.status(status).json({ error: { code, message, ...extra } });
+export interface ErrorResponse {
+  status: number;
+  code: ErrorCode;
+  message: string;
+  extra: HttpError['extra'];
 }
 
-export const errorHandler: ErrorRequestHandler = (err, req, res, _next) => {
+/** The HTTP status and body an error becomes; null for an unexpected error (500). Used by the handler and by /checks. */
+export function errorResponse(err: unknown): ErrorResponse | null {
   if (err instanceof ZodError) {
     const issues = zodIssues(err);
     const first = issues[0];
-    send(res, 422, 'schema_invalid', `${first.path || 'body'} ${first.message}`, { path: first.path, issues, hint: 'Fix the named field and send again.' });
-    return;
+    return { status: 422, code: 'schema_invalid', message: `${first.path || 'body'} ${first.message}`, extra: { path: first.path, issues, hint: 'Fix the named field and send again.' } };
   }
   if (err instanceof OverrideInvalid) {
-    send(res, 422, 'override_invalid', err.message, { path: 'overrides', hint: 'Change one assumption at a time.' });
-    return;
+    return { status: 422, code: 'override_invalid', message: err.message, extra: { path: 'overrides', hint: 'Change one assumption at a time.' } };
   }
   if (err instanceof AttributionConflict) {
-    send(res, 409, 'attribution_conflict', err.message, { hint: err.rule });
-    return;
+    return { status: 409, code: 'attribution_conflict', message: err.message, extra: { hint: err.rule } };
   }
   if (err instanceof HttpError) {
-    send(res, err.status, err.code, err.message, err.extra);
-    return;
+    return { status: err.status, code: err.code, message: err.message, extra: err.extra };
   }
-  const e = err as { type?: string; code?: string };
-  if (e.type === 'entity.too.large' || e.code === 'LIMIT_FILE_SIZE') {
-    send(res, 413, 'file_too_large', `A file is larger than ${Math.round(config.maxBodyBytes / 1048576)} MB.`, { hint: 'Split it by month and upload the files together.' });
-    return;
+  const e = err as { type?: string; code?: string } | null;
+  if (e?.type === 'entity.too.large' || e?.code === 'LIMIT_FILE_SIZE') {
+    return { status: 413, code: 'file_too_large', message: `A file is larger than ${Math.round(config.maxBodyBytes / 1048576)} MB.`, extra: { hint: 'Split it by month and upload the files together.' } };
   }
-  if (e.type === 'entity.parse.failed') {
-    send(res, 422, 'schema_invalid', 'The body is not valid JSON.', { path: 'body', hint: 'Check the file is UTF-8 JSON.' });
+  if (e?.type === 'entity.parse.failed') {
+    return { status: 422, code: 'schema_invalid', message: 'The body is not valid JSON.', extra: { path: 'body', hint: 'Check the file is UTF-8 JSON.' } };
+  }
+  return null;
+}
+
+export const errorHandler: ErrorRequestHandler = (err, req, res, _next) => {
+  const known = errorResponse(err);
+  if (known) {
+    res.status(known.status).json({ error: { code: known.code, message: known.message, ...known.extra } });
     return;
   }
   req.log?.error({ err }, 'unhandled error');
-  send(res, 500, 'internal', 'Something failed on the server. The request id is in the logs.', { hint: `request_id ${String(req.id)}` });
+  res.status(500).json({ error: { code: 'internal', message: 'Something failed on the server. The request id is in the logs.', hint: `request_id ${String(req.id)}` } });
 };
