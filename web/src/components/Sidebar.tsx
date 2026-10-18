@@ -7,12 +7,13 @@ import { useStore } from '../state/store';
 import { Icon, type IconName } from './Icon';
 import { LogoMark } from './LogoMark';
 
-export const STEPS: Array<{ route: Route; label: string; icon: IconName; hint: string }> = [
-  { route: 'import', label: 'Import', icon: 'upload-cloud', hint: 'Load orders' },
-  { route: 'ledger', label: 'Ledger', icon: 'table', hint: 'Per-order contribution' },
-  { route: 'leaks', label: 'Leaks', icon: 'alert-triangle', hint: 'Where money is lost' },
-  { route: 'scenario', label: 'Scenario', icon: 'sliders', hint: 'Change one thing' },
-  { route: 'decision', label: 'Decision', icon: 'check-circle', hint: 'Record what to do' },
+/** The five steps: name and hint as keys with their English (translated at render). */
+export const STEPS: Array<{ route: Route; labelKey: string; label: string; icon: IconName; hintKey: string; hint: string }> = [
+  { route: 'import', labelKey: 'nav.import', label: 'Import', icon: 'upload-cloud', hintKey: 'nav.hint.import', hint: 'Load orders' },
+  { route: 'ledger', labelKey: 'nav.ledger', label: 'Ledger', icon: 'table', hintKey: 'nav.hint.ledger', hint: 'Per-order contribution' },
+  { route: 'leaks', labelKey: 'nav.leaks', label: 'Leaks', icon: 'alert-triangle', hintKey: 'nav.hint.leaks', hint: 'Where money is lost' },
+  { route: 'scenario', labelKey: 'nav.scenario', label: 'Scenario', icon: 'sliders', hintKey: 'nav.hint.scenario', hint: 'Change one thing' },
+  { route: 'decision', labelKey: 'nav.decision', label: 'Decision', icon: 'check-circle', hintKey: 'nav.hint.decision', hint: 'Record what to do' },
 ];
 
 /** Proof and reporting pages, below the checks card. */
@@ -75,10 +76,11 @@ export function Sidebar({ route }: { route: Route }) {
   const overviewCurrent = route === 'overview';
   const allPass = checks !== null && checks.passed === checks.total;
   const footLinks = FOOT_LINKS.filter((l) => !l.account || account);
+  const aboutBrand = t('nav.aboutBrand', 'About {{brand}}', { brand: BRAND.name });
 
   return (
-    <nav className="sidebar" aria-label="Steps">
-      <button type="button" className="brand" onClick={openAbout} aria-label={`About ${BRAND.name}`} data-tip={`About ${BRAND.name}`}>
+    <nav className="sidebar" aria-label={t('nav.stepsAria', 'Steps')}>
+      <button type="button" className="brand" onClick={openAbout} aria-label={aboutBrand} data-tip={aboutBrand}>
         <span className="brand-mark" aria-hidden="true">
           <LogoMark size={34} />
         </span>
@@ -105,7 +107,7 @@ export function Sidebar({ route }: { route: Route }) {
         {STEPS.map((s, i) => {
           const current = s.route === route;
           const state = current ? 'is-active' : done[s.route] ? 'is-done' : 'is-future';
-          const label = t(`nav.${s.route}`);
+          const label = t(s.labelKey, s.label);
           return (
             <li key={s.route}>
               <a
@@ -118,7 +120,7 @@ export function Sidebar({ route }: { route: Route }) {
                 <Icon name={s.icon} size={19} />
                 <span className="nav-text">
                   <span className="nav-label">{label}</span>
-                  <span className="nav-hint">{t(`nav.hint.${s.route}`)}</span>
+                  <span className="nav-hint">{t(s.hintKey, s.hint)}</span>
                 </span>
                 {done[s.route] && !current ? (
                   <span className="nav-check" aria-hidden="true">
@@ -156,18 +158,20 @@ export function Sidebar({ route }: { route: Route }) {
             type="button"
             className={`checks-card${allPass ? '' : ' is-failing'}${route === 'checks' ? ' is-current' : ''}`}
             onClick={() => navigate('checks')}
-            aria-label={`${checks.passed} of ${checks.total} engine checks pass — open the public checks`}
+            aria-label={t('nav.checksAria', '{{passed}} of {{total}} engine checks pass — open the public checks', { passed: checks.passed, total: checks.total })}
             aria-current={route === 'checks' ? 'page' : undefined}
-            data-tip="Public checks"
+            data-tip={t('nav.publicChecks', 'Public checks')}
           >
             <span className="checks-icon" aria-hidden="true">
               <Icon name={allPass ? 'check-circle' : 'alert-triangle'} size={18} />
             </span>
             <span className="checks-text">
               <strong>
-                {allPass ? `All ${checks.total} checks pass` : `${checks.passed} of ${checks.total} checks pass`}
+                {allPass
+                  ? t('nav.checksAll', 'All {{total}} checks pass', { total: checks.total })
+                  : t('checks.summary', '{{passed}} of {{total}} checks pass', { passed: checks.passed, total: checks.total })}
               </strong>
-              {engineVersion ? <span>Engine {engineVersion} · view details</span> : null}
+              {engineVersion ? <span>{t('nav.engineDetails', 'Engine {{version}} · view details', { version: engineVersion })}</span> : null}
             </span>
           </button>
         ) : null}

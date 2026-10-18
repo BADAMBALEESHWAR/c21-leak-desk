@@ -1,6 +1,24 @@
+import type { TFunction } from 'i18next';
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ChartTip, useWidth, type TipState } from './ChartCard';
 import { compactInr, niceTicks } from './scale';
+
+/** The engine's product call (push | fix | niche | review) in the UI language; any other value is shown as sent. */
+export function productCall(t: TFunction, label: string): string {
+  switch (label) {
+    case 'push':
+      return t('quadrant.call.push', 'push');
+    case 'fix':
+      return t('quadrant.call.fix', 'fix');
+    case 'niche':
+      return t('quadrant.call.niche', 'niche');
+    case 'review':
+      return t('quadrant.call.review', 'review');
+    default:
+      return label;
+  }
+}
 
 export interface QuadrantPoint {
   id: string;
@@ -39,6 +57,7 @@ function splitAt(values: Array<{ v: number; high: boolean }>): number | null {
  * engine's own groups; the corner names and point labels carry the push / fix / niche / review reading.
  */
 export function QuadrantChart({ points, xLabel, yLabel, ariaLabel }: Props) {
+  const { t } = useTranslation();
   const [ref, width] = useWidth<HTMLDivElement>(560);
   const [active, setActive] = useState<string | null>(null);
   if (points.length === 0) return null;
@@ -66,7 +85,7 @@ export function QuadrantChart({ points, xLabel, yLabel, ariaLabel }: Props) {
     ? {
         x: Math.min(x(current.x) + 14, W - 210),
         y: Math.max(4, y(current.y) - 70),
-        title: `${current.id} · ${current.label}`,
+        title: `${current.id} · ${productCall(t, current.label)}`,
         rows: current.tip.map((r) => ({ label: r.label, value: r.value })),
       }
     : null;
@@ -79,17 +98,17 @@ export function QuadrantChart({ points, xLabel, yLabel, ariaLabel }: Props) {
   return (
     <div className="chart-plot" ref={ref}>
       <svg className="quadrant-svg" width={W} height={H} viewBox={`0 0 ${W} ${H}`} role="img" aria-label={ariaLabel}>
-        {yTicks.map((t) => (
-          <g key={`y${t}`}>
-            <line className="grid-line" x1={PAD.left} x2={W - PAD.right} y1={y(t)} y2={y(t)} />
-            <text className="axis-text" x={PAD.left - 8} y={y(t) + 4} textAnchor="end">
-              {compactInr(t)}
+        {yTicks.map((v) => (
+          <g key={`y${v}`}>
+            <line className="grid-line" x1={PAD.left} x2={W - PAD.right} y1={y(v)} y2={y(v)} />
+            <text className="axis-text" x={PAD.left - 8} y={y(v) + 4} textAnchor="end">
+              {compactInr(v)}
             </text>
           </g>
         ))}
-        {xTicks.map((t) => (
-          <text key={`x${t}`} className="axis-text" x={x(t)} y={H - PAD.bottom + 16} textAnchor="middle">
-            {t.toLocaleString('en-IN')}
+        {xTicks.map((v) => (
+          <text key={`x${v}`} className="axis-text" x={x(v)} y={H - PAD.bottom + 16} textAnchor="middle">
+            {v.toLocaleString('en-IN')}
           </text>
         ))}
         <text className="axis-title" x={W - PAD.right} y={H - 4} textAnchor="end">
@@ -102,16 +121,16 @@ export function QuadrantChart({ points, xLabel, yLabel, ariaLabel }: Props) {
         {ySplit !== null ? <line className="quad-guide" x1={PAD.left} x2={W - PAD.right} y1={y(ySplit)} y2={y(ySplit)} /> : null}
         {yLo < 0 ? <line className="axis-line" x1={PAD.left} x2={W - PAD.right} y1={y(0)} y2={y(0)} /> : null}
         <text className="quad-name" x={right} y={top} textAnchor="end">
-          Push
+          {t('quadrant.push', 'Push')}
         </text>
         <text className="quad-name" x={left} y={top}>
-          Niche
+          {t('quadrant.niche', 'Niche')}
         </text>
         <text className="quad-name" x={right} y={bottom} textAnchor="end">
-          Fix
+          {t('quadrant.fix', 'Fix')}
         </text>
         <text className="quad-name" x={left} y={bottom}>
-          Review
+          {t('quadrant.review', 'Review')}
         </text>
         {points.map((p) => (
           <g
@@ -119,7 +138,7 @@ export function QuadrantChart({ points, xLabel, yLabel, ariaLabel }: Props) {
             className={`quad-point${active === p.id ? ' is-active' : ''}`}
             tabIndex={0}
             role="img"
-            aria-label={`${p.id}, ${p.label}: ${p.tip.map((r) => `${r.label} ${r.value}`).join(', ')}`}
+            aria-label={`${p.id}, ${productCall(t, p.label)}: ${p.tip.map((r) => `${r.label} ${r.value}`).join(', ')}`}
             onPointerEnter={() => setActive(p.id)}
             onPointerLeave={() => setActive(null)}
             onFocus={() => setActive(p.id)}

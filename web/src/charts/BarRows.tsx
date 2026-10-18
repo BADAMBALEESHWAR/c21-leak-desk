@@ -1,5 +1,6 @@
 import { useRef, useState, type FocusEvent, type KeyboardEvent, type PointerEvent } from 'react';
 import { ChartTip, type SeriesTone, type TipState } from './ChartCard';
+import { apiText } from '../lib/apiText';
 
 export interface BarValue {
   series: string;
@@ -69,7 +70,7 @@ export function BarRows({ rows, ariaLabel, labelRoom = 0.22, labelWidth = 150, o
   return (
     <div className="bars" ref={wrapRef} role="list" aria-label={ariaLabel} style={{ ['--bar-label-w' as string]: `${labelWidth}px` }}>
       {rows.map((row) => {
-        const summary = `${row.label}: ${row.values.map((v) => `${v.series} ${v.text}`).join(', ')}`;
+        const summary = `${apiText(row.label)}: ${row.values.map((v) => `${v.series} ${v.text}`).join(', ')}`;
         return (
           <div
             key={row.key}
@@ -85,7 +86,7 @@ export function BarRows({ rows, ariaLabel, labelRoom = 0.22, labelWidth = 150, o
             onKeyDown={onKey(row)}
           >
             <div className="bar-label">
-              <span className="bar-label-text">{row.label}</span>
+              <span className="bar-label-text">{apiText(row.label)}</span>
               {row.sub ? (
                 <span className="bar-label-sub" title={row.sub}>
                   {row.sub}

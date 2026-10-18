@@ -3,8 +3,10 @@ import type { AnalysisResponse, LineKey, OrderResult, WaterfallLine, WorkedOrder
 import { BridgeChart } from '../charts/BridgeChart';
 import { WaterfallChart, WaterfallNotes } from '../charts/WaterfallChart';
 import { BRAND } from '../brand';
-import { formatCount, formatDate, formatDecimal, formatInr, formatPct, plural } from '../lib/format';
-import { ALLOCATED_EN, ALLOCATED_KEY, fullReturnPartialRecovery, handlingEstimateUsed, LEAK_LABELS } from '../lib/labels';
+import { lower } from '../i18n';
+import { apiText } from '../lib/apiText';
+import { formatCount, formatDate, formatDecimal, formatInr, formatPct } from '../lib/format';
+import { ALLOCATED_EN, ALLOCATED_KEY, ATTRIBUTION_LABEL, fullReturnPartialRecovery, handlingEstimateUsed, LEAK_LABELS } from '../lib/labels';
 import { ledgerHref } from '../lib/router';
 import { useStore, type BridgeFocus } from '../state/store';
 import { Pill } from './Badge';
@@ -174,6 +176,26 @@ function WhyLeaks({ order }: { order: OrderResult }) {
   );
 }
 
+type TFn = ReturnType<typeof useTranslation>['t'];
+
+/** The engine's headline-gate reason (one of two sentences), in the UI language; anything else is shown as sent. */
+function gateReasonText(t: TFn, reason: string): string {
+  if (reason === 'Refund and recovery facts are complete for every order in the period.') {
+    return t('drawer.gate.open', 'Refund and recovery facts are complete for every order in the period.');
+  }
+  const m = /^Contribution % is hidden until refund and recovery facts are complete \((\d+) orders? unknown\)\.$/.exec(reason);
+  if (m) return t('drawer.gate.closed', 'Contribution % is hidden until refund and recovery facts are complete ({{n}} orders unknown).', { count: Number(m[1]), n: m[1] });
+  return reason;
+}
+
+/** The engine's per-order labels (a fixed set), in the UI language; anything else is shown as sent. */
+function orderLabelText(t: TFn, label: string): string {
+  if (label === 'handling estimated') return t('drawer.tag.handlingEstimated', 'handling estimated');
+  if (label === 'synthetic row') return t('drawer.tag.syntheticRow', 'synthetic row');
+  if (label === ATTRIBUTION_LABEL) return t('drawer.tag.attribution', 'Attribution is allocation, not causation.');
+  return label;
+}
+
 function OrderDetail({ order, periodEnd, attribution }: { order: OrderResult; periodEnd: string | null; attribution: AnalysisResponse['attribution'] | null }) {
   const { t } = useTranslation();
   const flags = order.flags.filter((f) => f !== 'late_refund' || !order.late_refund);
@@ -185,27 +207,27 @@ function OrderDetail({ order, periodEnd, attribution }: { order: OrderResult; pe
     <div className="drawer-stack">
       <dl className="kv kv-2">
         <div>
-          <dt>Channel</dt>
-          <dd>{order.channel}</dd>
+          <dt>{t('ledger.channel')}</dt>
+          <dd>{order.channel === 'unassigned' ? t('ledger.unassigned', 'unassigned') : order.channel}</dd>
         </div>
         <div>
-          <dt>Product</dt>
-          <dd>{order.product_id}</dd>
+          <dt>{t('ledger.product')}</dt>
+          <dd>{order.product_id === 'unassigned' ? t('ledger.unassigned', 'unassigned') : order.product_id}</dd>
         </div>
         <div>
-          <dt>Returned</dt>
-          <dd>{order.returned ? 'Yes' : 'No'}</dd>
+          <dt>{t('status.returned')}</dt>
+          <dd>{order.returned ? t('drawer.yes', 'Yes') : t('drawer.no', 'No')}</dd>
         </div>
         {order.refund_date ? (
           <div>
-            <dt>Refund date</dt>
+            <dt>{t('drawer.refundDate', 'Refund date')}</dt>
             <dd>{order.refund_date}</dd>
           </div>
         ) : null}
         {flags.length > 0 ? (
           <div>
-            <dt>Flags</dt>
-            <dd>{flags.map((f) => f.replace(/_/g, ' ')).join(', ')}</dd>
+            <dt>{t('drawer.flags', 'Flags')}</dt>
+            <dd>{flags.map((f) => (f === 'late_refund' ? lower(t('status.lateRefund')) : f.replace(/_/g, ' '))).join(', ')}</dd>
           </div>
         ) : null}
       </dl>
@@ -214,7 +236,7 @@ function OrderDetail({ order, periodEnd, attribution }: { order: OrderResult; pe
 
       {order.leak_cause ? (
         <div className="drawer-row">
-          <span className="drawer-row-label">Leak cause</span>
+          <span className="drawer-row-label">{t('drawer.leakCause', 'Leak cause')}</span>
           <Pill tone={order.leak_cause === 'refund_unknown' ? 'warning' : 'danger'} icon="alert-triangle">
             {t(`focus.cause.${order.leak_cause}`, LEAK_LABELS[order.leak_cause])}
           </Pill>
@@ -251,9 +273,9 @@ function OrderDetail({ order, periodEnd, attribution }: { order: OrderResult; pe
 
       <RecoveryLine order={order} />
 
-      <section className="drawer-section" aria-label="Waterfall">
-        <h3 className="section-label">Waterfall</h3>
-        <WaterfallChart lines={order.lines} contribution={order.contribution_inr} label={order.late_refund ? 'In period' : 'Contribution'} />
+      <section className="drawer-section" aria-label={t('drawer.waterfall', 'Waterfall')}>
+        <h3 className="section-label">{t('drawer.waterfall', 'Waterfall')}</h3>
+        <WaterfallChart lines={order.lines} contribution={order.contribution_inr} label={order.late_refund ? t('drawer.inPeriod', 'In period') : t('ledger.contribution')} />
         {attribution === 'channel' ? (
           <p className="field-hint attr-note">{t('drawer.adsChannel', 'Ads move to the channel line in this mode; channel spend is {{note}}.', { note: t(ALLOCATED_KEY, ALLOCATED_EN) })}</p>
         ) : adsInr ? (
@@ -264,13 +286,13 @@ function OrderDetail({ order, periodEnd, attribution }: { order: OrderResult; pe
       </section>
 
       {order.unknown_fields.length > 0 ? (
-        <Callout tone="warning" title={`Unknown ${order.unknown_fields.length === 1 ? 'field' : 'fields'}: ${order.unknown_fields.join(', ')}`}>
-          <p>Contribution is not computed until {order.unknown_fields.length === 1 ? 'it is' : 'they are'} supplied — unknown, never zero.</p>
+        <Callout tone="warning" title={t('drawer.unknownFields', 'Unknown fields: {{fields}}', { count: order.unknown_fields.length, fields: order.unknown_fields.join(', ') })}>
+          <p>{t('drawer.notComputed', 'Contribution is not computed until they are supplied — unknown, never zero.', { count: order.unknown_fields.length })}</p>
         </Callout>
       ) : null}
 
-      <section className="drawer-section" aria-label="Line notes">
-        <h3 className="section-label">Line notes</h3>
+      <section className="drawer-section" aria-label={t('drawer.lineNotes', 'Line notes')}>
+        <h3 className="section-label">{t('drawer.lineNotes', 'Line notes')}</h3>
         <WaterfallNotes lines={order.lines} />
       </section>
 
@@ -278,7 +300,7 @@ function OrderDetail({ order, periodEnd, attribution }: { order: OrderResult; pe
         <div className="drawer-tags">
           {order.labels.map((l) => (
             <span key={l} className="pill pill-outline pill-xs">
-              {l}
+              {orderLabelText(t, l)}
             </span>
           ))}
         </div>
@@ -288,31 +310,37 @@ function OrderDetail({ order, periodEnd, attribution }: { order: OrderResult; pe
 }
 
 function WorkedDetail({ data }: { data: WorkedOrderResult }) {
+  const { t } = useTranslation();
   return (
     <div className="drawer-stack">
-      <p className="muted">The reference worked order, six lines, computed by the same engine.</p>
-      <section className="drawer-section" aria-label="Waterfall">
-        <h3 className="section-label">Waterfall</h3>
-        <WaterfallChart lines={data.lines} contribution={data.contribution_inr} />
+      <p className="muted">{t('drawer.workedIntro', 'The reference worked order, six lines, computed by the same engine.')}</p>
+      <section className="drawer-section" aria-label={t('drawer.waterfall', 'Waterfall')}>
+        <h3 className="section-label">{t('drawer.waterfall', 'Waterfall')}</h3>
+        <WaterfallChart lines={data.lines} contribution={data.contribution_inr} label={t('ledger.contribution')} />
       </section>
-      <section className="drawer-section" aria-label="Line notes">
-        <h3 className="section-label">Line notes</h3>
+      <section className="drawer-section" aria-label={t('drawer.lineNotes', 'Line notes')}>
+        <h3 className="section-label">{t('drawer.lineNotes', 'Line notes')}</h3>
         <WaterfallNotes lines={data.lines} />
       </section>
       <Callout tone="info">
-        <p>{data.note}</p>
+        <p>{apiText(data.note)}</p>
       </Callout>
     </div>
   );
 }
 
-const FOCUS_LABEL: Record<BridgeFocus, string> = { gross: 'Gross sales', net_sales: 'Net sales', contribution: 'Operational contribution' };
-
 function BridgeDetail({ a, focus }: { a: AnalysisResponse; focus: BridgeFocus }) {
+  const { t } = useTranslation();
   const lines = a.bridge ?? [];
   if (lines.length === 0) {
-    return <Callout tone="info" title="This analysis has no period waterfall.">Run the analysis again to get it.</Callout>;
+    return (
+      <Callout tone="info" title={t('drawer.noBridge', 'This analysis has no period waterfall.')}>
+        {t('drawer.noBridgeBody', 'Run the analysis again to get it.')}
+      </Callout>
+    );
   }
+  const focusLabel =
+    focus === 'gross' ? t('ledger.gross') : focus === 'net_sales' ? t('ledger.netSales') : t('ledger.operationalContribution', 'Operational contribution');
   const focusLine = lines.find((l) => l.key === focus);
   const bridgeGross = lines.find((l) => l.key === 'gross')?.amount_inr ?? null;
   // The one subtraction the page does: gross that sits in unknown orders, outside the bridge.
@@ -323,31 +351,37 @@ function BridgeDetail({ a, focus }: { a: AnalysisResponse; focus: BridgeFocus })
     <div className="drawer-stack">
       {focusLine ? (
         <div className="drawer-hero">
-          <span className="drawer-hero-label">{FOCUS_LABEL[focus]}</span>
+          <span className="drawer-hero-label">{focusLabel}</span>
           <span className="drawer-hero-value">
             <Money value={focusLine.amount_inr} tone={focus === 'contribution' ? 'contribution' : 'plain'} />
           </span>
           <span className="drawer-hero-sub">
-            {a.totals.orders - unknown} computed {plural(a.totals.orders - unknown, 'order', 'orders')} · period end {a.period_end}
+            {t('drawer.computedOrders', '{{count}} computed orders · period end {{end}}', { count: a.totals.orders - unknown, end: a.period_end })}
           </span>
         </div>
       ) : null}
       {excludedGross !== 0 ? (
-        <Callout tone="warning" title={`Excludes ${unknown} unknown ${plural(unknown, 'order', 'orders')} — ${formatInr(excludedGross)} gross`}>
-          <p>The waterfall covers orders whose contribution can be computed, so its gross differs from the {formatInr(a.totals.gross_inr)} headline.</p>
+        <Callout tone="warning" title={t('drawer.excludes', 'Excludes {{count}} unknown orders — {{inr}} gross', { count: unknown, inr: formatInr(excludedGross) })}>
+          <p>
+            {t('drawer.excludesBody', 'The waterfall covers orders whose contribution can be computed, so its gross differs from the {{inr}} headline.', {
+              inr: formatInr(a.totals.gross_inr),
+            })}
+          </p>
         </Callout>
       ) : null}
-      <section className="drawer-section" aria-label="Period waterfall">
-        <h3 className="section-label">From gross sales to contribution</h3>
+      <section className="drawer-section" aria-label={t('drawer.periodWaterfall', 'Period waterfall')}>
+        <h3 className="section-label">{t('drawer.grossToContribution', 'From gross sales to contribution')}</h3>
         <BridgeChart lines={lines} focus={focus} estimated={handlingEstimated ? ['handling'] : []} />
       </section>
       {handlingEstimated ? (
         <p className="field-hint">
-          Handling includes {formatInr(a.config.handling_default_inr)} per order, estimated for rows without handling_inr.
+          {t('unit.handlingTip', 'Handling includes {{inr}} per order, estimated for rows without handling_inr.', { inr: formatInr(a.config.handling_default_inr) })}
         </p>
       ) : null}
       {a.attribution === 'channel' ? (
-        <p className="field-hint">Channel mode: ads move off the orders and channel spend is deducted once, at the channel line. Channel spend is allocated, not caused.</p>
+        <p className="field-hint">
+          {t('drawer.channelMode', 'Channel mode: ads move off the orders and channel spend is deducted once, at the channel line. Channel spend is allocated, not caused.')}
+        </p>
       ) : null}
       <ReconciliationLine rec={a.reconciliation} />
     </div>
@@ -356,33 +390,34 @@ function BridgeDetail({ a, focus }: { a: AnalysisResponse; focus: BridgeFocus })
 
 function MarginDetail({ a }: { a: AnalysisResponse }) {
   const { openOrderResult, closeDrawer, focusLedgerTable } = useStore();
-  const t = a.totals;
-  const open = a.headline_gate.open && t.headline_ready !== false && t.contribution_pct !== null;
+  const { t } = useTranslation();
+  const tot = a.totals;
+  const open = a.headline_gate.open && tot.headline_ready !== false && tot.contribution_pct !== null;
   if (open) {
     return (
       <div className="drawer-stack">
         <div className="drawer-hero">
-          <span className="drawer-hero-label">Contribution margin</span>
-          <span className="drawer-hero-value num">{formatPct(t.contribution_pct as number)}</span>
-          <span className="drawer-hero-sub">Contribution ÷ net sales</span>
+          <span className="drawer-hero-label">{t('drawer.marginTitle', 'Contribution margin')}</span>
+          <span className="drawer-hero-value num">{formatPct(tot.contribution_pct as number)}</span>
+          <span className="drawer-hero-sub">{t('drawer.marginFormula', 'Contribution ÷ net sales')}</span>
         </div>
         <div className="formula-card">
           <div>
-            <span className="compare-label">Contribution</span>
+            <span className="compare-label">{t('ledger.contribution')}</span>
             <span className="compare-value">
-              <Money value={t.contribution_inr} tone="contribution" />
+              <Money value={tot.contribution_inr} tone="contribution" />
             </span>
           </div>
           <span className="formula-op" aria-hidden="true">÷</span>
           <div>
-            <span className="compare-label">Net sales</span>
+            <span className="compare-label">{t('ledger.netSales')}</span>
             <span className="compare-value">
-              <Money value={t.net_sales_inr} tone="plain" />
+              <Money value={tot.net_sales_inr} tone="plain" />
             </span>
           </div>
         </div>
-        <Callout tone="success" title="Refund and recovery facts are complete.">
-          <p>{a.headline_gate.reason}</p>
+        <Callout tone="success" title={t('drawer.factsComplete', 'Refund and recovery facts are complete.')}>
+          <p>{gateReasonText(t, a.headline_gate.reason)}</p>
         </Callout>
       </div>
     );
@@ -391,31 +426,34 @@ function MarginDetail({ a }: { a: AnalysisResponse }) {
   return (
     <div className="drawer-stack">
       <div className="drawer-hero">
-        <span className="drawer-hero-label">Contribution margin</span>
+        <span className="drawer-hero-label">{t('drawer.marginTitle', 'Contribution margin')}</span>
         <span className="drawer-hero-value kpi-locked">
-          <Icon name="lock" size={22} /> Hidden
+          <Icon name="lock" size={22} /> {t('drawer.hidden', 'Hidden')}
         </span>
-        <span className="drawer-hero-sub">No margin headline until refund facts are complete.</span>
+        <span className="drawer-hero-sub">{t('drawer.noHeadline', 'No margin headline until refund facts are complete.')}</span>
       </div>
-      <Callout tone="warning" title="Why it is hidden">
-        <p>{a.headline_gate.reason}</p>
+      <Callout tone="warning" title={t('drawer.whyHidden', 'Why it is hidden')}>
+        <p>{gateReasonText(t, a.headline_gate.reason)}</p>
       </Callout>
-      <section className="drawer-section" aria-label="Unknown orders">
-        <h3 className="section-label">
-          Unknown {plural(unknownOrders.length, 'order', 'orders')} ({unknownOrders.length})
-        </h3>
+      <section className="drawer-section" aria-label={t('drawer.unknownOrders', 'Unknown orders')}>
+        <h3 className="section-label">{t('drawer.unknownOrdersHead', 'Unknown orders ({{count}})', { count: unknownOrders.length })}</h3>
         <ul className="unknown-list">
           {unknownOrders.slice(0, 20).map((o) => (
             <li key={o.order_id}>
-              <button type="button" className="unknown-item" onClick={() => openOrderResult(o)} aria-label={`Open ${o.order_id}: missing ${o.unknown_fields.join(', ')}`}>
+              <button
+                type="button"
+                className="unknown-item"
+                onClick={() => openOrderResult(o)}
+                aria-label={t('drawer.openMissing', 'Open {{id}}: missing {{fields}}', { id: o.order_id, fields: o.unknown_fields.join(', ') })}
+              >
                 <span className="unknown-id">{o.order_id}</span>
-                <span className="unknown-fields">Missing {o.unknown_fields.join(', ')}</span>
+                <span className="unknown-fields">{t('drawer.missing', 'Missing {{fields}}', { fields: o.unknown_fields.join(', ') })}</span>
                 <Icon name="arrow-right" size={16} />
               </button>
             </li>
           ))}
         </ul>
-        {unknownOrders.length > 20 ? <p className="field-hint">and {unknownOrders.length - 20} more in the ledger.</p> : null}
+        {unknownOrders.length > 20 ? <p className="field-hint">{t('drawer.moreInLedger', 'and {{n}} more in the ledger.', { n: unknownOrders.length - 20 })}</p> : null}
       </section>
       <Button
         variant="primary"
@@ -425,7 +463,7 @@ function MarginDetail({ a }: { a: AnalysisResponse }) {
           focusLedgerTable('unknown');
         }}
       >
-        Show unknown orders
+        {t('drawer.showUnknown', 'Show unknown orders')}
       </Button>
     </div>
   );
@@ -433,6 +471,7 @@ function MarginDetail({ a }: { a: AnalysisResponse }) {
 
 export function OrderDrawer() {
   const { drawer, drawerOpen, closeDrawer, analysis, correctedOrderIds } = useStore();
+  const { t } = useTranslation();
 
   let title = '';
   let meta = null;
@@ -448,17 +487,17 @@ export function OrderDrawer() {
     );
     body = <OrderDetail order={o} periodEnd={analysis?.period_end ?? null} attribution={analysis?.attribution ?? null} />;
   } else if (drawer?.kind === 'worked') {
-    title = 'Worked example order';
+    title = t('drawer.workedTitle', 'Worked example order');
     meta = drawer.data ? (
       <>
-        <span className="drawer-date">Contribution {formatInr(drawer.data.contribution_inr)}</span>
+        <span className="drawer-date">{t('drawer.contributionInr', 'Contribution {{inr}}', { inr: formatInr(drawer.data.contribution_inr) })}</span>
         {drawer.data.expected_contribution_inr !== null ? (
           drawer.data.matches ? (
             <Pill tone="success" icon="check">
-              matches the reference {formatInr(drawer.data.expected_contribution_inr)}
+              {t('drawer.matchesRef', 'matches the reference {{inr}}', { inr: formatInr(drawer.data.expected_contribution_inr) })}
             </Pill>
           ) : (
-            <Pill tone="danger">does not match</Pill>
+            <Pill tone="danger">{t('drawer.noMatch', 'does not match')}</Pill>
           )
         ) : null}
       </>
@@ -468,47 +507,51 @@ export function OrderDrawer() {
     ) : drawer.error ? (
       <Callout tone="danger" title={drawer.error} role="alert" />
     ) : (
-      <div className="drawer-stack" role="status" aria-label="Loading the worked order">
+      <div className="drawer-stack" role="status" aria-label={t('drawer.loadingWorked', 'Loading the worked order')}>
         <Skeleton width="60%" />
         <Skeleton width="100%" height={180} />
       </div>
     );
   } else if (drawer?.kind === 'bridge' && analysis) {
-    title = 'Period waterfall';
+    title = t('drawer.periodWaterfall', 'Period waterfall');
     meta = (
       <>
-        <Pill tone="neutral">{analysis.attribution === 'channel' ? 'Channel spend' : 'Allocate ads'}</Pill>
+        <Pill tone="neutral">{analysis.attribution === 'channel' ? t('ledger.channelSpend') : t('drawer.allocateAds', 'Allocate ads')}</Pill>
         {analysis.totals.partial ? (
           <Pill tone="warning" dot>
-            Partial · {analysis.totals.unknown_count} unknown
+            {t('drawer.partialUnknown', 'Partial · {{n}} unknown', { n: analysis.totals.unknown_count })}
           </Pill>
         ) : null}
       </>
     );
     body = <BridgeDetail a={analysis} focus={drawer.focus} />;
   } else if (drawer?.kind === 'margin' && analysis) {
-    title = 'Contribution margin';
+    title = t('drawer.marginTitle', 'Contribution margin');
     meta = analysis.headline_gate.open ? (
       <Pill tone="success" icon="check">
-        Headline open
+        {t('drawer.headlineOpen', 'Headline open')}
       </Pill>
     ) : (
       <Pill tone="warning" icon="lock">
-        Headline gate closed
+        {t('drawer.headlineClosed', 'Headline gate closed')}
       </Pill>
     );
     body = <MarginDetail a={analysis} />;
   } else if (drawer?.kind === 'checks') {
-    title = 'Public checks';
-    meta = <span className="drawer-date">Engine checks · 25 points</span>;
+    title = t('drawer.checksTitle', 'Public checks');
+    meta = <span className="drawer-date">{t('drawer.checksMeta', 'Engine checks · 25 points')}</span>;
     body = <ChecksDetail />;
   } else if (drawer?.kind === 'about') {
-    title = `About ${BRAND.name}`;
-    meta = <span className="drawer-date">{BRAND.tagline}</span>;
+    title = t('drawer.aboutTitle', 'About {{name}}', { name: BRAND.name });
+    meta = <span className="drawer-date">{t('tagline', BRAND.tagline)}</span>;
     body = <AboutDetail />;
   } else if (drawer?.kind === 'missing') {
     title = drawer.orderId;
-    body = <Callout tone="info" title={`Order ${drawer.orderId} is not in the current analysis.`}>Load a dataset that contains it, then open it from the ledger.</Callout>;
+    body = (
+      <Callout tone="info" title={t('drawer.missingTitle', 'Order {{id}} is not in the current analysis.', { id: drawer.orderId })}>
+        {t('drawer.missingBody', 'Load a dataset that contains it, then open it from the ledger.')}
+      </Callout>
+    );
   }
 
   return (

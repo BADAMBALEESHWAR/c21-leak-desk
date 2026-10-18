@@ -8,7 +8,8 @@ import { LEAK_LABELS } from '../lib/labels';
 import { hrefFor } from '../lib/router';
 import { isRunnable, useStore, type NarrationState } from '../state/store';
 import { AiBadge } from './AiBadge';
-import { ConfidenceBadge, Pill } from './Badge';
+import { Pill } from './Badge';
+import { EvidenceBadge } from './EvidenceBadge';
 import { Button, ButtonLink } from './Button';
 import { Drawer } from './Drawer';
 import { Icon } from './Icon';
@@ -257,7 +258,7 @@ export function FixAdvisor({ cause, open, onClose }: { cause: string | null; ope
                         <span className="fix-option-label">{iv.label}</span>
                         <span className="fix-option-figures">
                           <Money value={iv.expected_delta_inr} tone="contribution" signed />
-                          {iv.confidence ? <ConfidenceBadge confidence={iv.confidence} prefix={t('overview.confidence', 'Confidence')} /> : null}
+                          <EvidenceBadge evidence={iv.evidence} confidence={iv.confidence} />
                         </span>
                       </span>
                     </label>

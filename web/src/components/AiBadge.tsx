@@ -1,5 +1,4 @@
 import { useTranslation } from 'react-i18next';
-import { hrefFor } from '../lib/router';
 import { Icon } from './Icon';
 
 export type AiBadgeSource = 'ai' | 'template' | 'table';
@@ -24,9 +23,6 @@ export function AiBadge({ source, compact = false, className, text }: { source: 
         {source === 'ai' ? t('aiBadge.short', 'AI') : source === 'table' ? t('aiBadge.tableShort', 'Table') : t('aiBadge.templateShort', 'Template')}
       </span>
       {compact ? null : <span className="ai-badge-text">{label}</span>}
-      <a className="ai-badge-link" href={hrefFor('ai')} title={label}>
-        {t('aiBadge.why', 'Why this is safe')}
-      </a>
     </span>
   );
 }

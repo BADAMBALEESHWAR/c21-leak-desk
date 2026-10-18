@@ -1,19 +1,20 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { api } from '../api/client';
-import { addDays, monthOf, monthStart, readMargins, formatPct2, type Margins } from '../api/proof';
+import { addDays, interventionText, monthOf, monthStart, readMargins, formatPct2, type Margins } from '../api/proof';
 import type { AnalysisResponse, DecisionSummary, PulseLeaks, PulseOverview } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
 import { BRAND } from '../brand';
 import { AiBadge } from '../components/AiBadge';
 import { useDigest } from '../components/AiBriefing';
-import { Pill } from '../components/Badge';
+import { CONFIDENCE_KEY, Pill } from '../components/Badge';
 import { Button, ButtonLink } from '../components/Button';
 import { LogoMark } from '../components/LogoMark';
 import { Money } from '../components/Money';
 import { ShareActions } from '../components/ShareActions';
 import { EmptyPanel, SkeletonCards } from '../components/ui';
-import { localeFor } from '../i18n';
+import { localeFor, lower } from '../i18n';
+import { apiText } from '../lib/apiText';
 import { formatCount, formatDate, formatInr, formatPct } from '../lib/format';
 import { datasetName, handlingEstimateUsed, LEAK_LABELS } from '../lib/labels';
 import { hrefFor, useHashLocation } from '../lib/router';
@@ -160,7 +161,7 @@ function UnitEconomics({ margins, wholePeriod, handlingAssumed }: { margins: Mar
               <tr key={l.label} className={`is-${l.kind}`}>
                 <th scope="row">
                   {l.kind === 'cost' ? <span className="report-minus">−</span> : null}
-                  {l.label}
+                  {apiText(l.label)}
                   {l.tag}
                 </th>
                 <td className="r num">{l.value !== null ? formatInr(Math.abs(l.value)) : l.kind === 'sub' ? '' : na}</td>
@@ -268,7 +269,7 @@ export function ReportScreen() {
         .filter(([, v]) => v > 0)
         .sort((a, b) => b[1] - a[1])
         .slice(0, 5)
-        .map(([cause, lost]) => ({ cause, label: LEAK_LABELS[cause as keyof typeof LEAK_LABELS] ?? cause.replace(/_/g, ' '), lost, count: null }))
+        .map(([cause, lost]) => ({ cause, label: t(`focus.cause.${cause}`, LEAK_LABELS[cause as keyof typeof LEAK_LABELS] ?? cause.replace(/_/g, ' ')), lost, count: null }))
     : [...analysis.leaks]
         .sort((a, b) => (b.lost_inr ?? -1) - (a.lost_inr ?? -1))
         .slice(0, 5)
@@ -326,7 +327,7 @@ export function ReportScreen() {
             <LogoMark size={36} />
             <span>
               <strong>{BRAND.name}</strong>
-              <span className="report-brand-sub">{BRAND.tagline}</span>
+              <span className="report-brand-sub">{t('tagline', BRAND.tagline)}</span>
             </span>
           </div>
           <div className="report-title-block">
@@ -530,9 +531,9 @@ export function ReportScreen() {
                   return (
                     <tr key={d.decision_id}>
                       <th scope="row">
-                        {d.intervention_label}
+                        {interventionText(t, d.intervention, d.intervention_label)}
                         {d.confidence === 'unknown' || d.confidence === 'low' ? (
-                          <span className="report-row-sub">{t('report.confidence', 'confidence {{value}}', { value: d.confidence })}</span>
+                          <span className="report-row-sub">{t('report.confidence', 'confidence {{value}}', { value: lower(t(CONFIDENCE_KEY[d.confidence])) })}</span>
                         ) : null}
                       </th>
                       <td className="r num">{d.expected_delta_inr !== null ? formatInr(d.expected_delta_inr) : '—'}</td>

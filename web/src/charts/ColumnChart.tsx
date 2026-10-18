@@ -1,4 +1,5 @@
 import { useState, type KeyboardEvent, type PointerEvent } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ChartTip, useWidth, type SeriesTone, type TipState } from './ChartCard';
 import { barPath, compactInr, niceTicks } from './scale';
 
@@ -28,6 +29,7 @@ const PAD = { top: 22, right: 8, bottom: 26, left: 52 };
  * a 2px gap between neighbours. Hover or arrow keys read every series for a category.
  */
 export function ColumnChart({ categories, series, ariaLabel, format, height = 220, callout, labelExtremes }: Props) {
+  const { t } = useTranslation();
   const [ref, width] = useWidth<HTMLDivElement>(560);
   const [active, setActive] = useState<number | null>(null);
   const n = categories.length;
@@ -55,7 +57,7 @@ export function ColumnChart({ categories, series, ariaLabel, format, height = 22
     x: Math.min(PAD.left + i * band + band / 2 + 12, W - 200),
     y: 4,
     title: categories[i].full,
-    rows: series.map((s) => ({ label: s.label, value: s.values[i] === null ? 'unknown' : format(s.values[i] as number), tone: s.tone })),
+    rows: series.map((s) => ({ label: s.label, value: s.values[i] === null ? t('chart.unknown', 'unknown') : format(s.values[i] as number), tone: s.tone })),
   });
 
   const onMove = (e: PointerEvent<SVGRectElement>) => {
@@ -100,7 +102,7 @@ export function ColumnChart({ categories, series, ariaLabel, format, height = 22
         height={H}
         viewBox={`0 0 ${W} ${H}`}
         role="img"
-        aria-label={`${ariaLabel}. Use the arrow keys to read each column.`}
+        aria-label={t('chart.arrowColumns', '{{label}}. Use the arrow keys to read each column.', { label: ariaLabel })}
         tabIndex={0}
         onKeyDown={onKey}
         onFocus={() => setActive((c) => c ?? 0)}

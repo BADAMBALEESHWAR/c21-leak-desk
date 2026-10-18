@@ -1,4 +1,5 @@
 import { useEffect, useId, useState } from 'react';
+import type { TFunction } from 'i18next';
 import { useTranslation } from 'react-i18next';
 import { aiLocalOff, api, isNotFound, setAiLocalOff, toErrorInfo, type ErrorInfo } from '../api/client';
 import type { AiFeatureCount, AiStatus } from '../api/types';
@@ -7,6 +8,7 @@ import { Pill } from '../components/Badge';
 import { Icon, type IconName } from '../components/Icon';
 import { PageHeader } from '../components/Page';
 import { Callout, ErrorCallout, Skeleton } from '../components/ui';
+import { apiText } from '../lib/apiText';
 import { formatCount } from '../lib/format';
 import { hrefFor } from '../lib/router';
 import { useStore } from '../state/store';
@@ -48,6 +50,26 @@ export function fieldsOf(f: AiStatus['fields_sent'] | undefined): string[] {
   };
   walk(f);
   return [...out];
+}
+
+/** An AI feature id in words ("narration", "ask"); an id this build does not know reads with spaces for underscores. */
+function featureName(t: TFunction, id: string): string {
+  switch (id) {
+    case 'narration':
+      return t('ai.feat.narration', 'narration');
+    case 'autopilot':
+      return t('ai.feat.autopilot', 'autopilot');
+    case 'advisor':
+      return t('ai.feat.advisor', 'advisor');
+    case 'ask':
+      return t('ai.feat.ask', 'ask');
+    case 'digest':
+      return t('ai.feat.digest', 'digest');
+    case 'import_map':
+      return t('ai.feat.importMap', 'import map');
+    default:
+      return id.replace(/_/g, ' ');
+  }
 }
 
 function featureRows(s: AiStatus): Array<{ name: string; calls: number | null; accepted: number | null; rejected: number | null }> {
@@ -193,7 +215,7 @@ function GuardLog() {
             <tbody>
               {rows.map((r) => (
                 <tr key={r.name}>
-                  <th scope="row">{r.name.replace(/_/g, ' ')}</th>
+                  <th scope="row">{featureName(t, r.name)}</th>
                   <td className="r num">{r.calls === null ? '—' : formatCount(r.calls)}</td>
                   <td className="r num">{r.accepted === null ? '—' : formatCount(r.accepted)}</td>
                   <td className="r num">{r.rejected === null ? '—' : formatCount(r.rejected)}</td>
@@ -211,7 +233,7 @@ function GuardLog() {
           <dl className="ai-fields-by">
           {byFeature.map(([feature, list]) => (
             <div key={feature}>
-              <dt>{feature.replace(/_/g, ' ')}</dt>
+              <dt>{featureName(t, feature)}</dt>
               <dd>
                 <ul className="ai-fields">
                   {list.map((f) => (
@@ -241,7 +263,7 @@ function GuardLog() {
           )}
         </>
       )}
-      {status.region_note ? <p className="small muted">{status.region_note}</p> : null}
+      {status.region_note ? <p className="small muted">{apiText(status.region_note)}</p> : null}
       <p className="small muted">{t('ai.logNote', 'Counts since the server started. A rejected reply is replaced by the template text, so the page never shows an unchecked number.')}</p>
     </div>
   );

@@ -1,6 +1,8 @@
 // Proof endpoints: the public checks with their working shown, and the check-3 mini scenario.
 // Both are public (no session), so these use plain fetch. Every new field is optional: the screens say
 // "not available yet" for anything an older API does not send, and never crash on it.
+import type { TFunction } from 'i18next';
+import { i18n } from '../i18n';
 import type { AttributionMode, Confidence, InterventionKey, WaterfallLine } from './types';
 
 const BASE = '/api/v1';
@@ -19,7 +21,7 @@ async function getJson<T>(path: string): Promise<T> {
   try {
     res = await fetch(`${BASE}${path}`, { headers: { Accept: 'application/json' } });
   } catch {
-    throw new ProofError(0, 'The API could not be reached.');
+    throw new ProofError(0, i18n.t('api.proofUnreachable', 'The API could not be reached.'));
   }
   const text = await res.text();
   let body: unknown = null;
@@ -30,9 +32,61 @@ async function getJson<T>(path: string): Promise<T> {
   }
   if (!res.ok) {
     const msg = (body as { error?: { message?: unknown } } | null)?.error?.message;
-    throw new ProofError(res.status, typeof msg === 'string' ? msg : `The request failed with status ${res.status}.`);
+    throw new ProofError(
+      res.status,
+      typeof msg === 'string' ? msg : i18n.t('api.requestFailed', 'The request failed with status {{status}}.', { status: res.status }),
+    );
   }
   return body as T;
+}
+
+// ---- Engine words the proof endpoints send in English ---------------------------------------
+// The checks are public and computed once, so their labels arrive in English; the UI words them from the stable keys.
+
+/** An intervention in the UI language; a key this build does not know keeps the label it came with. */
+export function interventionText(t: TFunction, code: string | null | undefined, fallback: string): string {
+  switch (code) {
+    case 'raise_recovery_via_inspection':
+      return t('common.iv.raiseRecovery', 'Raise recovery via inspection');
+    case 'charge_return_shipping':
+      return t('common.iv.chargeReturnShipping', 'Charge return shipping');
+    case 'cap_discount':
+      return t('common.iv.capDiscount', 'Cap discount');
+    case 'add_handling_to_price':
+      return t('common.iv.addHandling', 'Add handling to price');
+    case 'none':
+      return t('common.iv.none', 'No change');
+    default:
+      return fallback;
+  }
+}
+
+/** A worked-order line name in the UI language, from its key; any other line keeps its own label. */
+export function lineText(t: TFunction, key: string, fallback: string): string {
+  switch (key) {
+    case 'revenue':
+      return t('checks.line.revenue', 'Revenue');
+    case 'refund':
+      return t('checks.line.refund', 'Refund');
+    case 'net_product_cost':
+      return t('checks.line.netProductCost', 'Net product cost');
+    case 'shipping':
+      return t('checks.line.shipping', 'Shipping');
+    case 'ads':
+      return t('checks.line.ads', 'Ads');
+    case 'handling':
+      return t('checks.line.handling', 'Handling');
+    default:
+      return fallback;
+  }
+}
+
+/** The engine's total label ("partial (1 unknown)", "complete") in the UI language; anything else as sent. */
+export function totalLabelText(t: TFunction, label: string): string {
+  const partial = /^partial \((\d+) unknown\)$/.exec(label);
+  if (partial) return t('checks.c3.totalPartial', 'partial ({{n}} unknown)', { n: Number(partial[1]) });
+  if (label === 'complete') return t('checks.c3.totalComplete', 'complete');
+  return label;
 }
 
 // ---- GET /checks ------------------------------------------------------------------------

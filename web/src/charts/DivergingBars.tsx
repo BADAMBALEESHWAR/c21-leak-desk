@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { formatPct } from '../lib/format';
 import { ChartTip, type TipRow, type TipState } from './ChartCard';
 import { compactInr, niceTicks } from './scale';
+import { apiText } from '../lib/apiText';
 
 export interface DivergingRow {
   key: string;
@@ -103,13 +104,13 @@ export function DivergingBars({ rows, measure, ariaLabel, format, labelWidth = 1
           const b = r.value === null ? zero : pct(Math.max(0, r.value));
           const valueText = r.value === null ? t('status.unknown') : format(r.value);
           const shareText = typeof r.share === 'number' ? t('chart.shareText', '{{pct}} of orders', { pct: formatPct(r.share * 100) }) : '';
-          const label = [`${r.label}: ${measure} ${valueText}`, shareText, r.href || onSelect ? t('chart.openInLedger', 'open these orders in the ledger') : '']
+          const label = [`${apiText(r.label)}: ${measure} ${valueText}`, shareText, r.href || onSelect ? t('chart.openInLedger', 'open these orders in the ledger') : '']
             .filter(Boolean)
             .join(', ');
           const inner = (
             <>
               <span className="dv-label">
-                <span className="dv-label-text">{r.label}</span>
+                <span className="dv-label-text">{apiText(r.label)}</span>
                 {r.sub ? <span className="dv-label-sub">{r.sub}</span> : null}
               </span>
               <span className="dv-track">

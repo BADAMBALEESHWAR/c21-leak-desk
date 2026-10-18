@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import { api, isNotFound, language, toErrorInfo, type ErrorInfo } from '../api/client';
+import { interventionText } from '../api/proof';
 import {
   AUTOPILOT_STAGES,
   type AnalysisResponse,
@@ -14,8 +16,10 @@ import {
 import { useAuth } from '../auth/AuthContext';
 import { AiBadge } from '../components/AiBadge';
 import { AiBriefing, useDigest } from '../components/AiBriefing';
+import { AskBar } from '../components/AskBar';
 import { AskAiButton } from '../components/AskAiButton';
-import { ConfidenceBadge, Pill } from '../components/Badge';
+import { Pill } from '../components/Badge';
+import { EvidenceBadge } from '../components/EvidenceBadge';
 import { Button } from '../components/Button';
 import { NeedsAnalysis } from '../components/EmptyState';
 import { Icon } from '../components/Icon';
@@ -24,7 +28,9 @@ import { PageHeader } from '../components/Page';
 import { Provenance } from '../components/Provenance';
 import { ShareActions } from '../components/ShareActions';
 import { Callout, ErrorCallout, Skeleton } from '../components/ui';
+import { i18n } from '../i18n';
 import { actionQuestion, leakQuestion } from '../lib/ask';
+import { apiText } from '../lib/apiText';
 import { formatCount, formatInr, formatMarginPct } from '../lib/format';
 import { datasetName, handlingEstimateUsed, INTERVENTION_LABELS, LEAK_LABELS } from '../lib/labels';
 import { hrefFor, navigate } from '../lib/router';
@@ -49,7 +55,7 @@ export function autopilotFromAnalysis(a: AnalysisResponse): Autopilot {
   const rec = a.recommendation;
   const top_leaks = sortLeakGroups(a.leaks)
     .slice(0, 3)
-    .map((g) => ({ cause: g.cause, label: g.label || LEAK_LABELS[g.cause], orders: g.count, inr_at_stake: g.lost_inr }));
+    .map((g) => ({ cause: g.cause, label: g.label || i18n.t(`focus.cause.${g.cause}`, LEAK_LABELS[g.cause]), orders: g.count, inr_at_stake: g.lost_inr }));
   const actions: AutopilotAction[] = [...a.candidates]
     .filter((c) => c.delta_inr > 0)
     .sort((x, y) => y.delta_inr - x.delta_inr)
@@ -60,7 +66,8 @@ export function autopilotFromAnalysis(a: AnalysisResponse): Autopilot {
         rank: i + 1,
         candidate_id: c.intervention,
         intervention: c.intervention,
-        label: c.label || INTERVENTION_LABELS[c.intervention] || c.intervention,
+        // Candidate labels come from the engine in English: worded again from the intervention key.
+        label: interventionText(i18n.t, c.intervention, c.label || INTERVENTION_LABELS[c.intervention] || c.intervention),
         overrides: null,
         expected_delta_inr: c.delta_inr,
         confidence: isRec ? rec.confidence : null,
@@ -273,7 +280,7 @@ function Headline({ doc, analysis }: { doc: Autopilot; analysis: AnalysisRespons
             </Pill>
           ) : null}
           {recon?.ok ? (
-            <Pill tone="success" icon="check" title={recon.statement}>
+            <Pill tone="success" icon="check" title={apiText(recon.statement)}>
               {t('overview.reconciled', 'Reconciled')}
             </Pill>
           ) : null}
@@ -306,7 +313,8 @@ function Headline({ doc, analysis }: { doc: Autopilot; analysis: AnalysisRespons
   );
 }
 
-const leakLabel = (l: { cause: string; label: string }) => l.label || LEAK_LABELS[l.cause as keyof typeof LEAK_LABELS] || l.cause;
+const leakLabel = (t: TFunction, l: { cause: string; label: string }) =>
+  l.label || t(`focus.cause.${l.cause}`, LEAK_LABELS[l.cause as keyof typeof LEAK_LABELS] || l.cause);
 
 function Leaks({ doc }: { doc: Autopilot }) {
   const { t } = useTranslation();
@@ -330,8 +338,8 @@ function Leaks({ doc }: { doc: Autopilot }) {
       {doc.top_leaks.slice(0, 3).map((l) => (
         <li key={l.cause} className="card ov-leak">
           <span className="ov-card-head">
-            <span className="ov-leak-label">{leakLabel(l)}</span>
-            <AskAiButton question={leakQuestion(t, l.cause, leakLabel(l))} about={leakLabel(l)} />
+            <span className="ov-leak-label">{leakLabel(t, l)}</span>
+            <AskAiButton question={leakQuestion(t, l.cause, leakLabel(t, l))} about={leakLabel(t, l)} />
           </span>
           <span className="ov-leak-amount">
             {l.inr_at_stake === null ? (
@@ -371,7 +379,7 @@ function ActionCard({
   onAdjust: () => void;
 }) {
   const { t } = useTranslation();
-  const label = action.label || INTERVENTION_LABELS[action.intervention] || action.intervention;
+  const label = action.label || interventionText(t, action.intervention, INTERVENTION_LABELS[action.intervention] || action.intervention);
   const ex = action.explanation;
   return (
     <article className="card ov-action" aria-labelledby={`ov-action-${action.rank}`}>
@@ -389,12 +397,12 @@ function ActionCard({
           <Money value={action.expected_delta_inr} tone="contribution" signed />
           <span className="ov-delta-sub">{t('overview.expected', 'expected change in contribution')}</span>
         </span>
-        {action.confidence ? <ConfidenceBadge confidence={action.confidence} prefix={t('overview.confidence', 'Confidence')} /> : null}
+        <EvidenceBadge evidence={action.evidence} confidence={action.confidence} />
         <Provenance kind="assumed" title={t('overview.deltaAssumed', 'A simulated change: it assumes the fix works as modelled.')} />
       </div>
       {ex && ex.text ? (
         <div className="ov-explain">
-          <p>{ex.text}</p>
+          <p>{apiText(ex.text)}</p>
           <AiBadge source={ex.source} />
         </div>
       ) : explaining ? (
@@ -481,7 +489,9 @@ export function OverviewScreen() {
         t,
         heading: name ? t('share.headingNamed', 'Profyn summary · {{name}}', { name }) : t('share.heading', 'Profyn summary'),
         contribution: doc.headline.contribution_inr,
-        actions: doc.actions.slice(0, 3).map((a) => ({ label: a.label || INTERVENTION_LABELS[a.intervention] || a.intervention, delta: a.expected_delta_inr })),
+        actions: doc.actions
+          .slice(0, 3)
+          .map((a) => ({ label: a.label || interventionText(t, a.intervention, INTERVENTION_LABELS[a.intervention] || a.intervention), delta: a.expected_delta_inr })),
         digest: digest.digest,
         url: appUrl(auth.mode !== 'account'),
       })
@@ -544,6 +554,8 @@ export function OverviewScreen() {
   return (
     <div className="page ov-page">
       <PageHeader title={title} subtitle={subtitle} actions={<ShareActions text={share} />} />
+
+      <AskBar />
 
       <Stages doc={doc} />
 

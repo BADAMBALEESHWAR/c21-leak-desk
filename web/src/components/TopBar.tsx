@@ -15,8 +15,6 @@ import { AttributionSegmented, InfoTip } from './ui';
 
 const ATTRIBUTION_ROUTES: Route[] = ['ledger', 'leaks', 'scenario', 'pulse'];
 
-export const DEMO_PILL_TIP = 'Saved to the shared demo database. Sign in to keep your data in your own account.';
-
 export function TopBar({ route, onError }: { route: Route; onError: (e: ErrorInfo | null) => void }) {
   const { dataset, analysis, samples, analysing, runAnalysis, openWorked, dbStatus } = useStore();
   const auth = useAuth();
@@ -60,7 +58,7 @@ export function TopBar({ route, onError }: { route: Route; onError: (e: ErrorInf
   return (
     <header className="topbar">
       <div className="topbar-left">
-        <nav className="crumbs" aria-label="Breadcrumb">
+        <nav className="crumbs" aria-label={t('topbar.breadcrumb', 'Breadcrumb')}>
           <ol>
             <li>
               <a href={hrefFor('import')}>{BRAND.name}</a>
@@ -77,7 +75,7 @@ export function TopBar({ route, onError }: { route: Route; onError: (e: ErrorInf
 
       <div className="topbar-actions">
         {orders !== null ? (
-          <span className="chip" title={`Loaded data: ${name}`}>
+          <span className="chip" title={t('topbar.loadedData', 'Loaded data: {{name}}', { name })}>
             <span className="chip-dot" aria-hidden="true" />
             <span className="chip-main">{name}</span>
             <span className="chip-extra">
@@ -91,7 +89,7 @@ export function TopBar({ route, onError }: { route: Route; onError: (e: ErrorInf
         {analysis && ATTRIBUTION_ROUTES.includes(route) ? (
           <span className="topbar-attr">
             <AttributionSegmented value={analysis.attribution} onChange={(m) => void onAttribution(m)} disabled={analysing || switching} compact />
-            <InfoTip text={t(ATTRIBUTION_TIP_KEY, ATTRIBUTION_TIP_EN)} label="About attribution" />
+            <InfoTip text={t(ATTRIBUTION_TIP_KEY, ATTRIBUTION_TIP_EN)} label={t('topbar.aboutAttribution', 'About attribution')} />
           </span>
         ) : null}
 
@@ -101,7 +99,7 @@ export function TopBar({ route, onError }: { route: Route; onError: (e: ErrorInf
           icon="file"
           onClick={openWorked}
           className={account ? 'worked-btn is-compact' : 'worked-btn'}
-          title="Worked order: one order explained line by line"
+          title={t('topbar.workedTip', 'Worked order: one order explained line by line')}
         >
           {t('actions.workedOrder')}
         </Button>
@@ -110,14 +108,18 @@ export function TopBar({ route, onError }: { route: Route; onError: (e: ErrorInf
           orders !== null ? (
             <span
               className={`status-pill ${saved ? 'is-saved' : 'is-memory'}`}
-              title={saved ? 'This data is saved to your account.' : 'The database is not available: this data is in memory only and will not be kept.'}
+              title={
+                saved
+                  ? t('topbar.savedTip', 'This data is saved to your account.')
+                  : t('topbar.memoryTip', 'The database is not available: this data is in memory only and will not be kept.')
+              }
             >
               <Icon name={saved ? 'check-circle' : 'database'} size={14} />
               <span className="status-text">{saved ? t('topbar.savedToAccount') : t('topbar.inMemory')}</span>
             </span>
           ) : null
         ) : (
-          <span className="status-pill is-demo" title={DEMO_PILL_TIP}>
+          <span className="status-pill is-demo" title={t('topbar.demoTip', 'Saved to the shared demo database. Sign in to keep your data in your own account.')}>
             <Icon name="info" size={14} />
             <span className="status-text">{t('topbar.demoWorkspace')}</span>
           </span>

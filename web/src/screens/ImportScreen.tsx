@@ -1,5 +1,6 @@
+import type { TFunction } from 'i18next';
 import { useEffect, useRef, useState, type DragEvent, type FormEvent, type ReactNode } from 'react';
-import { useTranslation } from 'react-i18next';
+import { Trans, useTranslation } from 'react-i18next';
 import { api, ApiError, toErrorInfo, type DatasetInput, type DatasetOptions, type ErrorInfo } from '../api/client';
 import type { AttributionMode, ColumnMapping, DatasetResponse, ImportMapResult, ImportProfile, OrderResult, RowCorrection, ValidationFlag, WorkspaceDataset } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
@@ -13,40 +14,48 @@ import { Money } from '../components/Money';
 import { Provenance } from '../components/Provenance';
 import { ShopifyCard } from '../components/ShopifyConnect';
 import { AttributionSegmented, Callout, Collapsible, ErrorCallout, InfoTip, revealElement, Skeleton, StatCard } from '../components/ui';
-import { compressIds, formatCount, formatDate, formatInr, plural } from '../lib/format';
+import { apiText } from '../lib/apiText';
+import { compressIds, formatCount, formatDate, formatInr } from '../lib/format';
 import { ATTRIBUTION_TIP_EN, ATTRIBUTION_TIP_KEY, datasetName, DRILL_TAGS, HEADER_ALIASES } from '../lib/labels';
 import { navigate } from '../lib/router';
-import { useStore } from '../state/store';
+import { localiseSample, useStore } from '../state/store';
 
 /** Files merged in one upload (the API's limit: a year of monthly exports). */
 const MAX_FILES = 12;
 
+/** A schema field and what it holds (translated where it is shown). */
+interface SchemaField {
+  field: string;
+  descKey: string;
+  desc: string;
+}
+
 /** Must be present and non-null on every row. */
-const REQUIRED_FIELDS: Array<[string, string]> = [
-  ['order_id', 'Text, unique per period'],
-  ['date', 'YYYY-MM-DD'],
-  ['gross_inr', '₹ before discount'],
-  ['discount_inr', '₹ discount given'],
-  ['product_cost_inr', '₹ landed product cost'],
-  ['shipping_inr', '₹ outbound shipping'],
-  ['returned', 'true or false'],
+const REQUIRED_FIELDS: SchemaField[] = [
+  { field: 'order_id', descKey: 'import.fd.orderId', desc: 'Text, unique per period' },
+  { field: 'date', descKey: 'import.fd.date', desc: 'YYYY-MM-DD' },
+  { field: 'gross_inr', descKey: 'import.fd.gross', desc: '₹ before discount' },
+  { field: 'discount_inr', descKey: 'import.fd.discount', desc: '₹ discount given' },
+  { field: 'product_cost_inr', descKey: 'import.fd.productCost', desc: '₹ landed product cost' },
+  { field: 'shipping_inr', descKey: 'import.fd.shipping', desc: '₹ outbound shipping' },
+  { field: 'returned', descKey: 'import.fd.returned', desc: 'true or false' },
 ];
 
 /** May be null or missing, which means unknown. */
-const NULLABLE_FIELDS: Array<[string, string]> = [
-  ['refund_inr', '₹ refunded to the customer'],
-  ['net_sales_inr', '₹ cross-checked: gross − discount − refund'],
-  ['recovered_product_cost_inr', '₹ back in stock after a return'],
-  ['payment_fee_inr', '₹ payment gateway fee'],
-  ['return_cost_inr', '₹ return shipping'],
+const NULLABLE_FIELDS: SchemaField[] = [
+  { field: 'refund_inr', descKey: 'import.fd.refund', desc: '₹ refunded to the customer' },
+  { field: 'net_sales_inr', descKey: 'import.fd.netSales', desc: '₹ cross-checked: gross − discount − refund' },
+  { field: 'recovered_product_cost_inr', descKey: 'import.fd.recovered', desc: '₹ back in stock after a return' },
+  { field: 'payment_fee_inr', descKey: 'import.fd.fee', desc: '₹ payment gateway fee' },
+  { field: 'return_cost_inr', descKey: 'import.fd.returnCost', desc: '₹ return shipping' },
 ];
 
-const OPTIONAL_FIELDS: Array<[string, string]> = [
-  ['channel', 'Text, sales channel'],
-  ['product_id', 'Text, product or SKU'],
-  ['ads_inr', '₹ per order, allocate mode'],
-  ['handling_inr', '₹ per order; else config default'],
-  ['refund_date', 'YYYY-MM-DD; after period end is pending'],
+const OPTIONAL_FIELDS: SchemaField[] = [
+  { field: 'channel', descKey: 'import.fd.channel', desc: 'Text, sales channel' },
+  { field: 'product_id', descKey: 'import.fd.productId', desc: 'Text, product or SKU' },
+  { field: 'ads_inr', descKey: 'import.fd.ads', desc: '₹ per order, allocate mode' },
+  { field: 'handling_inr', descKey: 'import.fd.handling', desc: '₹ per order; else config default' },
+  { field: 'refund_date', descKey: 'import.fd.refundDate', desc: 'YYYY-MM-DD; after period end is pending' },
 ];
 
 // ---- Column mapping -------------------------------------------------------------------------------------------------
@@ -156,6 +165,14 @@ const REASON_TONE: Record<ValidationFlag['reason'], 'primary' | 'warning' | 'dan
   rounded: 'neutral',
 };
 
+/** What happened to a flagged row (kept, dropped, rejected), in the UI language. */
+function actionText(action: ValidationFlag['action'], t: TFunction): string {
+  if (action === 'kept') return t('import.actionKept', 'kept');
+  if (action === 'dropped') return t('import.actionDropped', 'dropped');
+  if (action === 'rejected') return t('import.actionRejected', 'rejected');
+  return action;
+}
+
 /** The result line after an upload that was added to saved data. */
 interface UploadNote {
   tone: 'success' | 'info';
@@ -163,24 +180,29 @@ interface UploadNote {
   detail: string | null;
 }
 
-function noteFor(ds: DatasetResponse, target: string | null): UploadNote | null {
+function noteFor(ds: DatasetResponse, target: string | null, t: TFunction): UploadNote | null {
   if (ds.unchanged) {
     const n = ds.duplicates_ignored ?? ds.rows_in;
     return {
       tone: 'info',
-      title: ds.message ?? `Nothing new: all ${formatCount(n)} orders were already saved.`,
-      detail: target ? `${target} is unchanged.` : null,
+      title: ds.message ?? t('import.noteNothingNew', 'Nothing new: all {{n}} orders were already saved.', { n: formatCount(n) }),
+      detail: target ? t('import.noteUnchanged', '{{name}} is unchanged.', { name: target }) : null,
     };
   }
   if (!ds.appended_to) return null;
   const added = ds.rows_added ?? 0;
   const skipped = ds.duplicates_ignored ?? 0;
+  const addedText = t('import.noteAdded', 'Added {{n}} new orders', { count: added, n: formatCount(added) });
+  const skippedText = skipped > 0 ? t('import.noteSkipped', '{{n}} already saved, skipped', { n: formatCount(skipped) }) : t('import.noteNoneSkipped', 'none were already saved');
   return {
     tone: 'success',
-    title: `Added ${formatCount(added)} new ${plural(added, 'order', 'orders')} · ${skipped > 0 ? `${formatCount(skipped)} already saved, skipped` : 'none were already saved'}`,
-    detail: `${formatCount(ds.rows_kept)} ${plural(ds.rows_kept, 'order', 'orders')} saved together now. Run the analysis to see the new totals.`,
+    title: `${addedText} · ${skippedText}`,
+    detail: t('import.noteTogether', '{{n}} orders saved together now. Run the analysis to see the new totals.', { count: ds.rows_kept, n: formatCount(ds.rows_kept) }),
   };
 }
+
+/** A client-side file error (wrong file type): shown on the file panel in every language, not only when English words match. */
+const FILE_ERRORS = new WeakSet<ErrorInfo>();
 
 /** The paid sample audit opens only when a payment link is configured at build time. */
 const AUDIT_LINK = (import.meta.env.VITE_RAZORPAY_LINK ?? '').trim();
@@ -250,7 +272,7 @@ function ValidationPanel({ title, sub, rows, tone = 'danger' }: { title: string;
                   </th>
                   <td>{r.order ?? '—'}</td>
                   <td className="vpanel-field">{r.field ? <code>{r.field}</code> : <span className="cell-muted">{t('import.wholeRow', 'whole row')}</span>}</td>
-                  <td className="cell-wrap">{r.reason}</td>
+                  <td className="cell-wrap">{apiText(r.reason)}</td>
                 </tr>
               ))}
             </tbody>
@@ -264,7 +286,7 @@ function ValidationPanel({ title, sub, rows, tone = 'danger' }: { title: string;
 
 /** A file problem (the API's field issues, or a hint that points at the template), not a network or server failure. */
 function isFileProblem(error: ErrorInfo): boolean {
-  return error.issues.length > 0 || /template|column|JSON or CSV/i.test(`${error.hint ?? ''} ${error.message}`);
+  return FILE_ERRORS.has(error) || error.issues.length > 0 || /template|column|JSON or CSV/i.test(`${error.hint ?? ''} ${error.message}`);
 }
 
 /** A load the API refused (bad schema, wrong type, nothing valid): the same panel, from the error's issues. */
@@ -305,7 +327,7 @@ interface EditTarget {
   flags: ValidationFlag[];
 }
 
-const editLabel = (orderId: string | null, line: number) => orderId ?? `line ${line}`;
+const editLabel = (orderId: string | null, line: number, t: TFunction) => orderId ?? t('import.lineN', 'line {{line}}', { line });
 
 /** The field a flag is about; a duplicate is about its order id. */
 function flagField(f: ValidationFlag): string {
@@ -354,8 +376,8 @@ function parseField(kind: FieldKind, s: string): { value: string | number | bool
   return { value: v, ok: true };
 }
 
-function shown(kind: FieldKind, v: unknown): string {
-  if (v === null || v === undefined || v === '') return 'unknown';
+function shown(kind: FieldKind, v: unknown, t: TFunction): string {
+  if (v === null || v === undefined || v === '') return t('import.editUnknown', 'unknown');
   if (kind === 'money' && typeof v === 'number') return formatInr(v);
   return String(v);
 }
@@ -363,7 +385,7 @@ function shown(kind: FieldKind, v: unknown): string {
 function RowEditor({ target, onClose }: { target: EditTarget; onClose: () => void }) {
   const { t } = useTranslation();
   const { dataset, analysis, correctRow, showToast } = useStore();
-  const id = editLabel(target.orderId, target.line);
+  const id = editLabel(target.orderId, target.line, t);
   const raw =
     dataset?.rejected_rows?.find((r) => r.line === target.line && (!target.orderId || !r.order_id || r.order_id === target.orderId))?.raw ??
     (target.orderId ? dataset?.rejected_rows?.find((r) => r.order_id === target.orderId)?.raw : undefined) ??
@@ -409,7 +431,7 @@ function RowEditor({ target, onClose }: { target: EditTarget; onClose: () => voi
         ...(note.trim() ? { note: note.trim() } : {}),
       });
       const what = Object.entries(changes)
-        .map(([f, v]) => `${f}: ${shown(kindOfField(f), initial[f])} → ${shown(kindOfField(f), v)}`)
+        .map(([f, v]) => `${f}: ${shown(kindOfField(f), initial[f], t)} → ${shown(kindOfField(f), v, t)}`)
         .join('; ');
       showToast(t('import.editToast', 'Corrected {{id}} · {{changes}}. Saved as a new version; the original is kept.', { id, changes: what }));
       onClose();
@@ -437,7 +459,7 @@ function RowEditor({ target, onClose }: { target: EditTarget; onClose: () => voi
             <Pill tone={REASON_TONE[f.reason] ?? 'neutral'} dot>
               {REASON_TAG[f.reason] ? t(REASON_TAG[f.reason]) : f.reason}
             </Pill>
-            <span>{f.detail}</span>
+            <span>{apiText(f.detail)}</span>
           </p>
         ))}
       </div>
@@ -486,8 +508,8 @@ function RowEditor({ target, onClose }: { target: EditTarget; onClose: () => voi
             ) : kind === 'bool' ? (
               <select id={inputId} className="input" value={values[f] ?? ''} onChange={(e) => setValues((v) => ({ ...v, [f]: e.target.value }))} aria-invalid={err ? true : undefined} aria-describedby={err ? `${inputId}-error` : undefined}>
                 <option value="">{t('import.editUnknown', 'unknown')}</option>
-                <option value="true">true</option>
-                <option value="false">false</option>
+                <option value="true">{t('import.boolTrue', 'true')}</option>
+                <option value="false">{t('import.boolFalse', 'false')}</option>
               </select>
             ) : (
               <input
@@ -507,7 +529,7 @@ function RowEditor({ target, onClose }: { target: EditTarget; onClose: () => voi
               </p>
             ) : (
               <p className="field-hint">
-                {t('import.editWas', 'In the data now: {{value}}', { value: shown(kind, initial[f]) })}
+                {t('import.editWas', 'In the data now: {{value}}', { value: shown(kind, initial[f], t) })}
               </p>
             )}
           </div>
@@ -567,13 +589,13 @@ function Corrections({ list }: { list: RowCorrection[] }) {
                   <span>
                     {c.order_id ?? '—'} <Provenance kind="corrected" />
                   </span>
-                  {c.line ? <span className="cell-sub">line {c.line}</span> : null}
+                  {c.line ? <span className="cell-sub">{t('import.lineN', 'line {{line}}', { line: c.line })}</span> : null}
                 </th>
                 <td>
                   <code>{c.field}</code>
                 </td>
                 <td className="num">
-                  {shown(kindOfField(c.field), c.from)} → {shown(kindOfField(c.field), c.to)}
+                  {shown(kindOfField(c.field), c.from, t)} → {shown(kindOfField(c.field), c.to, t)}
                 </td>
                 <td className="cell-wrap">{c.note || <span className="cell-muted">—</span>}</td>
               </tr>
@@ -609,7 +631,7 @@ function Report({ dataset, reveal, name, note }: { dataset: DatasetResponse; rev
   // Rows that failed validation (not duplicates, which are set aside on purpose): line, field and reason.
   const failed: FailedRow[] = dataset.flags
     .filter((f) => f.action !== 'kept' && f.reason !== 'duplicate')
-    .map((f, i) => ({ key: `${f.line}-${f.field ?? ''}-${i}`, line: `${f.file ? `${f.file} · ` : ''}${f.line}`, order: f.order_id, field: f.field ?? fieldOfPath(f.path), reason: f.detail }));
+    .map((f, i) => ({ key: `${f.line}-${f.field ?? ''}-${i}`, line: `${f.file ? `${f.file} · ` : ''}${f.line}`, order: f.order_id, field: f.field ?? fieldOfPath(f.path), reason: apiText(f.detail) }));
 
   const toFlags = (view: 'all' | 'removed') => {
     setFlagView(view);
@@ -634,94 +656,105 @@ function Report({ dataset, reveal, name, note }: { dataset: DatasetResponse; rev
           {t('import.report')}
         </h2>
         <span className="section-meta">
-          {name} · period end {formatDate(dataset.period_end)}
-          {dataset.schema_version ? ` · schema ${dataset.schema_version}` : ''}
+          {t('import.reportMeta', '{{name}} · period end {{date}}', { name, date: formatDate(dataset.period_end) })}
+          {dataset.schema_version ? ` · ${t('import.schemaVersion', 'schema {{v}}', { v: dataset.schema_version })}` : ''}
         </span>
       </div>
       {note ? (
         <Callout tone={note.tone} title={note.title} role="status" className="upload-note">
-          {note.detail ? <p>{note.detail}</p> : null}
+          {note.detail ? <p>{apiText(note.detail)}</p> : null}
         </Callout>
       ) : null}
       {dataset.files && dataset.files.length > 1 ? (
-        <p className="muted small" aria-label={appended ? 'Files saved together in this dataset' : 'Files merged into this dataset'}>
-          {dataset.files.length} files {appended ? 'saved together' : 'merged'}:{' '}
-          {dataset.files.map((f) => `${f.name} (${f.rows.toLocaleString('en-IN')} ${plural(f.rows, 'row', 'rows')})`).join(' · ')}
+        <p className="muted small" aria-label={appended ? t('import.filesSavedAria', 'Files saved together in this dataset') : t('import.filesMergedAria', 'Files merged into this dataset')}>
+          {appended ? t('import.filesSaved', '{{n}} files saved together:', { n: dataset.files.length }) : t('import.filesMerged', '{{n}} files merged:', { n: dataset.files.length })}{' '}
+          {dataset.files.map((f) => `${f.name} (${t('import.fileRows', '{{n}} rows', { count: f.rows, n: f.rows.toLocaleString('en-IN') })})`).join(' · ')}
         </p>
       ) : null}
       {appended ? (
         <div className="kpi-grid kpi-grid-4">
-          <StatCard label="Rows in" value={formatCount(dataset.rows_in)} icon="file" sub="Read from this upload" />
+          <StatCard label={t('import.statRowsIn', 'Rows in')} value={formatCount(dataset.rows_in)} icon="file" sub={t('import.statFromUpload', 'Read from this upload')} />
           <StatCard
-            label="Added"
+            label={t('import.statAdded', 'Added')}
             value={formatCount(dataset.rows_added ?? 0)}
             icon="check-circle"
             tone="success"
-            sub={`${formatCount(dataset.rows_kept)} ${plural(dataset.rows_kept, 'order', 'orders')} saved in total`}
+            sub={t('import.statSavedTotal', '{{n}} orders saved in total', { count: dataset.rows_kept, n: formatCount(dataset.rows_kept) })}
             actionIcon="arrow-right"
             onClick={toKept}
-            actionLabel={`Added ${dataset.rows_added ?? 0} orders — show every saved order id`}
+            actionLabel={t('import.statAddedAction', 'Added {{n}} orders — show every saved order id', { n: dataset.rows_added ?? 0 })}
           />
           <StatCard
-            label="Already saved"
+            label={t('import.statAlreadySaved', 'Already saved')}
             value={formatCount(dataset.duplicates_ignored ?? 0)}
             icon="database"
-            sub="Skipped, never counted twice"
+            sub={t('import.statSkipped', 'Skipped, never counted twice')}
             actionIcon="arrow-right"
             onClick={() => (removedFlags.length > 0 ? toFlags('removed') : toKept())}
-            actionLabel={`Already saved ${dataset.duplicates_ignored ?? 0} — show the skipped rows`}
+            actionLabel={t('import.statAlreadyAction', 'Already saved {{n}} — show the skipped rows', { n: dataset.duplicates_ignored ?? 0 })}
           />
           <StatCard
-            label="Flags"
+            label={t('import.statFlags', 'Flags')}
             value={formatCount(dataset.flags.length)}
             icon="alert-triangle"
             tone={rejectedHere > 0 ? 'danger' : dataset.flags.length > 0 ? 'warning' : 'default'}
-            sub={rejectedHere > 0 ? `${rejectedHere} ${plural(rejectedHere, 'row', 'rows')} rejected` : 'This upload only'}
+            sub={rejectedHere > 0 ? t('import.statRejected', '{{n}} rows rejected', { count: rejectedHere, n: rejectedHere }) : t('import.statUploadOnly', 'This upload only')}
             actionIcon="arrow-right"
             onClick={() => (dataset.flags.length > 0 ? toFlags('all') : toKept())}
-            actionLabel={`Flags ${dataset.flags.length} — show the flagged rows`}
+            actionLabel={t('import.statFlagsAction', 'Flags {{n}} — show the flagged rows', { n: dataset.flags.length })}
           />
         </div>
       ) : (
         <div className="kpi-grid kpi-grid-4">
           <StatCard
-            label="Rows in"
+            label={t('import.statRowsIn', 'Rows in')}
             value={formatCount(dataset.rows_in)}
             icon="file"
-            sub="Every row read from the file"
+            sub={t('import.statEveryRow', 'Every row read from the file')}
             actionIcon="arrow-right"
             onClick={() => (dataset.flags.length > 0 ? toFlags('all') : toKept())}
-            actionLabel={`Rows in ${dataset.rows_in} — ${dataset.flags.length > 0 ? 'show the flagged rows' : 'show the kept order ids'}`}
+            actionLabel={t('import.statRowsInAction', 'Rows in {{n}} — {{then}}', {
+              n: dataset.rows_in,
+              then: dataset.flags.length > 0 ? t('import.showFlagged', 'show the flagged rows') : t('import.showKeptIds', 'show the kept order ids'),
+            })}
           />
           <StatCard
-            label="Kept"
+            label={t('import.statKept', 'Kept')}
             value={formatCount(dataset.rows_kept)}
             icon="check-circle"
             tone="success"
             sub={dataset.kept_ids.length > 60 ? `${compressIds(dataset.kept_ids.slice(0, 60))} …` : compressIds(dataset.kept_ids)}
             actionIcon="arrow-right"
             onClick={toKept}
-            actionLabel={`Kept ${dataset.rows_kept} rows — show the kept order ids`}
+            actionLabel={t('import.statKeptAction', 'Kept {{n}} rows — show the kept order ids', { n: dataset.rows_kept })}
           />
           <StatCard
-            label="Dropped / rejected"
+            label={t('import.statDropped', 'Dropped / rejected')}
             value={`${formatCount(dropped)} / ${formatCount(dataset.rows_rejected)}`}
             icon="x"
             tone={dropped + dataset.rows_rejected > 0 ? 'danger' : 'default'}
-            sub={dropped + dataset.rows_rejected > 0 ? 'Not in the analysis' : 'Every row was usable'}
+            sub={dropped + dataset.rows_rejected > 0 ? t('import.statNotInAnalysis', 'Not in the analysis') : t('import.statAllUsable', 'Every row was usable')}
             actionIcon="arrow-right"
             onClick={() => (removedFlags.length > 0 ? toFlags('removed') : toKept())}
-            actionLabel={`Dropped ${dropped}, rejected ${dataset.rows_rejected} — ${removedFlags.length > 0 ? 'filter the flagged rows to dropped and rejected' : 'show the kept order ids'}`}
+            actionLabel={t('import.statDroppedAction', 'Dropped {{dropped}}, rejected {{rejected}} — {{then}}', {
+              dropped,
+              rejected: dataset.rows_rejected,
+              then: removedFlags.length > 0 ? t('import.filterDropped', 'filter the flagged rows to dropped and rejected') : t('import.showKeptIds', 'show the kept order ids'),
+            })}
           />
           <StatCard
-            label="Flags"
+            label={t('import.statFlags', 'Flags')}
             value={formatCount(dataset.flags.length)}
             icon="alert-triangle"
             tone={dataset.flags.length > 0 ? 'warning' : 'default'}
-            sub={dataset.synthetic_rows > 0 ? `${dataset.synthetic_rows} labelled synthetic ${plural(dataset.synthetic_rows, 'row', 'rows')}` : 'Observed rows only'}
+            sub={
+              dataset.synthetic_rows > 0
+                ? t('import.statSynthetic', '{{n}} labelled synthetic rows', { count: dataset.synthetic_rows, n: dataset.synthetic_rows })
+                : t('import.statObservedOnly', 'Observed rows only')
+            }
             actionIcon="arrow-right"
             onClick={() => (dataset.flags.length > 0 ? toFlags('all') : toKept())}
-            actionLabel={`Flags ${dataset.flags.length} — show the flagged rows`}
+            actionLabel={t('import.statFlagsAction', 'Flags {{n}} — show the flagged rows', { n: dataset.flags.length })}
           />
         </div>
       )}
@@ -738,10 +771,12 @@ function Report({ dataset, reveal, name, note }: { dataset: DatasetResponse; rev
         <div className="card kept-card reveal-target" ref={keptRef} tabIndex={-1} aria-labelledby="kept-title">
           <div className="table-card-head kept-head">
             <h3 id="kept-title" className="card-title">
-              {appended ? 'Saved order ids' : 'Kept order ids'}
+              {appended ? t('import.savedIds', 'Saved order ids') : t('import.keptIds', 'Kept order ids')}
             </h3>
             <span className="muted small">
-              {dataset.kept_ids.length} {appended ? 'orders saved in total' : 'rows go into the analysis'}
+              {appended
+                ? t('import.keptCountSaved', '{{n}} orders saved in total', { n: dataset.kept_ids.length })
+                : t('import.keptCountRows', '{{n}} rows go into the analysis', { n: dataset.kept_ids.length })}
             </span>
           </div>
           <div className="id-chips">
@@ -750,7 +785,7 @@ function Report({ dataset, reveal, name, note }: { dataset: DatasetResponse; rev
                 {id}
               </span>
             ))}
-            {dataset.kept_ids.length > 300 ? <span className="muted small">and {dataset.kept_ids.length - 300} more</span> : null}
+            {dataset.kept_ids.length > 300 ? <span className="muted small">{t('import.andMore', 'and {{n}} more', { n: dataset.kept_ids.length - 300 })}</span> : null}
           </div>
         </div>
       ) : null}
@@ -758,8 +793,8 @@ function Report({ dataset, reveal, name, note }: { dataset: DatasetResponse; rev
       {dataset.flags.length > 0 ? (
         <div className="card table-card reveal-target" ref={flagsRef} tabIndex={-1}>
           <div className="table-card-head">
-            <h3 className="card-title">{appended ? 'Flagged rows in this upload' : 'Flagged rows'}</h3>
-            <div className="chips" role="group" aria-label="Filter flagged rows">
+            <h3 className="card-title">{appended ? t('import.flaggedInUpload', 'Flagged rows in this upload') : t('import.flaggedRows', 'Flagged rows')}</h3>
+            <div className="chips" role="group" aria-label={t('import.filterFlags', 'Filter flagged rows')}>
               {(
                 [
                   ['all', t('import.allFlags'), dataset.flags.length],
@@ -776,7 +811,7 @@ function Report({ dataset, reveal, name, note }: { dataset: DatasetResponse; rev
           </div>
           <div className="table-scroll">
             <table className="table">
-              <caption className="visually-hidden">Validation flags with line, detail, reason and action</caption>
+              <caption className="visually-hidden">{t('import.flagsCaption', 'Validation flags with line, detail, reason and action')}</caption>
               <thead>
                 <tr>
                   <th scope="col">{t('ledger.order')}</th>
@@ -797,16 +832,19 @@ function Report({ dataset, reveal, name, note }: { dataset: DatasetResponse; rev
                       <span>
                         {f.order_id ?? '—'} {f.order_id && corrected.has(f.order_id) ? <Provenance kind="corrected" /> : null}
                       </span>
-                      <span className="cell-sub">{f.file ? `${f.file} · ` : ''}line {f.line}</span>
+                      <span className="cell-sub">
+                        {f.file ? `${f.file} · ` : ''}
+                        {t('import.lineN', 'line {{line}}', { line: f.line })}
+                      </span>
                     </th>
                     <td className="cell-wrap">
                       {f.reason === 'duplicate' && f.order_id ? (
                         <span className="cell-stack">
                           <span className="dup-line">{t('import.duplicateDetail', '{{id}} duplicate — second copy ignored', { id: f.order_id })}</span>
-                          <span className="cell-sub">{f.detail}</span>
+                          <span className="cell-sub">{apiText(f.detail)}</span>
                         </span>
                       ) : (
-                        f.detail
+                        apiText(f.detail)
                       )}
                     </td>
                     <td>
@@ -815,11 +853,11 @@ function Report({ dataset, reveal, name, note }: { dataset: DatasetResponse; rev
                       </Pill>
                     </td>
                     <td>
-                      <Pill tone={f.action === 'kept' ? 'warning' : 'danger'}>{f.action}</Pill>
+                      <Pill tone={f.action === 'kept' ? 'warning' : 'danger'}>{actionText(f.action, t)}</Pill>
                     </td>
                     <td className="r">
                       {firstOfGroup ? (
-                        <Button variant="secondary" size="sm" onClick={() => setEditing(targetFor(f))} aria-label={t('import.editRow', 'Edit {{id}}', { id: editLabel(f.order_id, f.line) })}>
+                        <Button variant="secondary" size="sm" onClick={() => setEditing(targetFor(f))} aria-label={t('import.editRow', 'Edit {{id}}', { id: editLabel(f.order_id, f.line, t) })}>
                           {t('import.editColumn', 'Edit')}
                         </Button>
                       ) : null}
@@ -830,10 +868,10 @@ function Report({ dataset, reveal, name, note }: { dataset: DatasetResponse; rev
               </tbody>
             </table>
           </div>
-          {shownFlags.length > 100 ? <p className="table-foot">Showing the first 100 of {shownFlags.length} flags.</p> : null}
+          {shownFlags.length > 100 ? <p className="table-foot">{t('import.first100', 'Showing the first 100 of {{n}} flags.', { n: shownFlags.length })}</p> : null}
         </div>
       ) : (
-        <Callout tone="success" title="No rows flagged." />
+        <Callout tone="success" title={t('import.noFlags', 'No rows flagged.')} />
       )}
 
       <Corrections list={dataset.corrections ?? []} />
@@ -841,14 +879,14 @@ function Report({ dataset, reveal, name, note }: { dataset: DatasetResponse; rev
       <Drawer
         open={editing !== null}
         onClose={() => setEditing(null)}
-        title={editing ? t('import.editTitle', 'Edit {{id}}', { id: editLabel(editing.orderId, editing.line) }) : ''}
+        title={editing ? t('import.editTitle', 'Edit {{id}}', { id: editLabel(editing.orderId, editing.line, t) }) : ''}
         meta={editing ? <span className="drawer-date">{t('import.editMeta', 'Line {{line}} · saved as a new version', { line: editing.line })}</span> : null}
       >
         {editing ? <RowEditor key={editing.key} target={editing} onClose={() => setEditing(null)} /> : null}
       </Drawer>
 
       {dataset.warnings.length > 0 ? (
-        <Callout tone="info" title="Warnings">
+        <Callout tone="info" title={t('import.warnings', 'Warnings')}>
           <ul className="plain-list">
             {dataset.warnings.map((w) => (
               <li key={w}>{w}</li>
@@ -860,17 +898,18 @@ function Report({ dataset, reveal, name, note }: { dataset: DatasetResponse; rev
   );
 }
 
-function SchemaList({ title, rows }: { title: string; rows: Array<[string, string]> }) {
+function SchemaList({ title, rows }: { title: string; rows: SchemaField[] }) {
+  const { t } = useTranslation();
   return (
     <div>
       <h3 className="mini-title">{title}</h3>
       <dl className="kv kv-schema">
-        {rows.map(([k, v]) => (
-          <div key={k}>
+        {rows.map((r) => (
+          <div key={r.field}>
             <dt>
-              <code>{k}</code>
+              <code>{r.field}</code>
             </dt>
-            <dd>{v}</dd>
+            <dd>{t(r.descKey, r.desc)}</dd>
           </div>
         ))}
       </dl>
@@ -891,8 +930,12 @@ function HeroStats({ stats }: { stats: Array<[string, ReactNode]> }) {
   );
 }
 
-const savedKind = (d: WorkspaceDataset) =>
-  d.source.startsWith('upload:') ? (d.files && d.files.length > 1 ? `${d.files.length} files saved together` : 'Uploaded file') : 'Sample data';
+const savedKind = (d: WorkspaceDataset, t: TFunction) =>
+  d.source.startsWith('upload:')
+    ? d.files && d.files.length > 1
+      ? t('import.kindFiles', '{{n}} files saved together', { n: d.files.length })
+      : t('import.kindUpload', 'Uploaded file')
+    : t('import.kindSample', 'Sample data');
 
 /** Workspace mode: the owner's saved datasets, newest first. Opening one shows its latest analysis (or runs one). */
 function SavedData({ onOpened }: { onOpened: () => void }) {
@@ -919,7 +962,7 @@ function SavedData({ onOpened }: { onOpened: () => void }) {
         </h2>
         <ErrorCallout error={workspaceError} />
         <Button variant="secondary" size="sm" icon="refresh" onClick={() => void refreshWorkspace()}>
-          Try again
+          {t('import.tryAgain', 'Try again')}
         </Button>
       </section>
     );
@@ -933,15 +976,13 @@ function SavedData({ onOpened }: { onOpened: () => void }) {
           <h2 id="saved-data-title" className="card-title">
             {t('import.savedData')}
           </h2>
-          <p className="card-sub">Newest first. Open one to see its ledger and owner dashboard.</p>
+          <p className="card-sub">{t('import.savedSub', 'Newest first. Open one to see its ledger and owner dashboard.')}</p>
         </div>
-        <span className="muted small">
-          {list.length} {plural(list.length, 'dataset', 'datasets')}
-        </span>
+        <span className="muted small">{t('import.datasetCount', '{{n}} datasets', { count: list.length, n: list.length })}</span>
       </div>
       <div className="table-scroll">
         <table className="table saved-table">
-          <caption className="visually-hidden">Your saved datasets, newest first</caption>
+          <caption className="visually-hidden">{t('import.savedCaption', 'Your saved datasets, newest first')}</caption>
           <thead>
             <tr>
               <th scope="col">{t('import.data')}</th>
@@ -970,14 +1011,14 @@ function SavedData({ onOpened }: { onOpened: () => void }) {
                       <span className="saved-name" title={d.files ? d.files.map((f) => f.name).join(', ') : name}>
                         {name}
                       </span>
-                      <span className="cell-sub">{savedKind(d)}</span>
+                      <span className="cell-sub">{savedKind(d, t)}</span>
                     </span>
                   </th>
                   <td className="num r">{formatCount(d.rows_kept)}</td>
                   <td className="num">{formatDate(d.period_end)}</td>
                   <td className="num">{formatDate(d.created_at)}</td>
                   <td className="num r">
-                    {d.latest_analysis ? <Money value={d.latest_analysis.contribution_inr} tone="contribution" /> : <span className="cell-muted">Not analysed yet</span>}
+                    {d.latest_analysis ? <Money value={d.latest_analysis.contribution_inr} tone="contribution" /> : <span className="cell-muted">{t('import.notAnalysed', 'Not analysed yet')}</span>}
                   </td>
                   <td className="saved-action">
                     {current ? (
@@ -985,7 +1026,7 @@ function SavedData({ onOpened }: { onOpened: () => void }) {
                         {t('status.openNow')}
                       </Pill>
                     ) : (
-                      <Button variant="secondary" size="sm" iconRight="arrow-right" onClick={() => void open(d)} disabled={openingId !== null} aria-label={`Open ${name}`}>
+                      <Button variant="secondary" size="sm" iconRight="arrow-right" onClick={() => void open(d)} disabled={openingId !== null} aria-label={t('import.openName', 'Open {{name}}', { name })}>
                         {busy ? t('actions.opening') : t('actions.open')}
                       </Button>
                     )}
@@ -1005,13 +1046,14 @@ function SavedData({ onOpened }: { onOpened: () => void }) {
   );
 }
 
-const SCHEMA_FIELDS: Array<[string, string, 'required' | 'nullable' | 'optional']> = [
-  ...REQUIRED_FIELDS.map(([f, d]): [string, string, 'required'] => [f, d, 'required']),
-  ...NULLABLE_FIELDS.map(([f, d]): [string, string, 'nullable'] => [f, d, 'nullable']),
-  ...OPTIONAL_FIELDS.map(([f, d]): [string, string, 'optional'] => [f, d, 'optional']),
+type SchemaKind = 'required' | 'nullable' | 'optional';
+const SCHEMA_FIELDS: Array<SchemaField & { kind: SchemaKind }> = [
+  ...REQUIRED_FIELDS.map((f) => ({ ...f, kind: 'required' as const })),
+  ...NULLABLE_FIELDS.map((f) => ({ ...f, kind: 'nullable' as const })),
+  ...OPTIONAL_FIELDS.map((f) => ({ ...f, kind: 'optional' as const })),
 ];
-const SCHEMA_SET = new Set(SCHEMA_FIELDS.map(([f]) => f));
-const REQUIRED_NAMES = REQUIRED_FIELDS.map(([f]) => f);
+const SCHEMA_SET = new Set(SCHEMA_FIELDS.map((f) => f.field));
+const REQUIRED_NAMES = REQUIRED_FIELDS.map((f) => f.field);
 
 function pct(v: number): string {
   return `${Math.round((v <= 1 ? v * 100 : v) as number)}%`;
@@ -1034,7 +1076,7 @@ function MappingPanel({
   const { t } = useTranslation();
   const { result, chosen, headers } = pending;
   const extra = Object.keys(result.mapping).filter((f) => !SCHEMA_SET.has(f));
-  const rows: Array<[string, string, 'required' | 'nullable' | 'optional']> = [...SCHEMA_FIELDS, ...extra.map((f): [string, string, 'optional'] => [f, '', 'optional'])];
+  const rows: Array<SchemaField & { kind: SchemaKind }> = [...SCHEMA_FIELDS, ...extra.map((f) => ({ field: f, descKey: '', desc: '', kind: 'optional' as const }))];
   const missing = REQUIRED_NAMES.filter((f) => !chosen[f]);
   const perField = result.confidence && typeof result.confidence === 'object' ? result.confidence : null;
   const overall = typeof result.confidence === 'number' ? result.confidence : null;
@@ -1084,7 +1126,7 @@ function MappingPanel({
             </tr>
           </thead>
           <tbody>
-            {rows.map(([field, desc, kind]) => {
+            {rows.map(({ field, descKey, desc, kind }) => {
               const value = chosen[field] ?? '';
               const conf = perField?.[field];
               const selectId = `map-${field}`;
@@ -1095,7 +1137,7 @@ function MappingPanel({
                       <code>{field}</code>
                       {kind === 'required' ? <span className="mapping-req">{t('mapping.required', 'required')}</span> : null}
                     </label>
-                    {desc ? <span className="cell-sub">{desc}</span> : null}
+                    {desc ? <span className="cell-sub">{descKey ? t(descKey, desc) : desc}</span> : null}
                   </th>
                   <td>
                     <select id={selectId} className="input mapping-select" value={value} onChange={(e) => onChange(field, e.target.value || null)}>
@@ -1130,7 +1172,7 @@ function MappingPanel({
 export function ImportScreen() {
   const auth = useAuth();
   const account = auth.mode === 'account';
-  const { samples, dataset, datasetId, analysis, importDataset, runAnalysis, analysing, importError, setImportError, workspace, workspaceStatus } = useStore();
+  const { samples: storeSamples, dataset, datasetId, analysis, importDataset, runAnalysis, analysing, importError, setImportError, workspace, workspaceStatus } = useStore();
   const [validating, setValidating] = useState<string | null>(null);
   // Shared with deep links, so a failed load always lands under the drop zone.
   const loadError = importError;
@@ -1155,6 +1197,8 @@ export function ImportScreen() {
     if (mapShown) revealElement(mapRef.current);
   }, [mapShown]);
   const { t } = useTranslation();
+  // Sample names and descriptions in the UI language.
+  const samples = storeSamples.map((s) => localiseSample(s));
 
   useEffect(() => {
     let cancelled = false;
@@ -1213,7 +1257,7 @@ export function ImportScreen() {
     try {
       const ds = await importDataset(input, options);
       setLoadedHere(true);
-      setUploadNote(noteFor(ds, options?.appendTo ? target?.name ?? null : null));
+      setUploadNote(noteFor(ds, options?.appendTo ? target?.name ?? null : null, t));
     } catch {
       // importDataset has already recorded the error for the drop zone.
     } finally {
@@ -1276,18 +1320,24 @@ export function ImportScreen() {
     setPendingMap(null);
     const wrong = files.filter((f) => !/\.(json|csv)$/i.test(f.name));
     if (wrong.length) {
+      const error: ErrorInfo = {
+        message: t('import.wrongType', '{{names}} are not JSON or CSV.', { count: wrong.length, names: wrong.map((f) => f.name).join(', ') }),
+        hint: t('import.wrongTypeHint', 'Export the orders as JSON or as CSV with the template column names.'),
+        issues: [],
+      };
+      FILE_ERRORS.add(error);
+      setLoadError(error);
+      return;
+    }
+    if (files.length > MAX_FILES) {
       setLoadError({
-        message: `${wrong.map((f) => f.name).join(', ')} ${wrong.length === 1 ? 'is' : 'are'} not JSON or CSV.`,
-        hint: 'Export the orders as JSON or as CSV with the template column names.',
+        message: t('import.tooMany', '{{n}} files were selected; up to {{max}} can be merged at once.', { n: files.length, max: MAX_FILES }),
+        hint: t('import.tooManyHint', 'Upload a year of monthly files at most.'),
         issues: [],
       });
       return;
     }
-    if (files.length > MAX_FILES) {
-      setLoadError({ message: `${files.length} files were selected; up to ${MAX_FILES} can be merged at once.`, hint: 'Upload a year of monthly files at most.', issues: [] });
-      return;
-    }
-    void prepare(files, files.length === 1 ? files[0].name : `${files.length} files`, profile, appendOn && target ? { appendTo: target.id } : undefined);
+    void prepare(files, files.length === 1 ? files[0].name : t('import.nFiles', '{{n}} files', { n: files.length }), profile, appendOn && target ? { appendTo: target.id } : undefined);
   };
 
   const onDrop = (e: DragEvent<HTMLDivElement>) => {
@@ -1303,7 +1353,11 @@ export function ImportScreen() {
     setContinueError(null);
     const h = handling.trim() === '' ? 0 : Number(handling);
     if (!Number.isFinite(h) || h < 0) {
-      setContinueError({ message: 'Handling per order must be a rupee amount of 0 or more.', hint: 'Leave it at 0 when rows carry their own handling_inr.', issues: [] });
+      setContinueError({
+        message: t('import.handlingInvalid', 'Handling per order must be a rupee amount of 0 or more.'),
+        hint: t('import.handlingInvalidHint', 'Leave it at 0 when rows carry their own handling_inr.'),
+        issues: [],
+      });
       return;
     }
     try {
@@ -1352,7 +1406,7 @@ export function ImportScreen() {
         <h1 id="import-title" className="hero-title">
           {t('import.title')}
         </h1>
-        <p className="hero-sub">Load demo data or drop your own files. Every row is validated before anything is counted.</p>
+        <p className="hero-sub">{t('import.demoSub', 'Load demo data or drop your own files. Every row is validated before anything is counted.')}</p>
         <div className="demo-data" role="group" aria-labelledby="demo-data-title">
           <h2 id="demo-data-title" className="demo-data-title">
             {t('status.synthetic')}
@@ -1370,15 +1424,15 @@ export function ImportScreen() {
               {validating === 'demo_12m' ? t('actions.loadingDemo12m') : t('actions.loadDemo12m')}
             </Button>
             <Pill tone="neutral">{t('status.syntheticLabelled')}</Pill>
-            <span className="demo12-note">Opens Pulse owner analytics on a year of orders.</span>
+            <span className="demo12-note">{t('import.demo12Note', 'Opens Pulse owner analytics on a year of orders.')}</span>
           </div>
         </div>
       </div>
       <HeroStats
         stats={[
-          ['reference orders', 20],
-          ['order fields', 12],
-          ['data-quality drills', drills.length],
+          [t('import.statReference', 'reference orders'), 20],
+          [t('import.statFields', 'order fields'), 12],
+          [t('import.statDrills', 'data-quality drills'), drills.length],
         ]}
       />
     </section>
@@ -1394,8 +1448,11 @@ export function ImportScreen() {
           {t('import.titleFirst')}
         </h1>
         <p className="hero-sub">
-          Drop a CSV or JSON export of your orders: one file, or up to {MAX_FILES} monthly files at once. Every row is validated and saved to your
-          account, then the owner dashboard opens on your own numbers.
+          {t(
+            'import.firstSub',
+            'Drop a CSV or JSON export of your orders: one file, or up to {{n}} monthly files at once. Every row is validated and saved to your account, then the owner dashboard opens on your own numbers.',
+            { n: MAX_FILES },
+          )}
         </p>
         <div className="hero-actions">
           <Button variant="primary" size="lg" icon="upload-cloud" onClick={() => browse()} disabled={busy}>
@@ -1408,9 +1465,9 @@ export function ImportScreen() {
       </div>
       <HeroStats
         stats={[
-          ['required columns', REQUIRED_FIELDS.length],
-          ['files at once', MAX_FILES],
-          ['orders per dataset', '1,00,000'],
+          [t('import.statRequired', 'required columns'), REQUIRED_FIELDS.length],
+          [t('import.statFilesAtOnce', 'files at once'), MAX_FILES],
+          [t('import.statPerDataset', 'orders per dataset'), '1,00,000'],
         ]}
       />
     </section>
@@ -1423,14 +1480,16 @@ export function ImportScreen() {
         <h1 id="import-title" className="hero-title">
           {t('import.titleWorkspace')}
         </h1>
-        <p className="hero-sub">Add this month&rsquo;s export or open saved data. Every row is validated before anything is counted, and orders already saved are skipped.</p>
+        <p className="hero-sub">
+          {t('import.workspaceSub', 'Add this month’s export or open saved data. Every row is validated before anything is counted, and orders already saved are skipped.')}
+        </p>
       </div>
       {saved.length > 0 ? (
         <HeroStats
           stats={[
-            [plural(saved.length, 'saved dataset', 'saved datasets'), saved.length],
-            ['orders in the newest', formatCount(saved[0].rows_kept)],
-            ['latest period end', formatDate(saved[0].period_end)],
+            [t('import.statSavedDatasets', 'saved datasets', { count: saved.length }), saved.length],
+            [t('import.statNewest', 'orders in the newest'), formatCount(saved[0].rows_kept)],
+            [t('import.statLatestEnd', 'latest period end'), formatDate(saved[0].period_end)],
           ]}
         />
       ) : null}
@@ -1449,7 +1508,12 @@ export function ImportScreen() {
             <label className="append-toggle">
               <input type="checkbox" checked={appendOn} onChange={(e) => setAppendOn(e.target.checked)} disabled={busy} />
               <span>
-                Add to <strong>{target.name}</strong> — orders already saved are skipped
+                <Trans
+                  i18nKey="import.appendTo"
+                  defaults="Add to <1>{{name}}</1> — orders already saved are skipped"
+                  values={{ name: target.name }}
+                  components={{ 1: <strong /> }}
+                />
               </span>
             </label>
           ) : null}
@@ -1465,8 +1529,14 @@ export function ImportScreen() {
             <span className="dropzone-icon" aria-hidden="true">
               <Icon name="upload-cloud" size={24} />
             </span>
-            <p className="dropzone-title">{target && appendOn ? `Drop new orders to add to ${target.name}` : t('actions.dropFile')}</p>
-            <p className="dropzone-sub">One file, or up to {MAX_FILES} at once (e.g. one per month), merged into one dataset · template column names · 50 MB each, 1,00,000 orders in total</p>
+            <p className="dropzone-title">{target && appendOn ? t('import.dropToAdd', 'Drop new orders to add to {{name}}', { name: target.name }) : t('actions.dropFile')}</p>
+            <p className="dropzone-sub">
+              {t(
+                'import.dropSub',
+                'One file, or up to {{n}} at once (e.g. one per month), merged into one dataset · template column names · 50 MB each, 1,00,000 orders in total',
+                { n: MAX_FILES },
+              )}
+            </p>
             <span className="dropzone-actions">
               <Button variant="secondary" icon="file" onClick={() => browse()} disabled={busy}>
                 {t('actions.browseFiles')}
@@ -1492,7 +1562,7 @@ export function ImportScreen() {
           </div>
           {account ? (
             <p className="storage-note">
-              <Icon name="lock" size={14} /> Uploads are saved to your account.
+              <Icon name="lock" size={14} /> {t('import.accountStorage', 'Uploads are saved to your account.')}
             </p>
           ) : (
             <p className="storage-note">
@@ -1518,7 +1588,7 @@ export function ImportScreen() {
             </p>
           )}
           <p className="alias-note" title={HEADER_ALIASES.map(([a, b]) => `${a} → ${b}`).join(', ')}>
-            Header aliases accepted: {HEADER_ALIASES.map(([a]) => a).join(', ')} …
+            {t('import.aliases', 'Header aliases accepted: {{list}} …', { list: HEADER_ALIASES.map(([a]) => a).join(', ') })}
           </p>
           <section className="card market-card" aria-labelledby="market-title">
             <h2 id="market-title" className="card-title">
@@ -1543,21 +1613,27 @@ export function ImportScreen() {
           </h2>
           <div className="field">
             <span className="field-label" id="attr-label">
-              Attribution <InfoTip text={t(ATTRIBUTION_TIP_KEY, ATTRIBUTION_TIP_EN)} label="About attribution" />
+              {t('import.attribution', 'Attribution')} <InfoTip text={t(ATTRIBUTION_TIP_KEY, ATTRIBUTION_TIP_EN)} label={t('import.aboutAttribution', 'About attribution')} />
             </span>
             <AttributionSegmented value={attribution} onChange={setAttribution} compact />
           </div>
           <div className="field">
             <label className="field-label" htmlFor="period-end">
-              Period as-of date{' '}
-              <InfoTip text="Refunds dated after this day stay in the period as kept orders and are shown as pending." label="About the period date" />
+              {t('import.periodDate', 'Period as-of date')}{' '}
+              <InfoTip
+                text={t('import.periodDateTip', 'Refunds dated after this day stay in the period as kept orders and are shown as pending.')}
+                label={t('import.aboutPeriodDate', 'About the period date')}
+              />
             </label>
             <input id="period-end" type="date" className="input input-date" value={periodEnd} onChange={(e) => setPeriodEnd(e.target.value)} />
           </div>
           <div className="field">
             <label className="field-label" htmlFor="handling-default">
-              Handling per order (estimate){' '}
-              <InfoTip text="Used only for rows without handling_inr. Labelled as an estimate everywhere." label="About handling per order" />
+              {t('import.handlingLabel', 'Handling per order (estimate)')}{' '}
+              <InfoTip
+                text={t('import.handlingTip', 'Used only for rows without handling_inr. Labelled as an estimate everywhere.')}
+                label={t('import.aboutHandling', 'About handling per order')}
+              />
             </label>
             <span className="num-field num-field-wide">
               <span className="num-affix" aria-hidden="true">
@@ -1572,7 +1648,9 @@ export function ImportScreen() {
           <Button variant="ghost" size="sm" className="btn-block continue-ledger" onClick={() => void onContinue('ledger')} disabled={!canContinue}>
             {t('actions.continueLedger')}
           </Button>
-          {!dataset && !datasetId ? <p className="muted small">{account ? 'Upload a file or open saved data first.' : 'Load a sample or a file first.'}</p> : null}
+          {!dataset && !datasetId ? (
+            <p className="muted small">{account ? t('import.needDataAccount', 'Upload a file or open saved data first.') : t('import.needDataDemo', 'Load a sample or a file first.')}</p>
+          ) : null}
           <ErrorCallout error={continueError} />
         </section>
       </div>
@@ -1591,9 +1669,9 @@ export function ImportScreen() {
 
       <div aria-live="polite">
         {validating ? (
-          <div className="stack" role="status" aria-label="Validating">
+          <div className="stack" role="status" aria-label={t('import.validating', 'Validating')}>
             <p className="loading-line">
-              <span className="spinner" aria-hidden="true" /> Validating…
+              <span className="spinner" aria-hidden="true" /> {t('import.validatingDots', 'Validating…')}
             </p>
             <div className="kpi-grid kpi-grid-4">
               {[0, 1, 2, 3].map((i) => (
@@ -1605,12 +1683,22 @@ export function ImportScreen() {
             </div>
           </div>
         ) : loadError ? (
-          dataset ? <p className="muted small">Nothing was imported. The previous data ({datasetName(dataset.source, dataset.files, sampleLabel(dataset.source))}) is still loaded.</p> : null
+          dataset ? (
+            <p className="muted small">
+              {t('import.previousKept', 'Nothing was imported. The previous data ({{name}}) is still loaded.', {
+                name: datasetName(dataset.source, dataset.files, sampleLabel(dataset.source)),
+              })}
+            </p>
+          ) : null
         ) : dataset ? (
           <Report dataset={dataset} reveal={loadedHere} note={uploadNote} name={datasetName(dataset.source, dataset.files, sampleLabel(dataset.source))} />
         ) : datasetId ? (
-          <Callout tone="info" title="The data from your last visit is loaded.">
-            <p>{account ? 'Upload a file or open saved data to see a validation report.' : 'Load a sample or a file to see its validation report.'}</p>
+          <Callout tone="info" title={t('import.lastVisit', 'The data from your last visit is loaded.')}>
+            <p>
+              {account
+                ? t('import.lastVisitAccount', 'Upload a file or open saved data to see a validation report.')
+                : t('import.lastVisitDemo', 'Load a sample or a file to see its validation report.')}
+            </p>
           </Callout>
         ) : null}
       </div>
@@ -1621,11 +1709,11 @@ export function ImportScreen() {
             <h2 id="drills-title" className="section-title">
               {t('import.drills')}
             </h2>
-            <span className="section-meta">Negative tests; each one loads a sample and shows how the checks react.</span>
+            <span className="section-meta">{t('import.drillsMeta', 'Negative tests; each one loads a sample and shows how the checks react.')}</span>
           </div>
           <div className="drill-grid">
             {drills.map((s) => {
-              const tag = DRILL_TAGS[s.source] ?? { tag: 'Drill', key: undefined, tone: 'primary' as const };
+              const tag = DRILL_TAGS[s.source] ?? { tag: 'Drill', key: 'import.drillTag', tone: 'primary' as const };
               return (
                 <button key={s.source} type="button" className="card drill" onClick={() => void load({ source: s.source }, s.source)} disabled={busy}>
                   <span className="drill-top">
@@ -1643,17 +1731,26 @@ export function ImportScreen() {
         </section>
       )}
 
-      <Collapsible title="View the column schema" meta="7 required · 5 nullable · 5 optional">
+      <Collapsible
+        title={t('import.schemaTitle', 'View the column schema')}
+        meta={t('import.schemaMeta', '{{required}} required · {{nullable}} nullable · {{optional}} optional', {
+          required: REQUIRED_FIELDS.length,
+          nullable: NULLABLE_FIELDS.length,
+          optional: OPTIONAL_FIELDS.length,
+        })}
+      >
         <div className="schema-grid">
-          <SchemaList title="Required" rows={REQUIRED_FIELDS} />
-          <SchemaList title="May be null (unknown)" rows={NULLABLE_FIELDS} />
+          <SchemaList title={t('import.schemaRequired', 'Required')} rows={REQUIRED_FIELDS} />
+          <SchemaList title={t('import.schemaNullable', 'May be null (unknown)')} rows={NULLABLE_FIELDS} />
           <div>
-            <SchemaList title="Optional fields" rows={OPTIONAL_FIELDS} />
-            <h3 className="mini-title">Suffix rules</h3>
+            <SchemaList title={t('import.schemaOptional', 'Optional fields')} rows={OPTIONAL_FIELDS} />
+            <h3 className="mini-title">{t('import.suffixTitle', 'Suffix rules')}</h3>
             <p className="small muted">
-              <code>_inr</code> rupees · <code>_pct</code> 0–100 · <code>_units</code> counts · <code>_days</code> calendar days. Null means
-              unknown, never zero. Rows added for the demo carry <code>synthetic: true</code>; header variants such as cogs, sku and gateway_fee
-              are mapped.
+              <Trans
+                i18nKey="import.suffixRules"
+                defaults="<0>_inr</0> rupees · <1>_pct</1> 0–100 · <2>_units</2> counts · <3>_days</3> calendar days. Null means unknown, never zero. Rows added for the demo carry <4>synthetic: true</4>; header variants such as cogs, sku and gateway_fee are mapped."
+                components={[<code key="inr" />, <code key="pct" />, <code key="units" />, <code key="days" />, <code key="synthetic" />]}
+              />
             </p>
           </div>
         </div>

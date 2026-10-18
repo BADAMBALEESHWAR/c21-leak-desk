@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
+import type { TFunction } from 'i18next';
 import { useTranslation } from 'react-i18next';
 import { api } from '../api/client';
 import type { Health } from '../api/types';
@@ -6,14 +7,16 @@ import { useAuth } from '../auth/AuthContext';
 import { Pill } from '../components/Badge';
 import { Icon } from '../components/Icon';
 import { PageHeader } from '../components/Page';
+import { apiText } from '../lib/apiText';
 import { hrefFor } from '../lib/router';
 import { fieldsOf, useAiStatus } from './AiScreen';
 
-/** Readable region names for the AWS regions Profyn may run in. */
-const REGION_NAMES: Record<string, string> = {
-  'ap-south-1': 'Mumbai',
-  'ap-south-2': 'Hyderabad',
-};
+/** Readable city names for the AWS regions Profyn may run in, in the UI language. */
+function regionName(t: TFunction, region: string): string | null {
+  if (region === 'ap-south-1') return t('trust.mumbai', 'Mumbai');
+  if (region === 'ap-south-2') return t('trust.hyderabad', 'Hyderabad');
+  return null;
+}
 
 function useHealth(): Health | null {
   const [h, setH] = useState<Health | null>(null);
@@ -47,6 +50,7 @@ export function TrustScreen() {
   const fields = fieldsOf(ai.status?.fields_sent);
   const region = health?.region ?? null;
   const india = region ? /^ap-south-/.test(region) : false;
+  const city = region ? regionName(t, region) : null;
 
   const notReported = <span className="muted">{t('trust.notReported', 'Not reported by this server')}</span>;
 
@@ -57,8 +61,8 @@ export function TrustScreen() {
       how: t('trust.regionHow', 'Your data is stored in an Indian cloud region.'),
       live: region ? (
         <Pill tone={india ? 'success' : 'warning'} dot>
-          {region}
-          {REGION_NAMES[region] ? ` (${REGION_NAMES[region]})` : ''}
+          {apiText(region)}
+          {city ? ` (${city})` : ''}
         </Pill>
       ) : (
         notReported
@@ -72,7 +76,11 @@ export function TrustScreen() {
         health?.db === 'memory' ? (
           <span className="muted">{t('trust.encLocal', 'This server keeps data in memory only (local run).')}</span>
         ) : health ? (
-          <Pill tone="neutral">{t('trust.dbStatus', 'database: {{db}}', { db: health.db })}</Pill>
+          <Pill tone="neutral">
+            {t('trust.dbStatus', 'database: {{db}}', {
+              db: health.db === 'ok' ? t('trust.dbOk', 'ok') : health.db === 'down' ? t('trust.dbDown', 'down') : health.db,
+            })}
+          </Pill>
         ) : (
           notReported
         ),

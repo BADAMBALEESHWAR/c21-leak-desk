@@ -1,4 +1,5 @@
 import { useState, type KeyboardEvent, type PointerEvent } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ChartTip, useWidth, type SeriesTone, type TipState } from './ChartCard';
 import { compactInr, niceTicks } from './scale';
 
@@ -25,6 +26,7 @@ const PAD = { top: 24, right: 8, bottom: 26, left: 52 };
 
 /** Stacked columns (positive amounts), 2px surface gap between segments, total labelled on the largest column. */
 export function StackedColumnChart({ categories, keys, values, totals, ariaLabel, format, extraTip, height = 240 }: Props) {
+  const { t } = useTranslation();
   const [ref, width] = useWidth<HTMLDivElement>(560);
   const [active, setActive] = useState<number | null>(null);
   const n = categories.length;
@@ -49,7 +51,7 @@ export function StackedColumnChart({ categories, keys, values, totals, ariaLabel
     return {
       x: Math.min(PAD.left + i * band + band / 2 + 12, W - 230),
       y: 4,
-      title: `${categories[i].full} · ${format(totals[i])} lost`,
+      title: t('chart.lostIn', '{{month}} · {{inr}} lost', { month: categories[i].full, inr: format(totals[i]) }),
       rows: extra ? [...rows, extra] : rows,
     };
   };
@@ -72,7 +74,7 @@ export function StackedColumnChart({ categories, keys, values, totals, ariaLabel
         height={H}
         viewBox={`0 0 ${W} ${H}`}
         role="img"
-        aria-label={`${ariaLabel}. Use the arrow keys to read each month.`}
+        aria-label={t('chart.arrowMonths', '{{label}}. Use the arrow keys to read each month.', { label: ariaLabel })}
         tabIndex={0}
         onKeyDown={onKey}
         onFocus={() => setActive((c) => c ?? 0)}

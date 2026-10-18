@@ -1,9 +1,11 @@
+import type { TFunction } from 'i18next';
 import { useCallback, useEffect, useId, useState, type FormEvent } from 'react';
-import { useTranslation } from 'react-i18next';
+import { Trans, useTranslation } from 'react-i18next';
 import { api, ApiError, authDownload, downloadFile, toErrorInfo, type ErrorInfo } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import type { AnalysisResponse, Candidate, CheckIn, DecisionRequest, DecisionSaved, DecisionSummary, OverrideKey, Recommendation, ScenarioResponse, TextSource } from '../api/types';
 import { CONFIDENCE_KEY, ConfidenceBadge, Pill, SourceTag } from '../components/Badge';
+import { EvidenceBadge } from '../components/EvidenceBadge';
 import { Button, ButtonLink } from '../components/Button';
 import { NeedsAnalysis } from '../components/EmptyState';
 import { ErrorNote } from '../components/ErrorNote';
@@ -14,8 +16,9 @@ import { Provenance, ProvenanceValue } from '../components/Provenance';
 import { Table, type Column } from '../components/Table';
 import { Callout } from '../components/ui';
 import { lower } from '../i18n';
+import { apiText } from '../lib/apiText';
 import { addDays, capitalise, formatDate, formatDateTime, formatInr, formatPct, formatSignedInr } from '../lib/format';
-import { handlingEstimateUsed, OVERRIDE_LABELS } from '../lib/labels';
+import { handlingEstimateUsed, OVERRIDE_LABELS, OVERRIDE_LABELS_EN } from '../lib/labels';
 import { hrefFor, navigate } from '../lib/router';
 import { OVERRIDE_KEYS, useStore } from '../state/store';
 
@@ -26,7 +29,7 @@ interface AssumedInput {
   why: string;
 }
 
-/** Every assumed input behind a decision; sent with the save so the export carries them all. */
+/** Every assumed input behind a decision; sent with the save so the export carries them all (in English, like the export). */
 export function assumedInputs(
   a: AnalysisResponse,
   s: ScenarioResponse | null,
@@ -36,10 +39,10 @@ export function assumedInputs(
   const out: AssumedInput[] = [];
   if (s) {
     for (const k of OVERRIDE_KEYS) {
-      if (s.overrides[k] !== undefined) out.push({ input: `scenario.${k}`, label: OVERRIDE_LABELS[k], value: s.overrides[k], why: 'scenario override' });
+      if (s.overrides[k] !== undefined) out.push({ input: `scenario.${k}`, label: OVERRIDE_LABELS_EN[k], value: s.overrides[k], why: 'scenario override' });
     }
     if (s.overrides.assume_unknown_refund) {
-      out.push({ input: 'scenario.assume_unknown_refund', label: OVERRIDE_LABELS.assume_unknown_refund, value: true, why: 'missing refund facts filled with a stated assumption' });
+      out.push({ input: 'scenario.assume_unknown_refund', label: OVERRIDE_LABELS_EN.assume_unknown_refund, value: true, why: 'missing refund facts filled with a stated assumption' });
     }
   }
   if (handlingEstimateUsed(a)) {
@@ -99,7 +102,7 @@ function DecisionsList({ version }: { version: number }) {
     {
       id: 'confidence',
       header: t('scenario.confidence'),
-      cell: (d) => (d.confidence === 'custom' ? <Pill tone="neutral">custom</Pill> : <ConfidenceBadge confidence={d.confidence} />),
+      cell: (d) => (d.confidence === 'custom' ? <Pill tone="neutral">{t('decision.custom', 'custom')}</Pill> : <ConfidenceBadge confidence={d.confidence} />),
     },
     { id: 'owner', header: t('decision.owner'), cell: (d) => d.owner },
     {
@@ -125,43 +128,52 @@ function DecisionsList({ version }: { version: number }) {
         <h2 id="decisions-title" className="card-title">
           {t('decision.savedList')}
         </h2>
-        {rows ? <span className="muted small">{rows.length} saved</span> : null}
+        {rows ? <span className="muted small">{t('decision.nSaved', '{{count}} saved', { count: rows.length })}</span> : null}
       </div>
       {error ? (
         <ErrorNote error={error} />
       ) : rows === null ? (
-        <p className="muted pad">Loading saved decisions…</p>
+        <p className="muted pad">{t('decision.loadingList', 'Loading saved decisions…')}</p>
       ) : (
-        <Table caption="Saved decisions, newest first" columns={columns} rows={rows} rowKey={(d) => d.decision_id} emptyText="No decisions saved yet." />
+        <Table
+          caption={t('decision.listCaption', 'Saved decisions, newest first')}
+          columns={columns}
+          rows={rows}
+          rowKey={(d) => d.decision_id}
+          emptyText={t('decision.noneSaved', 'No decisions saved yet.')}
+        />
       )}
     </section>
   );
 }
 
-function overrideText(o: Record<string, unknown> | undefined | null): string {
-  if (!o) return 'none';
+function overrideText(t: TFunction, o: Record<string, unknown> | undefined | null): string {
+  const none = t('decision.none', 'none');
+  if (!o) return none;
   const parts = Object.entries(o).map(([k, v]) => {
     const label = OVERRIDE_LABELS[k as OverrideKey] ?? k;
-    if (k === 'assume_unknown_refund') return v ? 'unknown refunds assumed' : '';
+    if (k === 'assume_unknown_refund') return v ? t('decision.unknownAssumed', 'unknown refunds assumed') : '';
     if (k.endsWith('_pct') && typeof v === 'number') return `${label} ${formatPct(v)}`;
     if ((k.endsWith('_inr') || k === 'ads_per_order') && typeof v === 'number') return `${label} ${formatInr(v)}`;
-    if (k === 'refund_policy') return `${label}: ${v === 'partial' ? 'partial, 80%' : String(v)}`;
+    if (k === 'refund_policy') return `${label}: ${v === 'partial' ? t('scenario.partialLower', 'partial, 80%') : v === 'full' ? t('decision.policyFull', 'full') : String(v)}`;
     return `${label} ${String(v)}`;
   });
-  return parts.filter(Boolean).join('; ') || 'none';
+  return parts.filter(Boolean).join('; ') || none;
 }
 
 function Snapshot({ a, s }: { a: AnalysisResponse; s: ScenarioResponse | null }) {
   const { focusLedgerTable, fixedCosts } = useStore();
   const { t } = useTranslation();
-  const contributionText = a.totals.contribution_inr === null ? 'unknown' : formatInr(a.totals.contribution_inr);
+  const unknown = lower(t('status.unknown'));
+  const contributionText = a.totals.contribution_inr === null ? unknown : formatInr(a.totals.contribution_inr);
+  const unknownCount = a.totals.unknown_count;
   return (
     <section className="card snapshot-card" aria-labelledby="snapshot-title">
       <h2 id="snapshot-title" className="card-title">
         {t('decision.snapshot')}
       </h2>
       <div className="mini-kpis">
-        <button type="button" className="card-action" onClick={() => navigate('ledger')} aria-label={`Contribution ${contributionText} — open the ledger`}>
+        <button type="button" className="card-action" onClick={() => navigate('ledger')} aria-label={t('decision.contributionAria', 'Contribution {{v}} — open the ledger', { v: contributionText })}>
           <span>{t('ledger.operationalContribution', 'Operational contribution')}</span>
           <strong>
             <Money value={a.totals.contribution_inr} tone="contribution" />
@@ -177,17 +189,21 @@ function Snapshot({ a, s }: { a: AnalysisResponse; s: ScenarioResponse | null })
             if (a.totals.unknown_count > 0) focusLedgerTable('unknown');
             navigate('ledger');
           }}
-          aria-label={`Unknown orders ${a.totals.unknown_count} — ${a.totals.unknown_count > 0 ? 'show them in the ledger' : 'open the ledger'}`}
+          aria-label={
+            unknownCount > 0
+              ? t('decision.unknownAriaShow', 'Unknown orders {{n}} — show them in the ledger', { n: unknownCount })
+              : t('decision.unknownAriaOpen', 'Unknown orders {{n}} — open the ledger', { n: unknownCount })
+          }
         >
-          <span>Unknown orders</span>
+          <span>{t('decision.unknownOrders', 'Unknown orders')}</span>
           <strong className={a.totals.unknown_count > 0 ? 't-unknown' : undefined}>{a.totals.unknown_count}</strong>
           <span className="kpi-go" aria-hidden="true">
             <Icon name="arrow-up-right" size={13} />
           </span>
         </button>
-        <button type="button" className="card-action" onClick={() => navigate('ledger')} aria-label={`Reconciled ${a.reconciliation.ok ? 'yes' : 'no'} — open the ledger`}>
-          <span>Reconciled</span>
-          <strong className={a.reconciliation.ok ? 't-gain' : 't-loss'}>{a.reconciliation.ok ? 'Yes ✓' : 'No'}</strong>
+        <button type="button" className="card-action" onClick={() => navigate('ledger')} aria-label={a.reconciliation.ok ? t('decision.reconciledYesAria', 'Reconciled yes — open the ledger') : t('decision.reconciledNoAria', 'Reconciled no — open the ledger')}>
+          <span>{t('decision.reconciled', 'Reconciled')}</span>
+          <strong className={a.reconciliation.ok ? 't-gain' : 't-loss'}>{a.reconciliation.ok ? t('decision.yes', 'Yes ✓') : t('decision.no', 'No')}</strong>
           <span className="kpi-go" aria-hidden="true">
             <Icon name="arrow-up-right" size={13} />
           </span>
@@ -195,45 +211,55 @@ function Snapshot({ a, s }: { a: AnalysisResponse; s: ScenarioResponse | null })
       </div>
       <dl className="kv">
         <div>
-          <dt>Attribution</dt>
-          <dd>{a.attribution === 'channel' ? 'Channel spend' : 'Ads allocated per order'}</dd>
+          <dt>{t('decision.kv.attribution', 'Attribution')}</dt>
+          <dd>{a.attribution === 'channel' ? t('decision.attrChannel', 'Channel spend') : t('decision.attrAllocate', 'Ads allocated per order')}</dd>
         </div>
         <div>
-          <dt>Period end</dt>
+          <dt>{t('decision.kv.periodEnd', 'Period end')}</dt>
           <dd>{a.period_end}</dd>
         </div>
         <div>
-          <dt>Changed</dt>
+          <dt>{t('decision.kv.changed', 'Changed')}</dt>
           <dd>
-            <ProvenanceValue kind={s ? 'assumed' : 'observed'} value={s ? overrideText(s.overrides as Record<string, unknown>) : 'nothing (observed baseline)'} />
+            <ProvenanceValue kind={s ? 'assumed' : 'observed'} value={s ? overrideText(t, s.overrides as Record<string, unknown>) : t('decision.nothingChanged', 'nothing (observed baseline)')} />
           </dd>
         </div>
         <div>
-          <dt>Return rate</dt>
+          <dt>{t('decision.kv.returnRate', 'Return rate')}</dt>
           <dd>
             <ProvenanceValue kind="observed" value={formatPct(a.observed.return_rate_pct)} />
           </dd>
         </div>
         <div>
-          <dt>Recovery</dt>
+          <dt>{t('decision.kv.recovery', 'Recovery')}</dt>
           <dd>
-            <ProvenanceValue kind="observed" value={a.observed.recovery_pct === null ? 'unknown' : formatPct(a.observed.recovery_pct)} />
+            <ProvenanceValue kind="observed" value={a.observed.recovery_pct === null ? unknown : formatPct(a.observed.recovery_pct)} />
           </dd>
         </div>
         <div>
-          <dt>Handling</dt>
+          <dt>{t('decision.kv.handling', 'Handling')}</dt>
           <dd>
-            <ProvenanceValue kind={handlingEstimateUsed(a) ? 'assumed' : 'observed'} value={handlingEstimateUsed(a) ? `${formatInr(a.config.handling_default_inr)} per order, estimate` : 'from the rows'} />
+            <ProvenanceValue
+              kind={handlingEstimateUsed(a) ? 'assumed' : 'observed'}
+              value={
+                handlingEstimateUsed(a)
+                  ? t('decision.handlingEstimate', '{{inr}} per order, estimate', { inr: formatInr(a.config.handling_default_inr) })
+                  : t('decision.fromRows', 'from the rows')
+              }
+            />
           </dd>
         </div>
         <div>
-          <dt>Fixed costs</dt>
+          <dt>{t('decision.kv.fixedCosts', 'Fixed costs')}</dt>
           <dd>
-            <ProvenanceValue kind="assumed" value={fixedCosts > 0 ? `${formatInr(fixedCosts)} per period` : `${formatInr(0)} (not set)`} />
+            <ProvenanceValue
+              kind="assumed"
+              value={fixedCosts > 0 ? t('decision.perPeriod', '{{inr}} per period', { inr: formatInr(fixedCosts) }) : t('decision.notSetParen', '{{inr}} (not set)', { inr: formatInr(0) })}
+            />
           </dd>
         </div>
         <div>
-          <dt>Engine</dt>
+          <dt>{t('decision.kv.engine', 'Engine')}</dt>
           <dd>{a.engine_version}</dd>
         </div>
       </dl>
@@ -241,22 +267,23 @@ function Snapshot({ a, s }: { a: AnalysisResponse; s: ScenarioResponse | null })
   );
 }
 
-const SNAPSHOT_KEYS: Record<string, string> = {
-  dataset_source: 'Dataset',
-  attribution: 'Attribution',
-  period_end: 'Period end',
-  handling_default_inr: 'Handling default',
-  changed: 'Changed',
-  overrides: 'Overrides',
-  observed_return_rate_pct: 'Observed return rate',
-  observed_recovery_pct: 'Observed recovery',
-  engine_version: 'Engine',
-  scenario_notes: 'Scenario notes',
+/** The saved snapshot's fields: translation key and English name. */
+const SNAPSHOT_KEYS: Record<string, { key: string; label: string }> = {
+  dataset_source: { key: 'decision.snap.dataset_source', label: 'Dataset' },
+  attribution: { key: 'decision.snap.attribution', label: 'Attribution' },
+  period_end: { key: 'decision.snap.period_end', label: 'Period end' },
+  handling_default_inr: { key: 'decision.snap.handling_default_inr', label: 'Handling default' },
+  changed: { key: 'decision.snap.changed', label: 'Changed' },
+  overrides: { key: 'decision.snap.overrides', label: 'Overrides' },
+  observed_return_rate_pct: { key: 'decision.snap.observed_return_rate_pct', label: 'Observed return rate' },
+  observed_recovery_pct: { key: 'decision.snap.observed_recovery_pct', label: 'Observed recovery' },
+  engine_version: { key: 'decision.snap.engine_version', label: 'Engine' },
+  scenario_notes: { key: 'decision.snap.scenario_notes', label: 'Scenario notes' },
 };
 
-function snapshotValue(k: string, v: unknown): string {
-  if (v === null || v === undefined) return 'none';
-  if (k === 'overrides') return overrideText(v as Record<string, unknown>);
+function snapshotValue(t: TFunction, k: string, v: unknown): string {
+  if (v === null || v === undefined) return t('decision.none', 'none');
+  if (k === 'overrides') return overrideText(t, v as Record<string, unknown>);
   if (k === 'changed') return OVERRIDE_LABELS[v as OverrideKey] ?? String(v);
   if (Array.isArray(v)) return v.map(String).join(' ');
   if (typeof v === 'number') return k.endsWith('_pct') ? formatPct(v) : k.endsWith('_inr') ? formatInr(v) : String(v);
@@ -284,19 +311,21 @@ function useCheckIn(saved: DecisionSaved, fallback: CheckIn): { check: CheckIn; 
   return { check: api30 ?? fallback, fromApi: api30 !== null && api30 !== undefined };
 }
 
-function valueText(v: CheckIn['target_value'] | undefined, c: CheckIn): string {
-  if (v === null || v === undefined || v === '') return 'not set';
+function valueText(t: TFunction, v: CheckIn['target_value'] | undefined, c: CheckIn): string {
+  if (v === null || v === undefined || v === '') return t('decision.notSet', 'not set');
   if (typeof v !== 'number') return String(v);
   const pct = c.unit ? c.unit === 'pct' : /pct|%|percent|rate/i.test(c.metric);
   return pct ? formatPct(v) : formatInr(v);
 }
 
-const METRIC_NAMES: Record<string, string> = {
-  contribution_inr: 'Operational contribution per period',
-  operational_contribution_inr: 'Operational contribution per period',
-  recovery_pct: 'Recovery of product cost on returns',
-  return_rate_pct: 'Return rate',
+/** Check-in metrics by id: translation key and English name. */
+const METRIC_NAMES: Record<string, { key: string; label: string }> = {
+  contribution_inr: { key: 'decision.metricContribution', label: 'Operational contribution per period' },
+  operational_contribution_inr: { key: 'decision.metricContribution', label: 'Operational contribution per period' },
+  recovery_pct: { key: 'decision.metricRecovery', label: 'Recovery of product cost on returns' },
+  return_rate_pct: { key: 'decision.metricReturnRate', label: 'Return rate' },
 };
+const metricName = (t: TFunction, id: string): string | undefined => (METRIC_NAMES[id] ? t(METRIC_NAMES[id].key, METRIC_NAMES[id].label) : undefined);
 
 function SavedSnapshot({ saved, a, expected }: { saved: DecisionSaved; a: AnalysisResponse; expected: number | null }) {
   const account = useAuth().mode === 'account';
@@ -306,7 +335,7 @@ function SavedSnapshot({ saved, a, expected }: { saved: DecisionSaved; a: Analys
   const entries = Object.entries({ ...saved.assumptions, engine_version: saved.engine_version }).filter(([k]) => k in SNAPSHOT_KEYS);
   const base = a.totals.contribution_inr;
   const { check } = useCheckIn(saved, {
-    metric: 'Operational contribution per period',
+    metric: 'operational_contribution_inr',
     target_value: base === null ? null : base + (expected ?? 0),
     date: addDays(saved.saved_at, 30),
   });
@@ -353,17 +382,17 @@ function SavedSnapshot({ saved, a, expected }: { saved: DecisionSaved; a: Analys
         <dl className="checkin-kv">
           <div>
             <dt>{t('decision.metric', 'Metric')}</dt>
-            <dd>{check.metric_label ?? METRIC_NAMES[check.metric] ?? check.metric}</dd>
+            <dd>{check.metric_label ?? metricName(t, check.metric) ?? check.metric}</dd>
           </div>
           <div>
             <dt>{t('decision.target', 'Target')}</dt>
             <dd className="num">
               {check.direction === 'at_most' ? t('decision.atMost', 'at most') : check.direction === 'at_least' ? t('decision.atLeast', 'at least') : ''}{' '}
-              {valueText(check.target_value, check)}
+              {valueText(t, check.target_value, check)}
               {check.baseline_value !== undefined && check.baseline_value !== null ? (
                 <span className="checkin-from">
                   {' '}
-                  {t('decision.fromBaseline', 'from {{v}}', { v: valueText(check.baseline_value, check) })}{' '}
+                  {t('decision.fromBaseline', 'from {{v}}', { v: valueText(t, check.baseline_value, check) })}{' '}
                   <Provenance kind={check.baseline_source === 'observed' || check.baseline_source === undefined ? 'observed' : 'assumed'} />
                 </span>
               ) : null}
@@ -380,8 +409,8 @@ function SavedSnapshot({ saved, a, expected }: { saved: DecisionSaved; a: Analys
       <dl className="kv">
         {entries.map(([k, v]) => (
           <div key={k}>
-            <dt>{SNAPSHOT_KEYS[k]}</dt>
-            <dd>{snapshotValue(k, v)}</dd>
+            <dt>{t(SNAPSHOT_KEYS[k].key, SNAPSHOT_KEYS[k].label)}</dt>
+            <dd>{snapshotValue(t, k, v)}</dd>
           </div>
         ))}
       </dl>
@@ -401,9 +430,12 @@ function DecisionForm({ a, s, rec, candidates, onSaved }: FormProps) {
   const { showToast, markDecisionSaved, fixedCosts } = useStore();
   const { t } = useTranslation();
   const groupName = useId();
-  const [choice, setChoice] = useState<string>(rec.preselect ? rec.intervention : '');
+  // Statistical evidence (bootstrap over the owner's orders) decides pre-selection at the observed baseline; under a scenario the engine's own rule stands.
+  const ev = !s ? a.evidence?.[rec.intervention] : undefined;
+  const preselect = rec.preselect || (!!ev && ev.level !== 'low' && rec.intervention !== 'none');
+  const [choice, setChoice] = useState<string>(preselect ? rec.intervention : '');
   const [custom, setCustom] = useState('');
-  const [expected, setExpected] = useState<string>(rec.preselect ? String(rec.expected_delta_inr) : '');
+  const [expected, setExpected] = useState<string>(preselect ? String(rec.expected_delta_inr) : '');
   const [test, setTest] = useState('');
   const [stop, setStop] = useState('');
   const [draftSource, setDraftSource] = useState<TextSource | null>(null);
@@ -454,7 +486,7 @@ function DecisionForm({ a, s, rec, candidates, onSaved }: FormProps) {
     const exp = expected.trim();
     const expectedNum = exp === '' ? null : Number(exp);
     if (expectedNum !== null && !Number.isFinite(expectedNum)) {
-      setErrors({ expected_delta_inr: 'Enter the expected change in rupees, for example 480, or leave it blank.' });
+      setErrors({ expected_delta_inr: t('decision.expectedInvalid', 'Enter the expected change in rupees, for example 480, or leave it blank.') });
       return;
     }
     const engineExpected = options.find((o) => o.key === choice)?.delta ?? null;
@@ -512,7 +544,11 @@ function DecisionForm({ a, s, rec, candidates, onSaved }: FormProps) {
           {t('decision.intervention')} {choice ? <Provenance kind={interventionKind} /> : null}
         </legend>
         <p id="d-intervention-hint" className="field-hint">
-          {rec.preselect ? 'Pre-selected: the recommendation has high confidence.' : `Not pre-selected: confidence is ${rec.confidence}. ${rec.confidence_reason}`}
+          {ev
+            ? t('decision.evidenceHint', '{{word}}: {{reason}}', { word: ev.level === 'high' ? t('evidence.high', 'High confidence') : ev.level === 'medium' ? t('evidence.medium', 'Medium confidence') : t('evidence.low', 'Low confidence'), reason: apiText(ev.reason) })
+            : rec.preselect
+            ? t('decision.preselected', 'Pre-selected: the recommendation has high confidence.')
+            : t('decision.notPreselected', 'Not pre-selected: confidence is {{confidence}}. {{reason}}', { confidence: confidenceWord, reason: apiText(rec.confidence_reason) })}
         </p>
         {options.map((o) => {
           const isRec = o.key === rec.intervention;
@@ -521,10 +557,10 @@ function DecisionForm({ a, s, rec, candidates, onSaved }: FormProps) {
               <span className="choice-head">
                 <input type="radio" name={groupName} value={o.key} checked={choice === o.key} onChange={() => onChoice(o.key)} />
                 <span className="choice-title">
-                  {o.label}
+                  {apiText(o.label)}
                   {isRec ? (
-                    <Pill tone={rec.preselect ? 'success' : 'primary'} className="choice-rec">
-                      {rec.preselect ? t('decision.recommended') : `${t('decision.recommended')} · ${lower(t('scenario.confidence'))} ${confidenceWord}`}
+                    <Pill tone={preselect ? 'success' : 'primary'} className="choice-rec">
+                      {preselect ? t('decision.recommended') : `${t('decision.recommended')} · ${lower(t('scenario.confidence'))} ${confidenceWord}`}
                     </Pill>
                   ) : null}
                 </span>
@@ -532,20 +568,21 @@ function DecisionForm({ a, s, rec, candidates, onSaved }: FormProps) {
                   <span className={`num ${o.delta > 0 ? 't-gain' : o.delta < 0 ? 't-loss' : 'muted'}`}>{formatSignedInr(o.delta)}</span>
                 </span>
               </span>
-              <span className="choice-rule">{o.rule}</span>
+              <span className="choice-rule">{apiText(o.rule)}</span>
+              {!s && a.evidence?.[o.key] ? <EvidenceBadge evidence={a.evidence[o.key]} /> : null}
             </label>
           );
         })}
         <label className={`choice choice-option${choice === CUSTOM ? ' is-selected' : ''}`}>
           <span className="choice-head">
             <input type="radio" name={groupName} value={CUSTOM} checked={choice === CUSTOM} onChange={() => setChoice(CUSTOM)} />
-            <span className="choice-title">Custom…</span>
+            <span className="choice-title">{t('decision.customOption', 'Custom…')}</span>
           </span>
         </label>
         {choice === CUSTOM ? (
           <div className="field field-inset">
             <label htmlFor="d-custom" className="field-label">
-              Describe the intervention
+              {t('decision.describe', 'Describe the intervention')}
             </label>
             <input
               id="d-custom"
@@ -564,7 +601,7 @@ function DecisionForm({ a, s, rec, candidates, onSaved }: FormProps) {
       <div className="field">
         <span className="field-label-row">
           <label htmlFor="d-expected" className="field-label">
-            Expected ₹ impact per period
+            {t('decision.expectedLabel', 'Expected ₹ impact per period')}
           </label>
           {expected.trim() !== '' ? <Provenance kind={expectedKind} /> : null}
         </span>
@@ -584,7 +621,7 @@ function DecisionForm({ a, s, rec, candidates, onSaved }: FormProps) {
           />
         </span>
         <p id="d-expected-hint" className="field-hint">
-          Filled from the candidate you choose; change it if you expect a different effect.
+          {t('decision.expectedHint', 'Filled from the candidate you choose; change it if you expect a different effect.')}
         </p>
         <FieldError id="expected_delta_inr-error" message={errors.expected_delta_inr} />
       </div>
@@ -597,7 +634,7 @@ function DecisionForm({ a, s, rec, candidates, onSaved }: FormProps) {
           <Provenance kind="assumed" />
         </span>
         <p className="field-static" aria-labelledby="d-fixed-label">
-          <span className="num">{fixedCosts > 0 ? `${formatInr(fixedCosts)} per period` : `${formatInr(0)} — not set`}</span>{' '}
+          <span className="num">{fixedCosts > 0 ? t('decision.perPeriod', '{{inr}} per period', { inr: formatInr(fixedCosts) }) : t('decision.notSetDash', '{{inr}} — not set', { inr: formatInr(0) })}</span>{' '}
           <a href={hrefFor('ledger')}>{t('decision.changeOnLedger', 'Change on the ledger')}</a>
           <span className="field-hint"> {t('decision.fixedSaved', 'Saved with the decision when set.')}</span>
         </p>
@@ -610,10 +647,10 @@ function DecisionForm({ a, s, rec, candidates, onSaved }: FormProps) {
         <span className="field-hint">
           {draftSource ? (
             <>
-              Drafted for {draftedFor} <SourceTag source={draftSource} />
+              {t('decision.draftedFor', 'Drafted for {{label}}', { label: draftedFor })} <SourceTag source={draftSource} />
             </>
           ) : (
-            'Fills the test and stop rule for the recommended intervention.'
+            t('decision.draftHint', 'Fills the test and stop rule for the recommended intervention.')
           )}
         </span>
       </div>
@@ -670,7 +707,7 @@ function DecisionForm({ a, s, rec, candidates, onSaved }: FormProps) {
         </div>
         <div className="field">
           <label htmlFor="d-notes" className="field-label">
-            Notes <span className="field-optional">optional</span>
+            {t('decision.notes', 'Notes')} <span className="field-optional">{t('decision.optional', 'optional')}</span>
           </label>
           <input
             id="d-notes"
@@ -709,15 +746,18 @@ export function DecisionScreen() {
 
   return (
     <div className="page">
-      <PageHeader title={t('decision.pageTitle')} subtitle="Record what to try, who owns it, and when to stop — with the numbers it was based on." />
+      <PageHeader title={t('decision.pageTitle')} subtitle={t('decision.subtitle', 'Record what to try, who owns it, and when to stop — with the numbers it was based on.')} />
 
       {!analysis || !rec ? (
-        <NeedsAnalysis sentence="No analysis yet. Load the sample orders, compare a scenario, then save the decision here." icon="check-circle" />
+        <NeedsAnalysis sentence={t('decision.empty', 'No analysis yet. Load the sample orders, compare a scenario, then save the decision here.')} icon="check-circle" />
       ) : (
         <>
-          <Callout tone="info" title={current ? 'Recorded against the scenario you last ran.' : 'Recorded against the observed baseline; no scenario has been run.'}>
+          <Callout
+            tone="info"
+            title={current ? t('decision.againstScenario', 'Recorded against the scenario you last ran.') : t('decision.againstBaseline', 'Recorded against the observed baseline; no scenario has been run.')}
+          >
             <p>
-              <a href={hrefFor('scenario')}>Change the scenario</a> to update the recommendation and drafts.
+              <Trans i18nKey="decision.changeScenario" defaults="<1>Change the scenario</1> to update the recommendation and drafts." components={{ 1: <a href={hrefFor('scenario')} /> }} />
             </p>
           </Callout>
           <div className="grid-decision">
