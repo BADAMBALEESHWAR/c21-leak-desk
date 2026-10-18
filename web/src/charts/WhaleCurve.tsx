@@ -1,8 +1,8 @@
 import { memo, useState, type KeyboardEvent, type PointerEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { WhalePoint } from '../api/types';
-import { formatCount, formatInr, formatSignedInr, plural } from '../lib/format';
-import { ChartCard, ChartTip, useWidth, type TipState } from './ChartCard';
+import { formatCount, formatInr, formatSignedInr } from '../lib/format';
+import { ChartCard, ChartTip, useWidth, type LegendItem, type TipState } from './ChartCard';
 
 const H = 230;
 const PAD = { top: 58, right: 16, bottom: 26, left: 48 };
@@ -86,8 +86,8 @@ export const WhaleCurve = memo(function WhaleCurve({ points, unknownCount, chann
       y: Math.max(8, y(p.cumulative_inr) - 64),
       title: `#${p.rank} · ${p.order_id}`,
       rows: [
-        { label: 'running total', value: formatInr(p.cumulative_inr), tone: 'series-1' },
-        { label: 'this order', value: formatSignedInr(p.contribution_inr) },
+        { label: t('whale.runningTotal', 'running total'), value: formatInr(p.cumulative_inr), tone: 'series-1' },
+        { label: t('whale.thisOrder', 'this order'), value: formatSignedInr(p.contribution_inr) },
       ],
     };
   };
@@ -109,31 +109,35 @@ export const WhaleCurve = memo(function WhaleCurve({ points, unknownCount, chann
     });
   };
 
-  const summary =
-    `Running total peaks at ${formatInr(peak.cumulative_inr)} after ${formatCount(peak.rank)} ${plural(peak.rank, 'order', 'orders')} ` +
-    `and ends at ${formatInr(last.cumulative_inr)} after ${formatCount(last.rank)} orders. Use the arrow keys to read each order.`;
+  const summary = t('whale.summary', 'Running total peaks at {{peak}} after {{n}} orders and ends at {{end}} after {{total}} orders. Use the arrow keys to read each order.', {
+    count: peak.rank,
+    peak: formatInr(peak.cumulative_inr),
+    n: formatCount(peak.rank),
+    end: formatInr(last.cumulative_inr),
+    total: formatCount(last.rank),
+  });
 
   const subtitle = (
     <>
-      Orders ranked from most to least profitable; the line is the running total.
-      {channelSpend ? ` Values are before ${formatInr(channelSpend)} channel spend.` : ''}
-      {unknownCount > 0 ? ` ${formatCount(unknownCount)} unknown ${plural(unknownCount, 'order is', 'orders are')} left out.` : ''}
+      {t('whale.sub', 'Orders ranked from most to least profitable; the line is the running total.')}
+      {channelSpend ? ` ${t('whale.beforeSpend', 'Values are before {{inr}} channel spend.', { inr: formatInr(channelSpend) })}` : ''}
+      {unknownCount > 0 ? ` ${t('whale.unknownLeftOut', '{{n}} unknown orders are left out.', { count: unknownCount, n: formatCount(unknownCount) })}` : ''}
     </>
   );
 
   const table = (
     <div className="table-scroll">
       <table className="table table-compact">
-        <caption className="visually-hidden">Cumulative contribution by order rank</caption>
+        <caption className="visually-hidden">{t('whale.caption', 'Cumulative contribution by order rank')}</caption>
         <thead>
           <tr>
-            <th scope="col">Rank</th>
-            <th scope="col">Order</th>
+            <th scope="col">{t('whale.rank', 'Rank')}</th>
+            <th scope="col">{t('ledger.order', 'Order')}</th>
             <th scope="col" className="r">
-              Contribution
+              {t('ledger.contribution', 'Contribution')}
             </th>
             <th scope="col" className="r">
-              Running total
+              {t('chart.runningTotal', 'Running total')}
             </th>
           </tr>
         </thead>
@@ -164,18 +168,13 @@ export const WhaleCurve = memo(function WhaleCurve({ points, unknownCount, chann
   const bandText = t('chart.whaleDestroy', '{{n}} orders after the peak destroy {{inr}}', { n: formatCount(afterPeak), inr: formatInr(fall) });
   const bandAnchor = bandW > 200 ? 'middle' : 'end';
   const bandTextX = bandAnchor === 'middle' ? bandX + bandW / 2 : W - PAD.right;
+  const legend: LegendItem[] = [
+    { label: t('chart.runningTotal', 'Running total'), tone: 'series-1', shape: 'line' },
+    { label: t('chart.afterPeak', 'After the peak'), tone: 'loss' },
+  ];
 
   return (
-    <ChartCard
-      title={t('chart.whaleTitle', 'Whale curve')}
-      subtitle={subtitle}
-      table={table}
-      csv={csv}
-      legend={[
-        { label: t('chart.runningTotal', 'Running total'), tone: 'series-1', shape: 'line' },
-        { label: t('chart.afterPeak', 'After the peak'), tone: 'loss' },
-      ]}
-    >
+    <ChartCard title={t('chart.whaleTitle', 'Whale curve')} subtitle={subtitle} table={table} csv={csv} legend={legend}>
       <div className="chart-plot" ref={ref}>
         <svg
           className="whale-svg"
@@ -198,10 +197,10 @@ export const WhaleCurve = memo(function WhaleCurve({ points, unknownCount, chann
             </g>
           ))}
           <text className="axis-text" x={PAD.left} y={H - 6}>
-            Highest
+            {t('whale.highest', 'Highest')}
           </text>
           <text className="axis-text" x={W - PAD.right} y={H - 6} textAnchor="end">
-            Lowest ({formatCount(last.rank)})
+            {t('whale.lowest', 'Lowest ({{n}})', { n: formatCount(last.rank) })}
           </text>
           {fall > 0 && bandW > 0 ? (
             <g className="whale-band-g">
@@ -226,7 +225,8 @@ export const WhaleCurve = memo(function WhaleCurve({ points, unknownCount, chann
             <>
               <circle className={`whale-dot${fall > 0 ? ' whale-dot-loss' : ''}`} cx={x(n - 1)} cy={lastY} r={4.5} />
               <text className="whale-label" x={x(n - 1)} y={lastLabelY} textAnchor="end">
-                {formatInr(last.cumulative_inr)} final{fall > 0 ? ` (${formatSignedInr(-fall)})` : ''}
+                {t('whale.final', '{{inr}} final', { inr: formatInr(last.cumulative_inr) })}
+                {fall > 0 ? ` (${formatSignedInr(-fall)})` : ''}
               </text>
             </>
           ) : null}

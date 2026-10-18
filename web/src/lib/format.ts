@@ -79,11 +79,11 @@ export function formatSignedDecimal(n: number): string {
   return formatDecimal(n);
 }
 
-/** Local date and time with seconds, e.g. 17 Oct 2026, 14:05:09 */
+/** Local date and time with seconds in the UI language (Latin digits), e.g. 17 Oct 2026, 14:05:09 */
 export function formatDateTime(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleString('en-IN', {
+  return d.toLocaleString(`${localeFor(i18n.language)}-u-nu-latn`, {
     day: '2-digit',
     month: 'short',
     year: 'numeric',
@@ -94,12 +94,12 @@ export function formatDateTime(iso: string): string {
   });
 }
 
-/** A calendar day, e.g. 30 Sep 2026. Plain YYYY-MM-DD dates are read as that day, not shifted by the time zone. */
+/** A calendar day in the UI language (Latin digits), e.g. 30 Sep 2026. Plain YYYY-MM-DD dates are read as that day, not shifted by the time zone. */
 export function formatDate(iso: string): string {
   const day = /^\d{4}-\d{2}-\d{2}$/.test(iso);
   const d = new Date(day ? `${iso}T00:00:00` : iso);
   if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+  return d.toLocaleDateString(`${localeFor(i18n.language)}-u-nu-latn`, { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
 /** A calendar day some days after a date or timestamp, as YYYY-MM-DD (local time). */

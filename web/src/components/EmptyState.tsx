@@ -18,7 +18,7 @@ export function NeedsAnalysis({ sentence, icon = 'table' }: { sentence: string; 
 
   if (restoring || analysing || importing) {
     return (
-      <div className="stack" role="status" aria-label="Loading the analysis">
+      <div className="stack" role="status" aria-label={t('empty.loading', 'Loading the analysis')}>
         <SkeletonCards count={4} />
         <div className="card skeleton-block" aria-hidden="true" />
       </div>
@@ -34,11 +34,13 @@ export function NeedsAnalysis({ sentence, icon = 'table' }: { sentence: string; 
         title={sentence}
         actions={
           <ButtonLink variant="primary" href={hrefFor('import')} icon="upload-cloud">
-            {hasSaved ? 'Open saved data' : 'Upload your orders'}
+            {hasSaved ? t('empty.openSaved', 'Open saved data') : t('empty.upload', 'Upload your orders')}
           </ButtonLink>
         }
       >
-        {hasSaved ? 'Your saved data is listed on the Import step; open one to analyse it.' : 'Upload a CSV or JSON export on the Import step; it is validated and saved to your account.'}
+        {hasSaved
+          ? t('empty.savedHint', 'Your saved data is listed on the Import step; open one to analyse it.')
+          : t('empty.uploadHint', 'Upload a CSV or JSON export on the Import step; it is validated and saved to your account.')}
       </EmptyPanel>
     );
   }
@@ -72,7 +74,7 @@ export function NeedsAnalysis({ sentence, icon = 'table' }: { sentence: string; 
           </>
         }
       >
-        The sample loads 20 orders in a second; any file in the same schema works too.
+        {t('empty.sampleHint', 'The sample loads 20 orders in a second; any file in the same schema works too.')}
       </EmptyPanel>
       <ErrorCallout error={error} />
     </>

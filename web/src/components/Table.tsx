@@ -1,4 +1,5 @@
 import type { MouseEvent, ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
 
 export interface Column<T> {
   id: string;
@@ -35,9 +36,10 @@ export function Table<T>({
   rowClassName,
   extraRows,
   sheet = false,
-  emptyText = 'No rows.',
+  emptyText,
   className,
 }: TableProps<T>) {
+  const { t } = useTranslation();
   const hasFooter = columns.some((c) => c.footer !== undefined);
   const alignCls = (c: Column<T>) => [c.align === 'right' ? 'r' : undefined, c.className].filter(Boolean).join(' ') || undefined;
 
@@ -65,7 +67,7 @@ export function Table<T>({
           {rows.length === 0 && !extraRows ? (
             <tr>
               <td colSpan={columns.length} className="muted">
-                {emptyText}
+                {emptyText ?? t('table.noRows', 'No rows.')}
               </td>
             </tr>
           ) : null}

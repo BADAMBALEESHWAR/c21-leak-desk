@@ -1,7 +1,9 @@
+import { useTranslation } from 'react-i18next';
 import { Icon } from './Icon';
 
 /** Page buttons with first, last and neighbours of the current page; gaps shown as an ellipsis. */
 export function Pagination({ page, pageCount, onPage, label }: { page: number; pageCount: number; onPage: (p: number) => void; label: string }) {
+  const { t } = useTranslation();
   if (pageCount <= 1) return null;
   const items: Array<number | 'gap'> = [];
   for (let p = 1; p <= pageCount; p++) {
@@ -10,7 +12,7 @@ export function Pagination({ page, pageCount, onPage, label }: { page: number; p
   }
   return (
     <nav className="pager" aria-label={label}>
-      <button type="button" className="pager-btn" onClick={() => onPage(page - 1)} disabled={page === 1} aria-label="Previous page">
+      <button type="button" className="pager-btn" onClick={() => onPage(page - 1)} disabled={page === 1} aria-label={t('pager.previous', 'Previous page')}>
         <Icon name="chevron-left" size={16} />
       </button>
       {items.map((it, i) =>
@@ -24,14 +26,14 @@ export function Pagination({ page, pageCount, onPage, label }: { page: number; p
             type="button"
             className={`pager-btn${it === page ? ' is-current' : ''}`}
             aria-current={it === page ? 'page' : undefined}
-            aria-label={`Page ${it}`}
+            aria-label={t('pager.page', 'Page {{n}}', { n: it })}
             onClick={() => onPage(it)}
           >
             {it}
           </button>
         ),
       )}
-      <button type="button" className="pager-btn" onClick={() => onPage(page + 1)} disabled={page === pageCount} aria-label="Next page">
+      <button type="button" className="pager-btn" onClick={() => onPage(page + 1)} disabled={page === pageCount} aria-label={t('pager.next', 'Next page')}>
         <Icon name="chevron-right" size={16} />
       </button>
     </nav>

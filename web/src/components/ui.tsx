@@ -1,14 +1,16 @@
 import { useId, type ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { ErrorInfo } from '../api/client';
 import type { AttributionMode } from '../api/types';
 import { Icon, type IconName } from './Icon';
 
 /** Info icon with a tooltip on hover and keyboard focus. */
-export function InfoTip({ text, label = 'More information' }: { text: ReactNode; label?: string }) {
+export function InfoTip({ text, label }: { text: ReactNode; label?: string }) {
   const id = useId();
+  const { t } = useTranslation();
   return (
     <span className="infotip">
-      <button type="button" className="infotip-btn" aria-label={label} aria-describedby={id}>
+      <button type="button" className="infotip-btn" aria-label={label ?? t('ui.moreInfo', 'More information')} aria-describedby={id}>
         <Icon name="info" size={15} />
       </button>
       <span role="tooltip" id={id} className="infotip-bubble">
@@ -24,8 +26,9 @@ export function Skeleton({ width, height = 14, className }: { width?: number | s
 
 /** Placeholder card grid while an analysis loads. */
 export function SkeletonCards({ count = 4 }: { count?: number }) {
+  const { t } = useTranslation();
   return (
-    <div className="kpi-grid" aria-busy="true" aria-label="Loading">
+    <div className="kpi-grid" aria-busy="true" aria-label={t('ui.loading', 'Loading')}>
       {Array.from({ length: count }, (_, i) => (
         <div key={i} className="card kpi">
           <Skeleton width="45%" height={12} />
@@ -70,6 +73,7 @@ export function StatCard({ ask, ...props }: StatProps) {
 }
 
 function StatTile({ label, value, sub, icon, tone = 'default', large, info, onClick, actionLabel, actionIcon = 'arrow-up-right', pressed }: Omit<StatProps, 'ask'>) {
+  const { t } = useTranslation();
   const cls = `card kpi kpi-${tone}${large ? ' kpi-large' : ''}`;
   const head = (
     <span className="kpi-head">
@@ -79,7 +83,7 @@ function StatTile({ label, value, sub, icon, tone = 'default', large, info, onCl
         </span>
       ) : null}
       <span className="kpi-label">{label}</span>
-      {!onClick && info ? <InfoTip text={info} label={`About ${label.toLowerCase()}`} /> : null}
+      {!onClick && info ? <InfoTip text={info} label={t('ui.about', 'About {{label}}', { label: label.toLowerCase() })} /> : null}
     </span>
   );
   const body = (
@@ -150,6 +154,7 @@ export function Callout({ tone, title, children, className, role }: { tone: Call
 
 /** An API error as stated: what went wrong, how to fix it, and which fields. */
 export function ErrorCallout({ error, className }: { error: ErrorInfo | null; className?: string }) {
+  const { t } = useTranslation();
   if (!error) return null;
   return (
     <Callout tone="danger" title={error.message} className={className} role="alert">
@@ -158,7 +163,7 @@ export function ErrorCallout({ error, className }: { error: ErrorInfo | null; cl
         <ul className="issues">
           {error.issues.map((i, n) => (
             <li key={`${i.path}-${n}`}>
-              <code className="path">{i.path || 'file'}</code> {i.message}
+              <code className="path">{i.path || t('ui.file', 'file')}</code> {i.message}
             </li>
           ))}
         </ul>
@@ -180,9 +185,9 @@ export function EmptyPanel({ icon, title, children, actions }: { icon: IconName;
   );
 }
 
-const ATTRIBUTION_OPTIONS: Array<{ value: AttributionMode; label: string; long: string }> = [
-  { value: 'allocate', label: 'Allocate ads', long: 'Allocate ads per order' },
-  { value: 'channel', label: 'Channel spend', long: 'Deduct channel spend at channel level' },
+const ATTRIBUTION_OPTIONS: Array<{ value: AttributionMode; labelKey: string; label: string; longKey: string; long: string }> = [
+  { value: 'allocate', labelKey: 'attribution.allocate', label: 'Allocate ads', longKey: 'attribution.allocateLong', long: 'Allocate ads per order' },
+  { value: 'channel', labelKey: 'attribution.channel', label: 'Channel spend', longKey: 'attribution.channelLong', long: 'Deduct channel spend at channel level' },
 ];
 
 /** Two-way segmented control for the attribution mode (radio semantics). */
@@ -198,13 +203,14 @@ export function AttributionSegmented({
   compact?: boolean;
 }) {
   const name = useId();
+  const { t } = useTranslation();
   return (
     <fieldset className="segmented" disabled={disabled}>
-      <legend className="visually-hidden">Attribution</legend>
+      <legend className="visually-hidden">{t('attribution.legend', 'Attribution')}</legend>
       {ATTRIBUTION_OPTIONS.map((o) => (
-        <label key={o.value} className="segmented-item" title={o.long}>
+        <label key={o.value} className="segmented-item" title={t(o.longKey, o.long)}>
           <input type="radio" name={name} value={o.value} checked={value === o.value} onChange={() => onChange(o.value)} />
-          <span>{compact ? o.label : o.long}</span>
+          <span>{compact ? t(o.labelKey, o.label) : t(o.longKey, o.long)}</span>
         </label>
       ))}
     </fieldset>

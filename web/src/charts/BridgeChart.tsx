@@ -1,6 +1,8 @@
+import { useTranslation } from 'react-i18next';
 import type { BridgeLine } from '../api/types';
 import { Pill } from '../components/Badge';
 import { Money } from '../components/Money';
+import { apiText } from '../lib/apiText';
 import { formatInr } from '../lib/format';
 
 interface Props {
@@ -16,6 +18,7 @@ interface Props {
  * deductions float from the running total, the total runs from zero. Every line is labelled.
  */
 export function BridgeChart({ lines, focus, estimated = [] }: Props) {
+  const { t } = useTranslation();
   // Positions only; every amount shown comes straight from the bridge.
   let running = 0;
   const segs = lines.map((l) => {
@@ -40,7 +43,7 @@ export function BridgeChart({ lines, focus, estimated = [] }: Props) {
     return 'wf-ded';
   };
 
-  const summary = `Period waterfall: ${lines.map((l) => `${l.label} ${formatInr(l.amount_inr)}`).join(', ')}.`;
+  const summary = t('chart.periodWaterfall', 'Period waterfall: {{lines}}.', { lines: lines.map((l) => `${apiText(l.label)} ${formatInr(l.amount_inr)}`).join(', ') });
 
   return (
     <div className="wf bridge" role="img" aria-label={summary}>
@@ -55,11 +58,11 @@ export function BridgeChart({ lines, focus, estimated = [] }: Props) {
             aria-current={isFocus ? 'true' : undefined}
           >
             <span className="wf-label">
-              {l.label}
+              {apiText(l.label)}
               {estimated.includes(l.key) ? (
                 <>
                   {' '}
-                  <Pill tone="warning">estimated</Pill>
+                  <Pill tone="warning">{t('chart.estimated', 'estimated')}</Pill>
                 </>
               ) : null}
             </span>

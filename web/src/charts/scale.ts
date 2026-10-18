@@ -1,4 +1,5 @@
 // Small scale helpers shared by the hand-written charts.
+import { i18n, localeFor } from '../i18n';
 
 export function niceTicks(lo: number, hi: number, count = 4): number[] {
   const span = hi - lo || 1;
@@ -25,13 +26,30 @@ function trim(n: number): string {
   return n >= 10 ? n.toFixed(0) : n.toFixed(1).replace(/\.0$/, '');
 }
 
+// English keeps its own short names ("Sep", where Intl's en-IN now says "Sept").
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
-/** "2025-10" → "Oct 2025" (or "Oct" when short). */
+const monthFormats = new Map<string, Intl.DateTimeFormat>();
+
+/** Hindi and Telugu month names from Intl, in the UI language (Latin digits for the year). */
+function localMonth(locale: string, year: number, month: number, short: boolean): string {
+  const id = `${locale}:${short ? 's' : 'l'}`;
+  let f = monthFormats.get(id);
+  if (!f) {
+    f = new Intl.DateTimeFormat(locale, short ? { month: 'short', timeZone: 'UTC' } : { month: 'short', year: 'numeric', timeZone: 'UTC' });
+    monthFormats.set(id, f);
+  }
+  return f.format(new Date(Date.UTC(year, month, 15)));
+}
+
+/** "2025-10" → "Oct 2025" (or "Oct" when short); in Hindi "अक्टू॰ 2025", in Telugu "అక్టో 2025". */
 export function formatMonth(ym: string, short = false): string {
   const m = /^(\d{4})-(\d{2})$/.exec(ym);
   if (!m) return ym;
-  const name = MONTHS[Number(m[2]) - 1] ?? m[2];
+  const index = Number(m[2]) - 1;
+  const locale = localeFor(i18n.language);
+  if (locale !== 'en-IN' && index >= 0 && index < 12) return localMonth(locale, Number(m[1]), index, short);
+  const name = MONTHS[index] ?? m[2];
   return short ? name : `${name} ${m[1]}`;
 }
 

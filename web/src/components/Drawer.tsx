@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, type KeyboardEvent, type ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
 import { IconButton } from './Button';
 
 interface DrawerProps {
@@ -17,6 +18,7 @@ const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), selec
  * Escape closes; focus moves in on open, is kept inside, and returns on close.
  */
 export function Drawer({ open, onClose, title, meta, children }: DrawerProps) {
+  const { t } = useTranslation();
   const panelRef = useRef<HTMLDivElement>(null);
   const returnFocus = useRef<HTMLElement | null>(null);
   const titleId = useId();
@@ -85,7 +87,7 @@ export function Drawer({ open, onClose, title, meta, children }: DrawerProps) {
             </h2>
             {meta ? <div className="drawer-meta">{meta}</div> : null}
           </div>
-          <IconButton icon="x" label="Close" onClick={onClose} />
+          <IconButton icon="x" label={t('drawer.close', 'Close')} onClick={onClose} />
         </div>
         <div className="drawer-body">{children}</div>
       </div>

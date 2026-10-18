@@ -52,7 +52,7 @@ export function Badge({ variant, children, title }: { variant: 'gain' | 'loss' |
 export function Unknown({ title }: { title?: string }) {
   const { t } = useTranslation();
   return (
-    <Pill tone="unknown" title={title ?? 'Not in the source data'}>
+    <Pill tone="unknown" title={title ?? t('badge.notInSource', 'Not in the source data')}>
       {lower(t('status.unknown'))}
     </Pill>
   );
@@ -67,7 +67,7 @@ export function ConfidenceBadge({ confidence, prefix }: { confidence: Confidence
   if (confidence === 'high') return <Pill tone="success">{text}</Pill>;
   if (confidence === 'low') return <Pill tone="warning">{text}</Pill>;
   return (
-    <Pill tone="unknown" title="Confidence is unknown while facts are missing">
+    <Pill tone="unknown" title={t('badge.confidenceUnknown', 'Confidence is unknown while facts are missing')}>
       {text}
     </Pill>
   );

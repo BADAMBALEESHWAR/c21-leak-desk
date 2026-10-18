@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { formatInr, formatMarginPct } from '../lib/format';
 import { compactInr, niceTicks } from './scale';
+import { apiText } from '../lib/apiText';
 
 export interface BridgeStep {
   key: string;
@@ -67,7 +68,7 @@ export function MarginBridge({ steps, ariaLabel }: Props) {
                   {s.kind === 'drop' ? <span aria-hidden="true">− </span> : s.kind === 'subtotal' ? <span aria-hidden="true">= </span> : null}
                   {s.label}
                 </span>
-                {s.note ? <span className="mb-note">{s.note}</span> : null}
+                {s.note ? <span className="mb-note">{apiText(s.note)}</span> : null}
               </span>
               <span className="mb-track">
                 {ticks.map((v) => (

@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import type { AnalysisResponse, Reconciliation } from '../api/types';
+import { apiText } from '../lib/apiText';
 import { formatDate, formatInr } from '../lib/format';
 import { Icon } from './Icon';
 import { Money } from './Money';
@@ -73,14 +74,14 @@ export function ReconciliationLine({ rec }: { rec: Reconciliation }) {
       <div className="banner banner-warning" role="status">
         <Icon name="alert-triangle" size={20} />
         <p>
-          <strong>Not reconciled.</strong> {rec.statement}
+          <strong>{t('recon.notReconciled', 'Not reconciled.')}</strong> {apiText(rec.statement)}
         </p>
       </div>
     );
   }
   if (rec.ok) {
     return (
-      <div className="banner banner-success recon" role="status" title={`Reconciled within ±${formatInr(rec.tolerance_inr)}`}>
+      <div className="banner banner-success recon" role="status" title={t('recon.within', 'Reconciled within ±{{inr}}', { inr: formatInr(rec.tolerance_inr) })}>
         <Icon name="check-circle" size={20} />
         <p>
           <strong>{t('ledger.reconciledShort')}</strong>
@@ -88,7 +89,7 @@ export function ReconciliationLine({ rec }: { rec: Reconciliation }) {
             —
           </span>
           <span className="num">
-            Σ orders {formatInr(o)} = Σ channels {formatInr(c)} = Σ products {formatInr(p)} ✓
+            {t('recon.sums', 'Σ orders {{orders}} = Σ channels {{channels}} = Σ products {{products}} ✓', { orders: formatInr(o), channels: formatInr(c), products: formatInr(p) })}
           </span>
         </p>
       </div>
@@ -98,12 +99,12 @@ export function ReconciliationLine({ rec }: { rec: Reconciliation }) {
     <div className="banner banner-danger recon" role="alert">
       <Icon name="alert-triangle" size={20} />
       <p>
-        <strong>Totals differ by {formatInr(rec.gap_inr)}</strong>
+        <strong>{t('recon.differ', 'Totals differ by {{inr}}', { inr: formatInr(rec.gap_inr) })}</strong>
         <span className="banner-sep" aria-hidden="true">
           —
         </span>
         <span className="num">
-          Σ orders {formatInr(o)} · Σ channels {formatInr(c)} · Σ products {formatInr(p)}
+          {t('recon.sumsGap', 'Σ orders {{orders}} · Σ channels {{channels}} · Σ products {{products}}', { orders: formatInr(o), channels: formatInr(c), products: formatInr(p) })}
         </span>
       </p>
     </div>
