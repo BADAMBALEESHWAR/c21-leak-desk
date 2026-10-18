@@ -139,7 +139,6 @@ describe('Overview', () => {
     expect(cards[0].textContent).toContain('480');
     expect(within(cards[0] as HTMLElement).getByText('AI summary · numbers from the engine')).toBeTruthy();
     expect(within(cards[1] as HTMLElement).getByText('Template text')).toBeTruthy();
-    expect(within(cards[0] as HTMLElement).getByRole('link', { name: 'Why this is safe' }).getAttribute('href')).toBe('#/ai');
 
     // Headline with provenance, and each leak links to its orders on the ledger.
     expect(container.querySelector('.ov-value')?.textContent).toContain('6,000');

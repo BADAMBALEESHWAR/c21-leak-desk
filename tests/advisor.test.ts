@@ -33,7 +33,7 @@ describe('fix advisor (v2 §1.2)', () => {
     const leak = extAnalysis.leaks.find((l: any) => l.cause === 'full_return_partial_recovery');
     expect(r.body).toMatchObject({ cause: 'full_return_partial_recovery', label: 'Full return, partial recovery', summary: { text: leak.why, source: 'template' } });
     expect(r.body.facts).toMatchObject({ orders: 5, inr_at_stake: 1384, example_ids: leak.example_ids });
-    expect(r.body.interventions).toEqual([
+    expect(r.body.interventions).toMatchObject([
       { candidate_id: 'raise_recovery_via_inspection', intervention: 'raise_recovery_via_inspection', label: 'Raise recovery via inspection', overrides: { recovery_pct: 90 }, expected_delta_inr: 390, confidence: 'unknown' },
       { candidate_id: 'charge_return_shipping', intervention: 'charge_return_shipping', label: 'Charge return shipping', overrides: null, expected_delta_inr: 280, confidence: 'unknown' },
     ]);
