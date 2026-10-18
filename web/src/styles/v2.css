@@ -711,6 +711,8 @@ body .toast-region {
   position: sticky;
   bottom: -28px;
   display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   gap: 8px;
   margin-top: auto;
   padding: 12px 0 4px;
@@ -1180,6 +1182,319 @@ body .toast-region {
   flex-wrap: wrap;
   align-items: center;
   gap: 8px 12px;
+}
+
+/* ---- Voice in Ask Profyn ---------------------------------------------------------------------- */
+
+.ask-mic {
+  position: relative;
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--text-2);
+  cursor: pointer;
+  transition: background-color var(--t-fast), color var(--t-fast), border-color var(--t-fast);
+}
+
+.ask-mic:hover:not(:disabled) {
+  border-color: var(--primary-border);
+  background: var(--primary-25);
+  color: var(--primary);
+}
+
+.ask-mic:focus-visible,
+.ask-speak:focus-visible,
+.ask-ai-btn:focus-visible {
+  outline: 2px solid var(--primary-strong);
+  outline-offset: 2px;
+}
+
+.ask-mic:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.ask-mic.is-listening,
+.ask-mic.is-listening:hover:not(:disabled) {
+  border-color: transparent;
+  background: var(--danger);
+  color: var(--on-dark);
+}
+
+.ask-mic.is-listening::after {
+  content: '';
+  position: absolute;
+  inset: -5px;
+  border: 2px solid var(--danger-fill);
+  border-radius: 50%;
+  animation: ask-ring 1.3s ease-out infinite;
+}
+
+.ask-voice-status {
+  display: flex;
+  flex: 1 0 100%;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  color: var(--danger);
+}
+
+.ask-voice-status.is-error {
+  font-weight: 500;
+}
+
+.ask-voice-status svg {
+  flex: none;
+}
+
+.ask-voice-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--danger-fill);
+  animation: ask-dot 1s ease-in-out infinite;
+}
+
+@keyframes ask-ring {
+  from {
+    transform: scale(0.9);
+    opacity: 0.9;
+  }
+  to {
+    transform: scale(1.35);
+    opacity: 0;
+  }
+}
+
+@keyframes ask-dot {
+  50% {
+    opacity: 0.25;
+  }
+}
+
+.ask-speak {
+  display: inline-grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  margin-left: auto;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--text-2);
+  cursor: pointer;
+}
+
+.ask-speak:hover,
+.ask-speak.is-speaking {
+  border-color: var(--primary-border);
+  background: var(--primary-25);
+  color: var(--primary);
+}
+
+/* ---- Ask about this ---------------------------------------------------------------------------- */
+
+.ask-ai-btn {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--primary-border);
+  border-radius: 50%;
+  background: var(--primary-25);
+  color: var(--primary);
+  cursor: pointer;
+  transition: background var(--t-fast), color var(--t-fast), box-shadow var(--t-fast), border-color var(--t-fast);
+}
+
+.ask-ai-btn:hover {
+  border-color: transparent;
+  background: var(--ai-gradient);
+  color: var(--on-dark);
+  box-shadow: var(--shadow-ai);
+}
+
+.ov-label-row,
+.ov-card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ov-card-head {
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.ov-action-ask {
+  margin-left: auto;
+}
+
+.leak-top-end {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.chart-card .chart-actions .ask-ai-btn {
+  align-self: center;
+}
+
+/* A KPI tile that is one button keeps its Ask button beside it, bottom right. */
+.kpi-slot {
+  position: relative;
+  display: grid;
+  min-width: 0;
+}
+
+.kpi-slot > .kpi {
+  height: 100%;
+}
+
+.kpi-slot > .kpi .kpi-sub {
+  padding-right: 30px;
+}
+
+.kpi-slot > .ask-ai-btn {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+}
+
+/* ---- Overview: AI briefing --------------------------------------------------------------------- */
+
+.card.ov-brief {
+  display: grid;
+  gap: 14px;
+  padding: 18px 20px 20px;
+  border-color: var(--primary-border);
+  background: linear-gradient(180deg, var(--primary-25) 0%, var(--surface) 80%);
+}
+
+.ov-brief-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+}
+
+.ov-brief-mark {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--r-sm);
+  background: var(--ai-gradient);
+  color: var(--on-dark);
+}
+
+.ov-brief-title {
+  margin: 0;
+  font-size: var(--fs-md);
+  font-weight: 700;
+}
+
+.ov-brief-badge {
+  margin-left: auto;
+}
+
+.ov-brief-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin: 0;
+}
+
+.ov-brief-item {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  min-width: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+}
+
+.ov-brief-item dt {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  color: var(--text-2);
+}
+
+.ov-brief-item dt svg {
+  flex: none;
+  color: var(--primary);
+}
+
+.ov-brief-item.is-leaked dt svg {
+  color: var(--danger);
+}
+
+.ov-brief-item.is-decided dt svg {
+  color: var(--success);
+}
+
+.ov-brief-item dd {
+  margin: 0;
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+  color: var(--text);
+}
+
+/* ---- Share ------------------------------------------------------------------------------------- */
+
+.share-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+@media (max-width: 1100px) {
+  .ov-brief-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .ov-brief-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ov-brief-badge {
+    margin-left: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ask-mic.is-listening::after,
+  .ask-voice-dot {
+    animation: none;
+  }
+}
+
+@media print {
+  .share-actions,
+  .ask-ai-btn {
+    display: none !important;
+  }
 }
 
 /* ---- Narrow screens -------------------------------------------------------------------------- */

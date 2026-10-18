@@ -13,6 +13,8 @@ import {
 } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
 import { AiBadge } from '../components/AiBadge';
+import { AiBriefing, useDigest } from '../components/AiBriefing';
+import { AskAiButton } from '../components/AskAiButton';
 import { ConfidenceBadge, Pill } from '../components/Badge';
 import { Button } from '../components/Button';
 import { NeedsAnalysis } from '../components/EmptyState';
@@ -20,10 +22,13 @@ import { Icon } from '../components/Icon';
 import { Money } from '../components/Money';
 import { PageHeader } from '../components/Page';
 import { Provenance } from '../components/Provenance';
+import { ShareActions } from '../components/ShareActions';
 import { Callout, ErrorCallout, Skeleton } from '../components/ui';
+import { actionQuestion, leakQuestion } from '../lib/ask';
 import { formatCount, formatInr, formatMarginPct } from '../lib/format';
 import { datasetName, handlingEstimateUsed, INTERVENTION_LABELS, LEAK_LABELS } from '../lib/labels';
 import { hrefFor, navigate } from '../lib/router';
+import { appUrl, shareText } from '../lib/share';
 import { isRunnable, useStore } from '../state/store';
 import { sortLeakGroups } from './LeaksScreen';
 
@@ -248,8 +253,11 @@ function Headline({ doc, analysis }: { doc: Autopilot; analysis: AnalysisRespons
   return (
     <section className="card ov-headline" aria-labelledby="ov-headline-label">
       <div className="ov-headline-main">
-        <span id="ov-headline-label" className="ov-label">
-          {t('overview.contribution', 'Operational contribution')}
+        <span className="ov-label-row">
+          <span id="ov-headline-label" className="ov-label">
+            {t('overview.contribution', 'Operational contribution')}
+          </span>
+          <AskAiButton question={t('askq.contribution', 'Explain operational contribution')} about={t('overview.contribution', 'Operational contribution')} />
         </span>
         <span className="ov-value">
           <Money value={h.contribution_inr} tone="contribution" />
@@ -298,6 +306,8 @@ function Headline({ doc, analysis }: { doc: Autopilot; analysis: AnalysisRespons
   );
 }
 
+const leakLabel = (l: { cause: string; label: string }) => l.label || LEAK_LABELS[l.cause as keyof typeof LEAK_LABELS] || l.cause;
+
 function Leaks({ doc }: { doc: Autopilot }) {
   const { t } = useTranslation();
   if (doc.top_leaks.length === 0) {
@@ -319,7 +329,10 @@ function Leaks({ doc }: { doc: Autopilot }) {
     <ol className="ov-leak-grid">
       {doc.top_leaks.slice(0, 3).map((l) => (
         <li key={l.cause} className="card ov-leak">
-          <span className="ov-leak-label">{l.label || LEAK_LABELS[l.cause as keyof typeof LEAK_LABELS] || l.cause}</span>
+          <span className="ov-card-head">
+            <span className="ov-leak-label">{leakLabel(l)}</span>
+            <AskAiButton question={leakQuestion(t, l.cause, leakLabel(l))} about={leakLabel(l)} />
+          </span>
           <span className="ov-leak-amount">
             {l.inr_at_stake === null ? (
               <Pill tone="unknown">{t('overview.unknownAmount', 'amount unknown')}</Pill>
@@ -369,6 +382,7 @@ function ActionCard({
         <h3 id={`ov-action-${action.rank}`} className="ov-action-title">
           {label}
         </h3>
+        <AskAiButton question={actionQuestion(t, action.intervention, label)} about={label} className="ov-action-ask" />
       </div>
       <div className="ov-action-figures">
         <span className="ov-delta">
@@ -425,6 +439,11 @@ export function OverviewScreen() {
   const [busy, setBusy] = useState<number | null>(null);
   const [errors, setErrors] = useState<Record<number, ErrorInfo>>({});
   const [analyseError, setAnalyseError] = useState<ErrorInfo | null>(null);
+  // The AI briefing follows the autopilot's analysis (the engine's own when the server has no autopilot) and is fetched
+  // again after a decision is saved, so "What was decided" catches up.
+  const [digestRefresh, setDigestRefresh] = useState(0);
+  const digestId = run.doc?.analysis_id || (run.fallback || run.error ? analysis?.analysis_id ?? null : null);
+  const digest = useDigest(id ? digestId : null, lang, digestRefresh);
 
   useEffect(() => {
     setSaved({});
@@ -456,7 +475,19 @@ export function OverviewScreen() {
 
   const owner = auth.user?.name || auth.user?.email || null;
 
-  const draftOf = (a: AutopilotAction): DecisionRequest => ({
+  // Share: only figures the page shows (headline, the three actions, the briefing), in the UI language.
+  const share = doc?.headline
+    ? shareText({
+        t,
+        heading: name ? t('share.headingNamed', 'Profyn summary · {{name}}', { name }) : t('share.heading', 'Profyn summary'),
+        contribution: doc.headline.contribution_inr,
+        actions: doc.actions.slice(0, 3).map((a) => ({ label: a.label || INTERVENTION_LABELS[a.intervention] || a.intervention, delta: a.expected_delta_inr })),
+        digest: digest.digest,
+        url: appUrl(auth.mode !== 'account'),
+      })
+    : null;
+
+  const draftOf =(a: AutopilotAction): DecisionRequest => ({
     intervention: a.decision_draft?.intervention ?? a.intervention,
     expected_delta_inr: a.decision_draft?.expected_delta_inr ?? a.expected_delta_inr,
     test_30d: a.decision_draft?.test_30d || t('overview.draftTest', 'Run this change for 30 days and compare contribution per order with the month before.'),
@@ -486,6 +517,7 @@ export function OverviewScreen() {
         result = await api.createDecision(doc.analysis_id, draftOf(a));
       }
       setSaved((s) => ({ ...s, [a.rank]: result }));
+      setDigestRefresh((n) => n + 1);
       markDecisionSaved(analysis?.analysis_id ?? doc.analysis_id ?? '');
       showToast(t('overview.toast', 'Decision saved: {{label}}', { label: a.label }));
     } catch (err) {
@@ -511,9 +543,11 @@ export function OverviewScreen() {
 
   return (
     <div className="page ov-page">
-      <PageHeader title={title} subtitle={subtitle} />
+      <PageHeader title={title} subtitle={subtitle} actions={<ShareActions text={share} />} />
 
       <Stages doc={doc} />
+
+      <AiBriefing state={digest} pending={!digestId && !run.error && !run.fallback} />
 
       {run.error ? <ErrorCallout error={run.error} /> : null}
       {run.fallback ? (
@@ -537,20 +571,6 @@ export function OverviewScreen() {
           <Skeleton width="30%" height={12} />
           <Skeleton width="45%" height={40} className="skeleton-gap" />
           <Skeleton width="60%" height={12} className="skeleton-gap" />
-        </section>
-      ) : null}
-
-      {shown ? (
-        <section className="ov-section" aria-labelledby="ov-leaks-title">
-          <div className="section-head">
-            <h2 id="ov-leaks-title" className="section-title">
-              {t('overview.leaksTitle', 'The three biggest leaks')}
-            </h2>
-            <a className="section-meta" href={hrefFor('leaks')}>
-              {t('overview.allLeaks', 'All leaks')}
-            </a>
-          </div>
-          <Leaks doc={shown} />
         </section>
       ) : null}
 
@@ -590,6 +610,20 @@ export function OverviewScreen() {
               ))}
             </div>
           )}
+        </section>
+      ) : null}
+
+      {shown ? (
+        <section className="ov-section" aria-labelledby="ov-leaks-title">
+          <div className="section-head">
+            <h2 id="ov-leaks-title" className="section-title">
+              {t('overview.leaksTitle', 'The three biggest leaks')}
+            </h2>
+            <a className="section-meta" href={hrefFor('leaks')}>
+              {t('overview.allLeaks', 'All leaks')}
+            </a>
+          </div>
+          <Leaks doc={shown} />
         </section>
       ) : null}
     </div>
