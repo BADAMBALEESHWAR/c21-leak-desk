@@ -27,6 +27,7 @@ import { askRouter } from './routes/ask.js';
 import { autopilotRouter } from './routes/autopilot.js';
 import { digestRouter } from './routes/digest.js';
 import { connectorsRouter } from './routes/connectors.js';
+import { razorpayRouter } from './routes/razorpay.js';
 
 /** CORS: the CloudFront origin(s) in CORS_ORIGIN plus localhost for development (§17). */
 function allowedOrigin(origin: string | undefined): string | null {
@@ -103,6 +104,7 @@ export function createApp(options: { auth?: AuthSettings; oauth?: OAuthSettings 
   api.use(aiRouter);
   // Store connectors (Shopify).
   api.use(connectorsRouter(oauth));
+  api.use(razorpayRouter);
   app.use('/api/v1', api);
 
   app.use((req, _res, next) => next(new HttpError(404, 'not_found', `No route for ${req.method} ${req.path}.`)));
