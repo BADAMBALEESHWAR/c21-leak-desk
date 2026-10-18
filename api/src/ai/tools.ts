@@ -12,7 +12,7 @@ import { CANDIDATE_KEYS, interventionLabels, type Lang } from './templates.js';
 // Ask Profyn tools (v2 §1.3): five read-only tools over the engine's own output. The model may pick a tool and phrase
 // its JSON; it never sees raw order rows and never computes a figure. Without AI a keyword router picks the tool.
 
-export const TOOL_NAMES = ['leaks', 'pulse.months', 'pulse.products', 'pulse.channels', 'scenario.run'] as const;
+export const TOOL_NAMES = ['summary', 'leaks', 'pulse.months', 'pulse.products', 'pulse.channels', 'scenario.run'] as const;
 export type ToolName = (typeof TOOL_NAMES)[number];
 export interface ToolCall {
   name: ToolName;
@@ -34,6 +34,7 @@ const Month = z.string().regex(/^\d{4}-\d{2}$/, 'use YYYY-MM');
 const PRODUCT_ORDERS = ['lowest_contribution', 'highest_contribution', 'net_sales'] as const;
 
 export const TOOL_ARGS = {
+  summary: z.object({ focus: z.enum(['overall', 'net_sales', 'contribution', 'orders']).optional() }),
   leaks: z.object({ cause: z.enum(LEAK_CAUSES).optional(), month: Month.optional() }),
   'pulse.months': z.object({ month: Month.optional() }),
   'pulse.products': z.object({ month: Month.optional(), product: z.string().min(1).optional(), order: z.enum(PRODUCT_ORDERS).optional() }),
@@ -50,6 +51,7 @@ export const TOOL_ARGS = {
 
 /** Gemini function names cannot contain dots. */
 const GEMINI_NAME: Record<ToolName, string> = {
+  summary: 'summary',
   leaks: 'leaks',
   'pulse.months': 'pulse_months',
   'pulse.products': 'pulse_products',
@@ -61,6 +63,11 @@ const FROM_GEMINI = Object.fromEntries(Object.entries(GEMINI_NAME).map(([k, v]) 
 const str = (description: string, values?: readonly string[]) => ({ type: SchemaType.STRING, description, ...(values ? { enum: [...values] } : {}) });
 
 export const TOOL_DECLARATIONS: FunctionDeclaration[] = [
+  {
+    name: 'summary',
+    description: 'Overall picture: net sales, operational contribution, orders, the biggest leak and the best fix. Use for "explain net sales", "how are we doing", "where do I need to improve", margins, general questions.',
+    parameters: { type: SchemaType.OBJECT, properties: { focus: str('What the question is about', ['overall', 'net_sales', 'contribution', 'orders']) } },
+  },
   {
     name: 'leaks',
     description: 'Leak groups: orders with negative or unknown contribution, grouped by cause, with rupees lost. Use for "why", "where did we lose money", causes.',
@@ -130,6 +137,21 @@ const productView = (p: ReturnType<typeof pulseProducts>['products'][number]) =>
 export function runTool(call: ToolCall, ctx: ToolContext): Record<string, unknown> {
   const { a } = ctx;
   switch (call.name) {
+    case 'summary': {
+      const args = TOOL_ARGS.summary.parse(call.args);
+      const top = a.leaks[0] ?? null;
+      const best = [...a.candidates].sort((x, y) => y.delta_inr - x.delta_inr)[0] ?? null;
+      return {
+        focus: args.focus ?? 'overall',
+        net_sales_inr: a.totals.net_sales_inr,
+        contribution_inr: a.totals.contribution_inr,
+        orders: a.totals.orders,
+        unknown_orders: a.totals.unknown_count,
+        return_rate_pct: a.observed.return_rate_pct,
+        top_leak: top ? { cause: top.cause, label: top.label, count: top.count, lost_inr: top.lost_inr } : null,
+        best_fix: best ? { intervention: best.intervention, label: best.label, delta_inr: best.delta_inr } : null,
+      };
+    }
     case 'leaks': {
       const args = TOOL_ARGS.leaks.parse(call.args);
       const leaks = a.leaks.map((l) => ({ cause: l.cause, label: l.label, count: l.count, lost_inr: l.lost_inr, example_ids: l.example_ids }));
@@ -229,6 +251,7 @@ export function parseMonth(q: string, available: string[]): string | null {
   return `${year}-${mm}`;
 }
 
+const SUMMARY_WORDS = /net sales|revenue|sales|contribution|margin|orders|improve|improvement|overall|summary|summar|how are we|how am i|performance|explain|बिक्री|योगदान|मार्जिन|सुधार|कैसा|సేల్స్|అమ్మకాలు|కాంట్రిబ్యూషన్|మెరుగు|ఎలా ఉంది/;
 const WHAT_IF = /what if|what happens|suppose|if we|simulate|scenario|क्या होगा|अगर|ఒకవేళ|అయితే/;
 const LEAK_WORDS = /leak|why|lost|losing|loss|negative|bleed|लीक|नुकसान|क्यों|घाटा|లీక్|నష్టం|ఎందుకు/;
 const PRODUCT_WORDS = /product|sku|item|उत्पाद|प्रोडक्ट|ఉత్పత్తి|ప్రోడక్ట్/;
@@ -287,12 +310,13 @@ export function matchQuestion(question: string, a: AnalysisResult): ToolCall | n
     return { name: 'leaks', args: { ...(cause ? { cause } : {}), ...withMonth } };
   }
   if (month || MONTH_TREND.test(q)) return { name: 'pulse.months', args: withMonth };
+  if (SUMMARY_WORDS.test(q)) return { name: 'summary', args: { focus: /net sales|revenue|sales|बिक्री|అమ్మకాలు/.test(q) ? 'net_sales' : 'overall' } };
   return null;
 }
 
-/** Deterministic tool choice; the biggest leaks when nothing matched. */
+/** Deterministic tool choice; the overall summary when nothing matched. */
 export function routeQuestion(question: string, a: AnalysisResult): ToolCall {
-  return matchQuestion(question, a) ?? { name: 'leaks', args: {} };
+  return matchQuestion(question, a) ?? { name: 'summary', args: {} };
 }
 
 /** What the data holds, for the model's tool prompt: the real months, channels and products to choose from. */
@@ -327,6 +351,13 @@ export function templateAnswer(call: ToolCall, result: Rec, lang: Lang): string 
   const p = PHRASES[lang];
   const money = (n: number | null | undefined) => inr(lang, n);
   switch (call.name) {
+    case 'summary': {
+      const leak = result.top_leak as Rec | null;
+      const fix = result.best_fix as Rec | null;
+      if (!leak && !fix) return p.noData;
+      const fixLabel = fix ? (interventionLabels(lang).find((l) => l.intervention === fix.intervention)?.label ?? fix.label) : p.unknown;
+      return p.summary(money(result.net_sales_inr), p.orders(result.orders), money(result.contribution_inr), leak ? p.leakLabel(leak.cause as LeakCause) : p.unknown, leak ? money(leak.lost_inr) : p.unknown, fixLabel, fix ? (signed(fix.delta_inr) ?? p.unknown) : p.unknown);
+    }
     case 'leaks': {
       const leaks = result.leaks as Rec[];
       const label = (l: Rec) => p.leakLabel(l.cause as LeakCause);
@@ -377,6 +408,10 @@ export function linkFor(call: ToolCall, result: Rec): AskLink {
   const month = typeof call.args.month === 'string' ? call.args.month : undefined;
   const withMonth = month ? { month } : {};
   switch (call.name) {
+    case 'summary': {
+      const cause = (result.top_leak as Rec | null)?.cause as string | undefined;
+      return cause ? { route: 'ledger', params: { cause } } : { route: 'leaks', params: {} };
+    }
     case 'leaks': {
       const cause = (result.focus?.cause ?? (result.leaks as Rec[])[0]?.cause) as string | undefined;
       return cause ? { route: 'ledger', params: { cause, ...withMonth } } : { route: 'leaks', params: {} };
