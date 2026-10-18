@@ -1,0 +1,480 @@
+/* ---- Connectors: Shopify Admin API (Integrations row, import card, connect drawer) ------------------------------- */
+
+/* Integrations: the live connector row spans the grid and carries its actions. */
+/* connectors.css can load before components.css: selectors here outrank the base .intg-list / .field rules. */
+.intg .intg-list.intg-list-connectors {
+  grid-template-columns: 1fr;
+}
+
+.intg-item.is-connector {
+  flex-wrap: wrap;
+  border-color: var(--success-border);
+  background: var(--surface);
+  box-shadow: inset 3px 0 0 var(--success-fill);
+}
+
+.intg-item.is-connector .intg-text {
+  flex: 1 1 180px;
+}
+
+.intg-item.is-connector .intg-pills .pill {
+  margin-left: 0;
+}
+
+.intg-item.is-connector .intg-prereq {
+  white-space: normal;
+}
+
+.intg-connected {
+  color: var(--text);
+  font-weight: 500;
+}
+
+.intg-connector-actions {
+  display: flex;
+  justify-content: flex-end;
+  flex: 0 1 auto;
+  margin-left: auto;
+  min-width: 0;
+}
+
+.intg-item.is-connected .intg-connector-actions .shop-confirm {
+  max-width: 420px;
+}
+
+/* Status line and actions */
+.shop-status-line {
+  font-variant-numeric: tabular-nums;
+}
+
+.shop-actions-wrap {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.shop-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.shop-confirm {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--danger-border);
+  border-radius: var(--r-sm);
+  background: var(--danger-bg);
+}
+
+.shop-confirm-text {
+  font-size: var(--fs-sm);
+  color: var(--text);
+  line-height: 1.45;
+}
+
+.btn.shop-danger {
+  border-color: var(--danger-border);
+  color: var(--danger);
+}
+
+.shop-progress-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--fs-sm);
+  color: var(--text-2);
+}
+
+.shop-error {
+  margin: 0;
+}
+
+/* Import screen card */
+.shop-card {
+  display: grid;
+  gap: 12px;
+  padding: 18px;
+}
+
+.shop-card-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.shop-card-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.shop-mark {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--r-sm);
+  background: var(--success-fill);
+  color: var(--on-dark);
+}
+
+.shop-connect-btn > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Drawer form */
+.shop-form {
+  display: grid;
+  gap: 18px;
+}
+
+.shop-lead {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--fs-sm);
+  font-weight: 500;
+  color: var(--text-2);
+}
+
+.shop-section {
+  display: grid;
+  gap: 10px;
+}
+
+.shop-section-title {
+  font-size: var(--fs-md);
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.shop-inline {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.shop-inline .input {
+  flex: 1 1 200px;
+  width: auto;
+}
+
+.shop-or {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 6px;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  color: var(--text-3);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.shop-or::before,
+.shop-or::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+.shop-token {
+  position: relative;
+  display: block;
+}
+
+.shop-token .input {
+  padding-right: 68px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: var(--fs-sm);
+}
+
+.shop-token-toggle {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  transform: translateY(-50%);
+  min-width: 52px;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-pill);
+  background: var(--surface-2);
+  color: var(--text-2);
+  font: inherit;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.shop-token-toggle:hover {
+  color: var(--text);
+  border-color: var(--border-strong);
+}
+
+.shop-token-toggle:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.shop-howto {
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+}
+
+.shop-howto > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  cursor: pointer;
+  list-style: none;
+}
+
+.shop-howto > summary::-webkit-details-marker {
+  display: none;
+}
+
+.shop-howto-chevron {
+  display: block;
+  flex: none;
+  transform-origin: 50% 50%;
+  margin-left: auto;
+  color: var(--text-3);
+  transition: transform var(--t-fast);
+}
+
+.shop-howto[open] .shop-howto-chevron {
+  transform: rotate(180deg);
+}
+
+.shop-howto > summary:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: -2px;
+  border-radius: var(--r-sm);
+}
+
+.shop-howto > .field-hint {
+  padding: 0 12px 12px 12px;
+}
+
+.shop-steps {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0 12px 10px 32px;
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+  color: var(--text);
+}
+
+.shop-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 6px 0 4px;
+}
+
+.shop-chips code,
+.shop-scopes code {
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: var(--neutral-bg);
+  font-size: var(--fs-xs);
+}
+
+.shop-step-note {
+  display: block;
+  font-size: var(--fs-xs);
+  color: var(--text-2);
+}
+
+.shop-since {
+  max-width: 200px;
+}
+
+.shop-costs {
+  display: grid;
+  gap: 14px;
+}
+
+/* Label and hint on the left, the amount on the right, so the inputs line up. */
+.field.shop-cost {
+  grid-template-columns: minmax(0, 1fr) 132px;
+  grid-template-areas:
+    'label input'
+    'hint input';
+  gap: 4px 16px;
+  align-items: start;
+}
+
+.shop-cost .field-label {
+  grid-area: label;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  font-size: var(--fs-sm);
+  line-height: 1.35;
+}
+
+.shop-cost .field-hint,
+.shop-cost .field-error {
+  grid-area: hint;
+}
+
+.num-field.shop-num {
+  grid-area: input;
+  width: 100%;
+}
+
+.shop-num-pct input {
+  text-align: right;
+}
+
+.shop-test-out {
+  display: grid;
+  gap: 10px;
+}
+
+.shop-test-out:empty {
+  display: none;
+}
+
+.shop-tested {
+  display: grid;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--success-border);
+  border-radius: var(--r-sm);
+  background: var(--success-bg);
+}
+
+.shop-tested-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 650;
+  color: var(--success);
+}
+
+.shop-tested-kv {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 28px;
+  margin: 0;
+}
+
+.shop-tested-kv dt {
+  font-size: var(--fs-xs);
+  color: var(--text-3);
+}
+
+.shop-tested-kv dd {
+  margin: 0;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.shop-scopes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.shop-scopes li {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--fs-xs);
+}
+
+.shop-scopes li.is-ok {
+  color: var(--success);
+}
+
+.shop-scopes li.is-missing {
+  color: var(--warning);
+}
+
+.shop-warn {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  font-size: var(--fs-sm);
+  color: var(--text);
+  line-height: 1.45;
+}
+
+.shop-warn .icon,
+.shop-warn svg {
+  flex: none;
+  margin-top: 2px;
+  color: var(--warning);
+}
+
+.shop-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  position: sticky;
+  bottom: -28px;
+  margin: 0 -24px -28px;
+  padding: 14px 24px 20px;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.shop-buttons-hint {
+  flex-basis: 100%;
+}
+
+.shop-progress {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  padding: 48px 12px;
+  text-align: center;
+}
+
+.shop-progress .spinner-lg {
+  width: 32px;
+  height: 32px;
+  border-width: 3px;
+}
+
+.shop-progress-title {
+  font-size: var(--fs-md);
+  font-weight: 650;
+}
+
+.shop-progress-sub {
+  max-width: 320px;
+  font-size: var(--fs-sm);
+  color: var(--text-2);
+  line-height: 1.5;
+}
+
+@media (max-width: 520px) {
+  .field.shop-cost {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      'label'
+      'input'
+      'hint';
+  }
+
+}
