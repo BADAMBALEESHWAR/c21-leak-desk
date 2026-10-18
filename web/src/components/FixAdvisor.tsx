@@ -15,6 +15,7 @@ import { Drawer } from './Drawer';
 import { Icon } from './Icon';
 import { Money } from './Money';
 import { Provenance } from './Provenance';
+import { RazorpayCollect } from './RazorpayCollect';
 import { ErrorCallout, Skeleton } from './ui';
 
 /** Which engine candidates answer which leak cause, for servers without the advisor endpoint. */
@@ -321,6 +322,8 @@ export function FixAdvisor({ cause, open, onClose }: { cause: string | null; ope
                 ) : null}
               </div>
             ) : null}
+
+            {picked?.intervention === 'charge_return_shipping' ? <RazorpayCollect defaultAmount={analysis?.observed.avg_return_cost_inr ?? null} /> : null}
 
             {picked ? (
               saved ? (
