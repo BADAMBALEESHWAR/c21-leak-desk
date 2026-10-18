@@ -11,6 +11,7 @@ import { Icon } from '../components/Icon';
 import { Integrations, REPORT_IMPORTERS } from '../components/Integrations';
 import { Money } from '../components/Money';
 import { Provenance } from '../components/Provenance';
+import { ShopifyCard } from '../components/ShopifyConnect';
 import { AttributionSegmented, Callout, Collapsible, ErrorCallout, InfoTip, revealElement, Skeleton, StatCard } from '../components/ui';
 import { compressIds, formatCount, formatDate, formatInr, plural } from '../lib/format';
 import { ATTRIBUTION_TIP_EN, ATTRIBUTION_TIP_KEY, datasetName, DRILL_TAGS, HEADER_ALIASES } from '../lib/labels';
@@ -1532,6 +1533,7 @@ export function ImportScreen() {
               ))}
             </div>
           </section>
+          <ShopifyCard />
           {loadError ? <LoadErrorPanel error={loadError} /> : null}
         </div>
 

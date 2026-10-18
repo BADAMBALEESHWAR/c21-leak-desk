@@ -29,7 +29,7 @@ datasetsRouter.get('/samples', (_req, res) => {
   res.json(Object.entries(SAMPLES).map(([source, s]) => ({ source, label: s.label, description: s.description, file: `data/${s.file}` })));
 });
 
-interface Incoming {
+export interface Incoming {
   source: string;
   ingested: Ingested;
   period_end?: string;
@@ -143,7 +143,7 @@ async function readIncoming(req: Request): Promise<Incoming> {
   throw new HttpError(415, 'unsupported_type', 'Use JSON or CSV in the C21 schema (application/json, text/csv or multipart/form-data with a "file" field).');
 }
 
-const summary = (d: DatasetRecord) => ({
+export const summary = (d: DatasetRecord) => ({
   dataset_id: d._id,
   source: d.source,
   rows_in: d.rows_in,
@@ -184,30 +184,55 @@ const newPeriodEnd = (orders: unknown[]) => {
 };
 const labelOf = (names: string[]) => (names.join(' + ').length <= 80 ? `upload:${names.join(' + ')}` : `upload:${names[0]} + ${names.length - 1} more files`);
 
-datasetsRouter.post(
-  '/datasets',
-  upload.array('file', MAX_FILES),
-  express.text({ type: 'text/csv', limit: config.maxBodyBytes }),
-  ah(async (req, res) => {
-    const started = Date.now();
-    // append_to: add this upload to an existing dataset; orders whose id is already saved are ignored, never counted twice.
-    const appendTo = typeof req.query.append_to === 'string' ? req.query.append_to : typeof req.body?.append_to === 'string' ? req.body.append_to : '';
-    const first = appendTo ? await datasets.get(appendTo) : null;
-    if (appendTo && (!first || !canSee(first.account, req.user))) throw notFound('Dataset', appendTo);
-    const base = first ? await newestVersion(first, accountOf(req.user)) : null;
-    const incoming = await readIncoming(req);
-    const existing = base ? new Set(base.rows.map((r) => r.order_id)) : undefined;
-    const v = validateRows(incoming.ingested.orders, {
-      period_end: incoming.period_end ?? (base ? later(base.period_end, newPeriodEnd(incoming.ingested.orders) ?? base.period_end) : undefined),
-      path_prefix: incoming.ingested.path_prefix,
-      line_offset: incoming.ingested.line_offset,
-      files: incoming.files,
-      existing_ids: existing,
-    });
-    const ignored = existing ? v.flags.filter((fl) => fl.reason === 'duplicate' && fl.order_id !== null && existing.has(fl.order_id)).length : 0;
-    if (v.rows_kept === 0 && base && ignored > 0) {
-      // Nothing new: the saved dataset stays as it is.
-      return void res.status(200).json({
+/** The dataset an import is added to: the newest version of `appendTo` (404 when the caller cannot see it); null without one. */
+export async function appendBase(req: Request, appendTo: string): Promise<DatasetRecord | null> {
+  if (!appendTo) return null;
+  const first = await datasets.get(appendTo);
+  if (!first || !canSee(first.account, req.user)) throw notFound('Dataset', appendTo);
+  return newestVersion(first, accountOf(req.user));
+}
+
+export interface CommitOptions {
+  /** When the import started (for the log line). */
+  started?: number;
+  /** Saved rows with these order ids give way to the incoming rows (a connector sync: an order refunded since the last import). */
+  replace_ids?: ReadonlySet<string>;
+  /** Source label kept when adding to saved data (connectors), instead of the list of uploaded files. */
+  source_label?: string;
+  /** This batch's name in `files` when adding to saved data. */
+  batch_name?: string;
+  /** Extra fields for the import audit event. */
+  audit?: Record<string, unknown>;
+}
+
+/**
+ * Validates incoming rows and saves them as a dataset (or a new version of `base`): the one ingestion path for uploads
+ * and connectors. Returns the status and body POST /datasets answers with.
+ */
+export async function commitImport(
+  req: Request,
+  incoming: Incoming,
+  base: DatasetRecord | null,
+  opts: CommitOptions = {},
+): Promise<{ status: 200 | 201; body: Record<string, unknown>; record: DatasetRecord }> {
+  const started = opts.started ?? Date.now();
+  const replace = opts.replace_ids?.size ? opts.replace_ids : undefined;
+  const baseRows = base ? (replace ? base.rows.filter((r) => !replace.has(r.order_id)) : base.rows) : [];
+  const existing = base ? new Set(baseRows.map((r) => r.order_id)) : undefined;
+  const v = validateRows(incoming.ingested.orders, {
+    period_end: incoming.period_end ?? (base ? later(base.period_end, newPeriodEnd(incoming.ingested.orders) ?? base.period_end) : undefined),
+    path_prefix: incoming.ingested.path_prefix,
+    line_offset: incoming.ingested.line_offset,
+    files: incoming.files,
+    existing_ids: existing,
+  });
+  const ignored = existing ? v.flags.filter((fl) => fl.reason === 'duplicate' && fl.order_id !== null && existing.has(fl.order_id)).length : 0;
+  if (v.rows_kept === 0 && base && ignored > 0) {
+    // Nothing new: the saved dataset stays as it is.
+    return {
+      status: 200,
+      record: base,
+      body: {
         ...summary(base),
         flags: v.flags,
         rows_in: v.rows_in,
@@ -218,64 +243,96 @@ datasetsRouter.post(
         unchanged: true,
         message: `Nothing new: all ${ignored.toLocaleString('en-IN')} orders were already saved.`,
         persisted: dbState() === 'connected',
-      });
-    }
-    if (v.rows_kept === 0) {
-      const issues = v.flags.filter((f) => f.action !== 'kept').map((f) => ({ path: f.path ?? `line ${f.line}`, message: f.detail }));
-      throw new HttpError(422, 'no_valid_rows', `Every row was rejected. First problem: ${issues[0]?.message ?? 'no orders.'}`, {
-        path: issues[0]?.path,
-        issues,
-        hint: 'Fix the named fields and upload again.',
-      });
-    }
-    const id = newId();
-    const thisUpload = incoming.files?.map((f, i, all) => ({ name: f.name, rows: (all[i + 1]?.start ?? v.rows_in) - f.start })) ?? [
-      { name: incoming.source.replace(/^upload:/, '') || 'upload', rows: v.rows_in },
-    ];
-    const rows = base ? [...base.rows, ...v.rows] : v.rows;
-    if (rows.length > config.maxRows) {
-      throw new HttpError(413, 'file_too_large', `Saved orders plus this upload come to ${rows.length.toLocaleString('en-IN')}; the limit is ${config.maxRows.toLocaleString('en-IN')}.`, { hint: 'Start a new dataset for a later period.' });
-    }
-    const rejectedHere = rejectedRowsOf(v.flags, incoming.ingested.orders, { line_offset: incoming.ingested.line_offset, files: incoming.files });
-    const rejectedRows = [...(base?.rejected_rows ?? []), ...rejectedHere].slice(0, MAX_REJECTED_ROWS);
-    const files = base ? [...(base.files ?? [{ name: base.source.replace(/^upload:/, ''), rows: base.rows.length }]), ...thisUpload] : incoming.files ? thisUpload : undefined;
-    for (const raw of incoming.raw ?? []) await put(`uploads/${id}-${safeName(raw.name)}`, raw.body, raw.type).catch(() => undefined);
-    const record: DatasetRecord = {
-      _id: id,
-      account: accountOf(req.user),
-      source: base ? labelOf(files!.map((x) => x.name)) : incoming.source,
-      rows,
-      flags: base ? [...base.flags, ...v.flags] : v.flags,
-      warnings: base ? [...new Set([...base.warnings, ...v.warnings])] : v.warnings,
-      schema_version: SCHEMA_VERSION,
-      period_end: base ? later(base.period_end, v.period_end) : v.period_end,
-      rows_in: (base?.rows_in ?? 0) + v.rows_in,
-      rows_rejected: (base?.rows_rejected ?? 0) + v.rows_rejected,
-      rows_kept: rows.length,
-      ...(files ? { files } : {}),
-      ...(base ? { supersedes: base._id } : {}),
-      rejected_rows: rejectedRows,
-      ...(base?.corrections ? { corrections: base.corrections } : {}),
-      created_at: new Date(),
+      },
     };
-    const persisted = await datasets.save(record);
-    req.log.info({ dataset_id: id, rows_kept: rows.length, added: v.rows_kept, ignored, flags: v.flags.length, parse_ms: Date.now() - started }, 'dataset imported');
-    void audit.record(req, { kind: 'import', dataset_id: id, source: record.source, rows_added: v.rows_kept, rows_rejected: v.rows_rejected, profile: incoming.mapped?.profile ?? null, mapped: Boolean(incoming.mapped) });
-    res.status(201).json({
+  }
+  if (v.rows_kept === 0) {
+    const issues = v.flags.filter((f) => f.action !== 'kept').map((f) => ({ path: f.path ?? `line ${f.line}`, message: f.detail }));
+    throw new HttpError(422, 'no_valid_rows', `Every row was rejected. First problem: ${issues[0]?.message ?? 'no orders.'}`, {
+      path: issues[0]?.path,
+      issues,
+      hint: 'Fix the named fields and upload again.',
+    });
+  }
+  const id = newId();
+  const thisUpload = incoming.files?.map((f, i, all) => ({ name: f.name, rows: (all[i + 1]?.start ?? v.rows_in) - f.start })) ?? [
+    { name: opts.batch_name ?? (incoming.source.replace(/^upload:/, '') || 'upload'), rows: v.rows_in },
+  ];
+  const rows = base ? [...baseRows, ...v.rows] : v.rows;
+  if (rows.length > config.maxRows) {
+    throw new HttpError(413, 'file_too_large', `Saved orders plus this upload come to ${rows.length.toLocaleString('en-IN')}; the limit is ${config.maxRows.toLocaleString('en-IN')}.`, { hint: 'Start a new dataset for a later period.' });
+  }
+  const replaced = replace ? v.rows.filter((r) => replace.has(r.order_id)).length : 0;
+  const rejectedHere = rejectedRowsOf(v.flags, incoming.ingested.orders, { line_offset: incoming.ingested.line_offset, files: incoming.files });
+  const rejectedRows = [...(base?.rejected_rows ?? []), ...rejectedHere].slice(0, MAX_REJECTED_ROWS);
+  const files = base ? [...(base.files ?? [{ name: base.source.replace(/^upload:/, ''), rows: base.rows.length }]), ...thisUpload] : incoming.files ? thisUpload : undefined;
+  for (const raw of incoming.raw ?? []) await put(`uploads/${id}-${safeName(raw.name)}`, raw.body, raw.type).catch(() => undefined);
+  const baseFlags = base ? (replace ? base.flags.filter((f) => f.order_id === null || !replace.has(f.order_id)) : base.flags) : [];
+  const record: DatasetRecord = {
+    _id: id,
+    account: accountOf(req.user),
+    source: base ? (opts.source_label ?? labelOf(files!.map((x) => x.name))) : incoming.source,
+    rows,
+    flags: base ? [...baseFlags, ...v.flags] : v.flags,
+    warnings: base ? [...new Set([...base.warnings, ...v.warnings])] : v.warnings,
+    schema_version: SCHEMA_VERSION,
+    period_end: base ? later(base.period_end, v.period_end) : v.period_end,
+    rows_in: (base?.rows_in ?? 0) + v.rows_in,
+    rows_rejected: (base?.rows_rejected ?? 0) + v.rows_rejected,
+    rows_kept: rows.length,
+    ...(files ? { files } : {}),
+    ...(base ? { supersedes: base._id } : {}),
+    rejected_rows: rejectedRows,
+    ...(base?.corrections ? { corrections: base.corrections } : {}),
+    created_at: new Date(),
+  };
+  const persisted = await datasets.save(record);
+  req.log?.info({ dataset_id: id, rows_kept: rows.length, added: v.rows_kept, replaced, ignored, flags: v.flags.length, parse_ms: Date.now() - started }, 'dataset imported');
+  void audit.record(req, {
+    kind: 'import',
+    dataset_id: id,
+    source: record.source,
+    rows_added: v.rows_kept - replaced,
+    rows_rejected: v.rows_rejected,
+    profile: incoming.mapped?.profile ?? null,
+    mapped: Boolean(incoming.mapped),
+    ...(opts.audit ?? {}),
+  });
+  return {
+    status: 201,
+    record,
+    body: {
       ...summary(record),
       // The report describes this upload; the record keeps everything saved so far.
       flags: v.flags,
       rows_in: v.rows_in,
       rows_rejected: v.rows_rejected,
-      rows_added: v.rows_kept,
+      rows_added: v.rows_kept - replaced,
       duplicates_ignored: ignored,
+      ...(opts.replace_ids ? { rows_updated: replaced } : {}),
       ...(base ? { appended_to: base._id } : {}),
       ...(files ? { files } : {}),
       ...(incoming.mapped ? { mapped: incoming.mapped } : {}),
       persisted,
-    });
+    },
+  };
+}
+
+datasetsRouter.post(
+  '/datasets',
+  upload.array('file', MAX_FILES),
+  express.text({ type: 'text/csv', limit: config.maxBodyBytes }),
+  ah(async (req, res) => {
+    const started = Date.now();
+    // append_to: add this upload to an existing dataset; orders whose id is already saved are ignored, never counted twice.
+    const appendTo = typeof req.query.append_to === 'string' ? req.query.append_to : typeof req.body?.append_to === 'string' ? req.body.append_to : '';
+    const base = await appendBase(req, appendTo);
+    const incoming = await readIncoming(req);
+    const { status, body } = await commitImport(req, incoming, base, { started });
+    res.status(status).json(body);
   }),
 );
+
 
 /** The signed-in owner's saved datasets, newest first, each with its latest analysis. A visitor without a token is in the demo workspace, which keeps nothing. */
 datasetsRouter.get(

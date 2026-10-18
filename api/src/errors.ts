@@ -18,6 +18,13 @@ export type ErrorCode =
   | 'invalid_state'
   | 'provider_disabled'
   | 'oauth_failed'
+  | 'invalid_shop'
+  | 'shop_not_found'
+  | 'shopify_unauthorized'
+  | 'missing_scope'
+  | 'shopify_unavailable'
+  | 'not_connected'
+  | 'no_orders'
   | 'internal';
 
 export interface Issue {

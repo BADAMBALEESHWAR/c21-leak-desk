@@ -394,7 +394,15 @@ describe('header disclaimer', () => {
 });
 
 describe('integrations roadmap', () => {
-  it('shows CSV / JSON and the report importers as available, the API connectors as planned, with no links, tokens or connected state', () => {
+  beforeEach(() => {
+    // GET /connectors: nothing connected.
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ connectors: [], shopify_oauth: false }), { status: 200, headers: { 'Content-Type': 'application/json' } })));
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('shows CSV / JSON and the report importers as available, Shopify as a live connector, the other API connectors as planned, with no links or tokens', () => {
     const { container } = render(<Integrations />);
     const live = container.querySelector('.intg-item.is-live') as HTMLElement;
     expect(text(live)).toContain('CSV / JSON upload');
@@ -409,23 +417,29 @@ describe('integrations roadmap', () => {
       'Shiprocket shipments',
     ]);
     for (const r of reports) expect(text(r)).toContain('Available now');
+    // Shopify: live, not connected yet, one "Connect Shopify" button and no token field until the drawer opens.
+    const shopify = container.querySelector('.intg-item.is-connector') as HTMLElement;
+    expect(text(shopify.querySelector('.intg-name'))).toBe('Shopify API');
+    expect(text(shopify)).toContain('Live');
+    expect(text(shopify)).not.toContain('Planned');
+    expect(text(shopify.querySelector('.intg-prereq'))).toMatch(/Admin API access token.*Not connected\.$/);
+    expect(within(shopify).getByRole('button', { name: 'Connect Shopify' })).toBeTruthy();
     const planned = Array.from(container.querySelectorAll('.intg-item.is-planned'));
-    expect(planned.map((p) => text(p.querySelector('.intg-name')))).toEqual(['Shopify API', 'Amazon SP-API', 'Flipkart Seller API', 'Myntra partner API', 'Meta Ads', 'Google Ads']);
+    expect(planned.map((p) => text(p.querySelector('.intg-name')))).toEqual(['Amazon SP-API', 'Flipkart Seller API', 'Myntra partner API', 'Meta Ads', 'Google Ads']);
     for (const p of planned) {
       expect(p.getAttribute('aria-disabled')).toBe('true');
       expect(text(p)).toContain('Planned');
       expect(text(p.querySelector('.intg-prereq'))).toMatch(/Not connected\.$/);
     }
-    expect(text(planned[0])).toContain('Build first');
-    expect(text(planned[0].querySelector('.intg-prereq'))).toContain('custom app token');
-    expect(text(planned[1].querySelector('.intg-prereq'))).toContain('SP-API developer registration and your seller authorisation');
-    expect(text(planned[2].querySelector('.intg-prereq'))).toContain('Seller API key');
-    expect(text(planned[3].querySelector('.intg-prereq'))).toContain('partner invitation');
+    expect(text(container)).not.toContain('Build first');
+    expect(text(planned[0].querySelector('.intg-prereq'))).toContain('SP-API developer registration and your seller authorisation');
+    expect(text(planned[1].querySelector('.intg-prereq'))).toContain('Seller API key');
+    expect(text(planned[2].querySelector('.intg-prereq'))).toContain('partner invitation');
     expect(container.querySelectorAll('a').length).toBe(0);
     expect(container.querySelector('input[type="password"]')).toBeNull();
-    // No connected state anywhere: only "Not connected." in the planned notes.
+    // Nothing is shown as connected: only "Not connected." in the notes.
     expect(text(container)).not.toMatch(/\bConnected\b/);
-    expect(text(container.querySelector('.intg-timeline'))).toBe('NowCSV / JSON and report filesNextShopify API, then Meta AdsLaterAmazon, Flipkart and Myntra APIs, Google Ads');
+    expect(text(container.querySelector('.intg-timeline'))).toBe('NowCSV / JSON, report files, Shopify APINextMeta Ads, RazorpayLaterAmazon, Flipkart and Myntra APIs, Google Ads');
   });
 
   it('records "Notify me" in this browser only', () => {
@@ -445,7 +459,9 @@ describe('integrations roadmap', () => {
     const { container } = render(<Integrations compact />);
     expect(container.querySelector('.intg-compact')).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Notify me' })).toBeNull();
-    // CSV / JSON, six report importers and six planned connectors.
+    // CSV / JSON, six report importers, the Shopify connector and five planned connectors; no actions in the compact list.
     expect(container.querySelectorAll('.intg-item').length).toBe(13);
+    expect(container.querySelectorAll('.intg-item.is-planned').length).toBe(5);
+    expect(screen.queryByRole('button', { name: 'Connect Shopify' })).toBeNull();
   });
 });

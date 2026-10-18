@@ -145,3 +145,27 @@ export const UserModel = mongoose.model('User', UserSchema, 'users');
 export const LoginModel = mongoose.model('Login', LoginSchema, 'logins');
 export const AuditEventModel = mongoose.model('AuditEvent', AuditEventSchema, 'audit');
 export const ColumnMappingModel = mongoose.model('ColumnMapping', ColumnMappingSchema, 'column_mappings');
+
+// Store connectors (Shopify): one per account and provider; the access token only ever AES-256-GCM encrypted.
+const ConnectorSchema = new Schema(
+  {
+    _id: String,
+    account: { type: String, index: true },
+    provider: String,
+    shop: String,
+    shop_name: String,
+    currency: String,
+    scopes: [String],
+    token_enc: String,
+    via: String,
+    connected_at: Date,
+    last_sync_at: Date,
+    orders_imported: Number,
+    dataset_id: String,
+    assumptions: Mixed,
+    since: String,
+    watermark: String,
+  },
+  opts,
+);
+export const ConnectorModel = mongoose.model('Connector', ConnectorSchema, 'connectors');

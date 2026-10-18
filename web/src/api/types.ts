@@ -968,3 +968,81 @@ export interface AuditEntry {
   detail?: string;
   [key: string]: unknown;
 }
+
+// ---- Connectors: Shopify Admin API ------------------------------------------------------------------------------------
+
+/** Costs Shopify does not know, applied to every imported order and labelled Assumed. */
+export interface ShopifyAssumptions {
+  /** ₹ average courier cost per order. */
+  shipping_inr: number;
+  /** Payment gateway fee, % of the order value (0–100). */
+  fee_pct: number;
+  /** ₹ reverse shipping per returned order. */
+  return_cost_inr: number;
+  /** ₹ extra charge per cash-on-delivery order. */
+  cod_fee_inr?: number;
+}
+
+/** POST /connectors/shopify/test */
+export interface ShopifyTestRequest {
+  shop: string;
+  token: string;
+}
+
+export interface ShopifyTestResult {
+  ok: boolean;
+  shop: { name: string; domain: string; currency: string; plan?: string | null };
+  scopes: string[];
+  orders_estimate?: number | null;
+}
+
+/** POST /connectors/shopify/connect */
+export interface ShopifyConnectRequest extends ShopifyTestRequest {
+  /** YYYY-MM-DD: orders created on or after this day. */
+  since?: string;
+  assumptions: ShopifyAssumptions;
+}
+
+export interface ShopifyConnectorInfo {
+  provider: 'shopify';
+  shop: string;
+  connected_at: string;
+  last_sync_at: string | null;
+  orders_imported: number;
+  /** False in the demo: the token was used once and not saved. */
+  stored: boolean;
+}
+
+/** Orders left out on purpose: test orders, cancelled orders. A number, or counts by reason. */
+export type ShopifySkipped = number | Record<string, number | undefined>;
+
+/** POST /connectors/shopify/connect and /sync (201): the new dataset, as an upload reports it. */
+export interface ShopifyImportResult {
+  dataset_id: string;
+  rows_in: number;
+  rows_kept: number;
+  rows_rejected: number;
+  flags: ValidationFlag[];
+  skipped?: ShopifySkipped | null;
+  currency_warning?: string | null;
+  connector: ShopifyConnectorInfo;
+}
+
+/** One saved connector (GET /connectors). */
+export interface ConnectorSummary {
+  provider: 'shopify';
+  shop: string;
+  shop_name: string | null;
+  currency: string | null;
+  connected_at: string;
+  last_sync_at: string | null;
+  orders_imported: number;
+  dataset_id: string | null;
+  assumptions: ShopifyAssumptions | null;
+}
+
+export interface ConnectorsResponse {
+  connectors: ConnectorSummary[];
+  /** True when the server has a Shopify app for the one-click install. */
+  shopify_oauth: boolean;
+}

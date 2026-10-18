@@ -5,6 +5,7 @@ import { accountOf, revokedAccounts } from '../auth.js';
 import { clearSession, oauthFromEnv, type OAuthSettings } from '../auth-oauth.js';
 import { dbState } from '../db.js';
 import { ah, HttpError } from '../errors.js';
+import { connectors, publicView } from '../connectors/store.js';
 import { savedMappings } from '../ingest/mapper.js';
 import { AutopilotModel } from '../models/index.js';
 import { analyses, datasets, decisions, scenarios } from '../repo.js';
@@ -45,6 +46,12 @@ export function describe(e: Pick<AuditEvent, 'kind' | 'detail'>): string {
         .concat('.');
     case 'mapping':
       return `Saved a column mapping${d.profile ? ` (profile ${d.profile})` : ''} for ${d.fields ?? 'some'} fields.`;
+    case 'connector_connected':
+      return `Connected Shopify store ${d.shop ?? ''}${d.via === 'oauth' ? ' (app install)' : ''}${d.stored === false ? ' (import only)' : ''}.`;
+    case 'connector_sync':
+      return `Synced Shopify store ${d.shop ?? ''}: ${d.rows_added ?? 0} new, ${d.rows_updated ?? 0} updated orders.`;
+    case 'connector_disconnected':
+      return `Disconnected Shopify store ${d.shop ?? ''}; its access token was deleted.`;
     default:
       return String(e.kind);
   }
@@ -76,7 +83,7 @@ export function accountRouter(oauth: OAuthSettings = oauthFromEnv()) {
       needDb();
       await audit.record(req, { kind: 'export', what: 'account' });
       const mine = { account };
-      const [ds, an, dc, user, signIns, events, mappings, runs] = await Promise.all([
+      const [ds, an, dc, user, signIns, events, mappings, runs, conns] = await Promise.all([
         datasets.findAll(mine, (d) => d.account === account),
         analyses.findAll(mine, (a) => a.account === account),
         decisions.findAll(mine, (d) => d.account === account),
@@ -85,6 +92,7 @@ export function accountRouter(oauth: OAuthSettings = oauthFromEnv()) {
         audit.all(account),
         savedMappings.all(account),
         autopilotDocs(account),
+        connectors.list(account),
       ]);
       const analysisIds = an.map((a) => a._id);
       const ids = new Set(analysisIds);
@@ -104,6 +112,8 @@ export function accountRouter(oauth: OAuthSettings = oauthFromEnv()) {
         decisions: dc,
         column_mappings: mappings,
         autopilots: runs,
+        // Store connections without their access tokens.
+        connectors: conns.map(publicView),
         audit: events,
       });
     }),
@@ -123,19 +133,20 @@ export function accountRouter(oauth: OAuthSettings = oauthFromEnv()) {
       const sc = await scenarios.removeAll({ $or: [{ account }, { analysis_id: { $in: an.ids } }] }, (s) => ids.has(s.analysis_id) || (s as { account?: string }).account === account);
       const ds = await datasets.removeAll(mine, (d) => d.account === account);
       const dc = await decisions.removeAll(mine, (d) => d.account === account);
-      const [mappings, signIns, events, user, runs] = await Promise.all([
+      const [mappings, signIns, events, user, runs, conns] = await Promise.all([
         savedMappings.remove(account),
         logins.remove(account),
         audit.remove(account),
         users.remove(account),
         removeAutopilots(account),
+        connectors.removeAll(account),
       ]);
       // Raw uploads are stored as uploads/<dataset id>-<file name>; large bodies under blobs/.
       const files = await removePrefixes([...ds.ids.map((id) => `uploads/${id}-`), ...ds.blobs, ...an.blobs]);
       revokedAccounts.add(account);
       clearSession(res, oauth);
       req.log?.info(
-        { account, datasets: ds.ids.length, analyses: an.ids.length, scenarios: sc.ids.length, decisions: dc.ids.length, autopilots: runs, mappings, logins: signIns, audit: events, user, files },
+        { account, datasets: ds.ids.length, analyses: an.ids.length, scenarios: sc.ids.length, decisions: dc.ids.length, autopilots: runs, mappings, logins: signIns, audit: events, user, files, connectors: conns },
         'account deleted',
       );
       res.status(204).end();

@@ -42,6 +42,11 @@ import type {
   ImportMapResult,
   ImportProfile,
   MeProfile,
+  ConnectorsResponse,
+  ShopifyConnectRequest,
+  ShopifyImportResult,
+  ShopifyTestRequest,
+  ShopifyTestResult,
 } from './types';
 
 import { getIdToken } from '../auth/auth';
@@ -399,6 +404,22 @@ export const api = {
   audit: () => request<AuditEntry[] | { entries: AuditEntry[] }>('GET', '/me/audit'),
   meExportUrl: () => `${API_BASE}/me/export`,
   deleteMe: () => request<unknown>('DELETE', '/me', { confirm: 'DELETE' }),
+
+  // ---- Connectors: Shopify Admin API ----------------------------------------------------------------------------------
+
+  /** Saved connectors for this workspace, and whether the one-click Shopify install is set up. */
+  connectors: () => request<ConnectorsResponse>('GET', '/connectors'),
+  /** Checks the store address and token without importing anything. */
+  shopifyTest: (body: ShopifyTestRequest) => request<ShopifyTestResult>('POST', '/connectors/shopify/test', body),
+  /** Imports the store's orders as a new dataset (201). Can take a minute on a large store. */
+  shopifyConnect: (body: ShopifyConnectRequest) => request<ShopifyImportResult>('POST', '/connectors/shopify/connect', body),
+  /** Imports again with the saved token (404 when not connected). */
+  shopifySync: () => request<ShopifyImportResult>('POST', '/connectors/shopify/sync', {}),
+  /** Deletes the saved token (204); imported orders stay. */
+  shopifyDisconnect: () => request<unknown>('DELETE', '/connectors/shopify'),
+  /** Full-page navigation to Shopify's install screen (only when shopify_oauth is true). */
+  shopifyInstallUrl: (shop: string, returnTo: string) =>
+    `${API_BASE}/connectors/shopify/install?shop=${encodeURIComponent(shop)}&return=${encodeURIComponent(returnTo)}`,
 };
 
 /** An endpoint this server does not have yet: callers fall back to the engine's own output. */
