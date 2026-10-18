@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { config } from './config.js';
 import { HttpError } from './errors.js';
@@ -74,3 +74,48 @@ export async function get(key: string): Promise<Buffer | null> {
 }
 
 export const safeName = (name: string) => name.replace(/[^\w.-]+/g, '_').slice(0, 80) || 'upload';
+
+/**
+ * Deletes every object whose key starts with one of `prefixes` (an exact key is its own prefix), in S3 when configured
+ * and in the local fallback folder always (a put may have fallen back there). Never throws: failures are counted.
+ */
+export async function removePrefixes(prefixes: string[]): Promise<{ removed: number; failed: number }> {
+  let removed = 0;
+  let failed = 0;
+  const safe = prefixes.filter((p) => p && !p.includes('..') && !p.startsWith('/'));
+  if (config.s3Bucket && safe.length) {
+    try {
+      const { S3Client, ListObjectsV2Command, DeleteObjectsCommand } = await import('@aws-sdk/client-s3');
+      const s3 = new S3Client({});
+      for (const prefix of safe) {
+        const listed = await s3.send(new ListObjectsV2Command({ Bucket: config.s3Bucket, Prefix: prefix }));
+        const keys = (listed.Contents ?? []).map((o) => o.Key).filter((k): k is string => Boolean(k));
+        if (!keys.length) continue;
+        const out = await s3.send(new DeleteObjectsCommand({ Bucket: config.s3Bucket, Delete: { Objects: keys.map((Key) => ({ Key })), Quiet: true } }));
+        failed += out.Errors?.length ?? 0;
+        removed += keys.length - (out.Errors?.length ?? 0);
+      }
+    } catch (err) {
+      failed++;
+      logger.warn({ err: (err as Error).message }, 's3 delete failed');
+    }
+  }
+  const root = path.join(config.dataDir, 'uploads');
+  for (const prefix of safe) {
+    const full = path.join(root, prefix);
+    const dir = prefix.endsWith('/') ? full : path.dirname(full);
+    const start = prefix.endsWith('/') ? '' : path.basename(full);
+    try {
+      for (const name of await readdir(dir)) {
+        if (!name.startsWith(start)) continue;
+        await rm(path.join(dir, name), { force: true, recursive: false }).then(
+          () => removed++,
+          () => failed++,
+        );
+      }
+    } catch {
+      // No local folder: nothing stored here.
+    }
+  }
+  return { removed, failed };
+}

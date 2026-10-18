@@ -14,6 +14,8 @@ healthRouter.get('/health', (_req, res) => {
     db: db === 'connected' ? 'ok' : db === 'down' ? 'down' : 'memory',
     ai: aiStatus(),
     storage: storageKind(),
+    // Where saved data lives: the AWS region with S3 storage (Mumbai unless AWS_REGION says otherwise), else this machine.
+    region: storageKind() === 's3' ? process.env.AWS_REGION || 'ap-south-1' : 'local',
     engine_version: ENGINE_VERSION,
     uptime_s: Math.round((Date.now() - startedAt) / 1000),
   });

@@ -223,6 +223,43 @@ class Collection<T extends { _id: string }> {
     }
     return memory.sort((a, b) => (a[sortField] < b[sortField] ? 1 : -1));
   }
+
+  /** Every matching record (Mongo `filter`, the same `test` in memory), uncapped and with stored bodies read back. For export. */
+  async findAll(filter: Record<string, unknown>, test: (d: T) => boolean): Promise<T[]> {
+    const memory = [...this.mem.values()].map((e) => e.doc).filter(test);
+    if (dbState() !== 'connected') return memory;
+    const seen = new Set(memory.map((d) => d._id));
+    const ids = (await this.model.find(filter).select('_id').lean()) as unknown as Array<{ _id: string }>;
+    const out = [...memory];
+    for (const { _id } of ids) {
+      if (seen.has(_id)) continue;
+      const doc = await this.get(_id);
+      if (doc) out.push(doc);
+    }
+    return out;
+  }
+
+  /** Deletes every matching record from memory and Mongo. Returns their ids and the storage keys of any stored bodies. */
+  async removeAll(filter: Record<string, unknown>, test: (d: T) => boolean): Promise<{ ids: string[]; blobs: string[] }> {
+    const ids = new Set<string>();
+    for (const [id, entry] of [...this.mem]) {
+      if (!test(entry.doc)) continue;
+      ids.add(id);
+      this.mem.delete(id);
+      this.memBytes -= entry.bytes;
+    }
+    const blobs = new Set<string>();
+    if (dbState() === 'connected') {
+      const docs = (await this.model.find(filter).select('_id blob').lean()) as unknown as Array<{ _id: string; blob?: string }>;
+      for (const d of docs) {
+        ids.add(d._id);
+        if (d.blob) blobs.add(d.blob);
+      }
+      await this.model.deleteMany(filter);
+    }
+    if (this.heavy) for (const id of ids) blobs.add(`blobs/${this.name}/${id}.json.gz`);
+    return { ids: [...ids], blobs: [...blobs] };
+  }
 }
 
 export const datasets = new Collection<DatasetRecord>('datasets', DatasetModel, {
@@ -249,4 +286,7 @@ export const decisions = {
   },
   get: (id: string) => decisionStore.get(id),
   list: (account?: string) => decisionStore.list('saved_at', account),
+  /** Export and account deletion (GET /me/export, DELETE /me). */
+  findAll: (filter: Record<string, unknown>, test: (d: DecisionRecord) => boolean) => decisionStore.findAll(filter, test),
+  removeAll: (filter: Record<string, unknown>, test: (d: DecisionRecord) => boolean) => decisionStore.removeAll(filter, test),
 };
