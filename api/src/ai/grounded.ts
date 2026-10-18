@@ -6,13 +6,14 @@ import { logger } from '../logger.js';
 import { SAMPLE_SOURCES } from '../schema/orders.js';
 import type { OrderRow } from '../engine/types.js';
 import { recordAi, type AiFeature } from './guardlog.js';
+import { withFallback } from './models.js';
 import { LANGUAGE_NAMES, type Lang } from './templates.js';
 
 // v2 AI features (Autopilot, Fix Advisor, Ask Profyn, Digest) share this: one model adapter, one policy, one guard.
 // The engine computes every number; the model may only reword a template that is already correct. Any figure in the
 // model's text that is not in the JSON it was given is a rejection, and the template is used instead.
 
-export const PROMPT_VERSION_V2 = 'profyn-v2-1';
+export const PROMPT_VERSION_V2 = 'profyn-v2-2';
 export const TIMEOUT_MS = 6000;
 const DAILY_CAP = Number(process.env.AI_DAILY_CAP ?? 200);
 
@@ -30,29 +31,34 @@ function gemini(): AiModel | null {
   if (!geminiConfigured()) return null;
   const name = modelName();
   const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY as string);
-  // 2.5 Flash thinks by default; a zero budget keeps answers inside the 6 s timeout.
-  const generationConfig = { temperature: 0, maxOutputTokens: 1024, thinkingConfig: { thinkingBudget: 0 } } as Record<string, unknown>;
+  // Full Flash models think by default; a zero budget keeps answers inside the 6 s timeout. Lite models reject the
+  // setting (400), so they get the plain config.
+  const configFor = (model: string) =>
+    (/lite/i.test(model) ? { temperature: 0, maxOutputTokens: 1024 } : { temperature: 0, maxOutputTokens: 1024, thinkingConfig: { thinkingBudget: 0 } }) as Record<string, unknown>;
   return {
     model: name,
-    async generate(system, user, schema) {
-      const m = genAI.getGenerativeModel({
-        model: name,
-        systemInstruction: system,
-        generationConfig: { ...generationConfig, responseMimeType: 'application/json', ...(schema ? { responseSchema: schema } : {}) },
-      });
-      return (await m.generateContent(user)).response.text();
-    },
-    async chooseTool(system, user, tools) {
-      const m = genAI.getGenerativeModel({
-        model: name,
-        systemInstruction: system,
-        tools: [{ functionDeclarations: tools }],
-        toolConfig: { functionCallingConfig: { mode: FunctionCallingMode.ANY } },
-        generationConfig,
-      });
-      const call = (await m.generateContent(user)).response.functionCalls()?.[0];
-      return call ? { name: call.name, args: (call.args ?? {}) as Record<string, unknown> } : null;
-    },
+    // Each call walks the model chain (models.ts) when a model is out of quota or overloaded.
+    generate: (system, user, schema) =>
+      withFallback(async (model) => {
+        const m = genAI.getGenerativeModel({
+          model,
+          systemInstruction: system,
+          generationConfig: { ...configFor(model), responseMimeType: 'application/json', ...(schema ? { responseSchema: schema } : {}) },
+        });
+        return (await m.generateContent(user)).response.text();
+      }),
+    chooseTool: (system, user, tools) =>
+      withFallback(async (model) => {
+        const m = genAI.getGenerativeModel({
+          model,
+          systemInstruction: system,
+          tools: [{ functionDeclarations: tools }],
+          toolConfig: { functionCallingConfig: { mode: FunctionCallingMode.ANY } },
+          generationConfig: configFor(model),
+        });
+        const call = (await m.generateContent(user)).response.functionCalls()?.[0];
+        return call ? { name: call.name, args: (call.args ?? {}) as Record<string, unknown> } : null;
+      }),
   };
 }
 
@@ -131,7 +137,8 @@ export function ungrounded(text: string, sources: string): string | null {
 export const SYSTEM_PROMPT_V2 = `You rewrite short texts for the owner of a small Indian D2C brand.
 Each field comes with JSON computed by a deterministic engine and a template text that is already correct.
 Rewrite each template so it is clearer and more natural. Rules:
-1. Use ONLY the numbers in that field's data or template. Never compute, round, convert or add figures. Copy rupee amounts exactly.
+1. Use ONLY the numbers in that field's data or template. Never compute, round, convert or add figures. Copy rupee amounts exactly as the template writes them (₹ sign, Indian digit grouping such as ₹ 1,48,425), never as INR.
+   Copy names and labels exactly, without underscores.
 2. Never invent order IDs, products, channels, customers, months or causes that are not in the input.
 3. Do not say that advertising caused sales. Attribution is allocation, not causation.
 4. Do not use the words profit, net profit or margin; say contribution.
