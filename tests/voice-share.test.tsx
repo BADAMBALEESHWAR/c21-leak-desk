@@ -326,18 +326,9 @@ describe('Overview: AI briefing and share', () => {
     const order = ['.ov-brief', '.ov-headline', '#ov-actions-title', '#ov-leaks-title'].map((sel) => container.querySelector(sel)!);
     for (let i = 1; i < order.length; i++) expect(order[i - 1].compareDocumentPosition(order[i]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 
-    const wa = await screen.findByRole('link', { name: 'Share on WhatsApp' });
-    const href = wa.getAttribute('href') ?? '';
-    expect(href.startsWith('https://wa.me/?text=')).toBe(true);
-    expect(wa.getAttribute('target')).toBe('_blank');
-    const text = decodeURIComponent(href.slice('https://wa.me/?text='.length));
-    expect(text).toContain(formatInr(6000));
-    expect(text).toContain(formatSignedInr(200));
-    expect(text.length).toBeLessThanOrEqual(700);
-
-    fireEvent.click(screen.getByRole('button', { name: 'Copy summary' }));
-    await waitFor(() => expect(store.showToast).toHaveBeenCalledWith('Summary copied', 'success'));
-    expect(writeText).toHaveBeenCalledWith(text);
+    // Sharing is the monthly report as a PDF: the Overview links to it instead of pasting English text.
+    const report = await screen.findByRole('link', { name: 'Monthly report · send as PDF' });
+    expect(report.getAttribute('href')).toBe('#/report');
   });
 
   it('hides the briefing when the server has no digest', async () => {
