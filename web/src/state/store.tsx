@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
 import { api, ApiError, isSessionEnded, toErrorInfo, type DatasetInput, type DatasetOptions, type ErrorInfo } from '../api/client';
 import type {
   AnalysisResponse,
@@ -18,6 +19,7 @@ import type {
   WorkspaceResponse,
 } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
+import { i18n } from '../i18n';
 import { parseHash } from '../lib/router';
 import { storage } from '../lib/storage';
 
@@ -55,6 +57,60 @@ export const FALLBACK_SAMPLES: Sample[] = [
   { source: 'bad_values', label: 'Bad values (CSV)', description: 'A negative cost, a text amount and a bad date. Expect those rows rejected, each with its line, field and reason.' },
   { source: 'demo_12m', label: '12-month demo brand (synthetic)', description: '3,000 labelled synthetic orders over twelve months, for the Pulse owner analytics.' },
 ];
+
+/**
+ * Sample names and descriptions exactly as GET /samples (api/src/storage.ts SAMPLES) and FALLBACK_SAMPLES send them, in
+ * English, with their translation keys. Text that matches is shown in the UI language; anything else is shown as sent.
+ */
+const SAMPLE_TEXTS: Array<{ key: string; text: string }> = [
+  { key: 'samples.fixture', text: 'Sample orders' },
+  { key: 'samples.fixtureDesc', text: '20 reference orders from a small D2C store, unchanged.' },
+  { key: 'samples.extended', text: 'Extended sample' },
+  { key: 'samples.extendedDesc', text: 'The 20 sample orders plus S01–S08 (labelled synthetic) with channels, products and ads.' },
+  {
+    key: 'samples.extendedDescApi',
+    text: 'The 20 sample orders plus S01–S08 (labelled synthetic): channels, products, ads, a duplicate (S05), a late refund (S06) and unknown refund facts (S04).',
+  },
+  { key: 'samples.duplicateOrder', text: 'Duplicate order' },
+  { key: 'samples.duplicateOrderDesc', text: 'O07 appears twice. Expect 20 orders and one duplicate flag.' },
+  { key: 'samples.lateRefund', text: 'Late refund' },
+  { key: 'samples.lateRefundDesc', text: 'O10 refund dated after the period end. Expect it pending.' },
+  { key: 'samples.lateRefundDescApi', text: 'O10 refund dated 2026-10-05. Expect +420 in period, −180 if recognised.' },
+  { key: 'samples.nullRefund', text: 'Missing refund' },
+  { key: 'samples.nullRefundDesc', text: 'O05 refund_inr is null. Expect unknown, never zero.' },
+  { key: 'samples.nullRefundDescApi', text: 'O05 refund_inr is null. Expect unknown, never zero; ₹6,180 partial.' },
+  { key: 'samples.missingFee', text: 'Missing payment fee' },
+  { key: 'samples.missingFeeDesc', text: 'payment_fee_inr removed. Expect partial totals, no crash.' },
+  { key: 'samples.missingFeeDescApi', text: 'payment_fee_inr removed from every row. Expect partial totals, no crash.' },
+  { key: 'samples.refundOverGross', text: 'Refund over gross' },
+  { key: 'samples.refundOverGrossDesc', text: 'O03 refund above gross. Expect O03 invalid and excluded.' },
+  { key: 'samples.refundOverGrossDescApi', text: 'O03 refund 1,500. Expect O03 invalid and excluded; ₹5,580.' },
+  { key: 'samples.recovery400', text: 'Full recovery' },
+  { key: 'samples.recovery400Desc', text: 'Recovered cost 400 on returns. Expect returns at −130.' },
+  { key: 'samples.recovery400DescApi', text: 'Recovered cost 400 on returns. Expect returns at −130; ₹6,200.' },
+  { key: 'samples.badSchema', text: 'Bad schema (CSV)' },
+  { key: 'samples.badSchemaDesc', text: 'No product_cost_inr column. Expect 422 with the field path.' },
+  { key: 'samples.badValues', text: 'Bad values (CSV)' },
+  { key: 'samples.badValuesDesc', text: 'A negative cost, a text amount and a bad date. Expect those rows rejected, each with its line, field and reason.' },
+  { key: 'samples.badValuesDescApi', text: 'A negative cost, a text value and a bad date. Expect each row rejected with its line and reason.' },
+  { key: 'samples.demo12m', text: '12-month demo brand (synthetic)' },
+  { key: 'samples.demo12mDesc', text: '3,000 labelled synthetic orders over twelve months, for the Pulse owner analytics.' },
+  {
+    key: 'samples.demo12mDescApi',
+    text: '3,020 labelled synthetic orders, Oct 2025 – Sep 2026, with payment type, customer and units, for the Pulse owner analytics. Not used by the engine checks.',
+  },
+];
+
+const SAMPLE_KEY = new Map(SAMPLE_TEXTS.map((s) => [s.text, s.key]));
+
+/** A sample's name and description in the UI language, or in `lng` (English text the UI does not know is shown as sent). */
+export function localiseSample(s: Sample, lng?: string): Sample {
+  const local = (text: string) => {
+    const key = SAMPLE_KEY.get(text);
+    return key ? i18n.t(key, text, lng ? { lng } : {}) : text;
+  };
+  return { ...s, label: local(s.label), description: local(s.description) };
+}
 
 /** Drills the UI always offers, even when the API's sample list predates them. */
 const ALWAYS_LISTED: Sample['source'][] = ['bad_values'];
@@ -216,6 +272,8 @@ export function findOrder(analysis: AnalysisResponse | null, orderId: string): O
 
 export function StoreProvider({ children }: { children: ReactNode }) {
   const auth = useAuth();
+  // Sample names and descriptions follow the UI language.
+  const uiLang = useTranslation().i18n.language;
   const account = auth.ready && auth.mode === 'account';
   const accountRef = useRef(account);
   accountRef.current = account;
@@ -388,7 +446,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           // An ended session has its own notice with "Sign in again".
           if (!isSessionEnded(err)) {
             setWorkspaceError(toErrorInfo(err));
-            setRestoreError(`Your saved data could not be opened. ${toErrorInfo(err).message}`);
+            setRestoreError(i18n.t('store.savedOpenFailed', 'Your saved data could not be opened. {{message}}', { message: toErrorInfo(err).message }));
           }
         } finally {
           if (!cancelled) {
@@ -418,7 +476,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       } catch (err) {
         if (cancelled) return;
         if (err instanceof ApiError && err.status === 404) storage.clear();
-        else setRestoreError(`The last analysis could not be restored. ${toErrorInfo(err).message}`);
+        else setRestoreError(i18n.t('store.restoreFailed', 'The last analysis could not be restored. {{message}}', { message: toErrorInfo(err).message }));
       } finally {
         if (!cancelled) setRestoring(false);
       }
@@ -501,7 +559,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const correctRow = useCallback(
     async (body: RowCorrectionRequest) => {
       const id = datasetIdRef.current;
-      if (!id) throw new Error('Load a dataset first.');
+      if (!id) throw new Error(i18n.t('store.loadFirst', 'Load a dataset first.'));
       const ds = await api.correctRow(id, body);
       if (accountRef.current) void refreshWorkspace();
       setDataset((prev) => ({ ...ds, files: ds.files ?? prev?.files }));
@@ -520,7 +578,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const runAnalysis = useCallback(async (attribution: AttributionMode, periodEnd?: string, dsId?: string, handling?: number) => {
     const id = dsId ?? datasetIdRef.current;
-    if (!id) throw new Error('Load a dataset first.');
+    if (!id) throw new Error(i18n.t('store.loadFirst', 'Load a dataset first.'));
     const seq = ++analysisSeq.current;
     setAnalysing(true);
     try {
@@ -657,6 +715,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const correctedOrderIds = useMemo(() => dataset?.corrected_order_ids ?? [], [dataset]);
+  const localSamples = useMemo(() => (samples ?? FALLBACK_SAMPLES).map((s) => localiseSample(s, uiLang)), [samples, uiLang]);
 
   const value = useMemo<StoreValue>(
     () => ({
@@ -667,7 +726,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       checksRaw,
       checksLoading,
       refreshChecks,
-      samples: samples ?? FALLBACK_SAMPLES,
+      samples: localSamples,
       dataset,
       datasetId,
       analysis,
@@ -727,7 +786,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       checksRaw,
       checksLoading,
       refreshChecks,
-      samples,
+      localSamples,
       dataset,
       datasetId,
       analysis,

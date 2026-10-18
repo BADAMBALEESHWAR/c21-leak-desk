@@ -2,6 +2,7 @@
 // secret, no hosted page, no library). Tokens stay in this browser; the API verifies the id token on every call.
 import type { AuthConfig } from '../api/types';
 import { APP_PATH } from '../brand';
+import { i18n } from '../i18n';
 
 export const LOGIN_PATH = '/login/';
 const SESSION_KEY = 'profyn.session';
@@ -26,9 +27,34 @@ export class AuthError extends Error {
     message: string,
     /** Cognito session for a NEW_PASSWORD_REQUIRED challenge. */
     public readonly session?: string,
+    /** The message's translation key, so a screen can show it again after the language changes. */
+    public readonly i18nKey?: string,
   ) {
     super(message);
   }
+}
+
+/** Messages a person can act on: translated when the error is made (never at module load), English by default. */
+const MESSAGES = {
+  badCredentials: { key: 'auth.badCredentials', text: 'Email or password is not right.' },
+  confirmFirst: { key: 'auth.confirmFirst', text: 'Confirm your email first: enter the code we sent you.' },
+  exists: { key: 'auth.exists', text: 'An account with this email already exists. Sign in instead.' },
+  passwordRule: { key: 'auth.passwordRule', text: 'Use at least 8 characters with an upper-case letter, a lower-case letter and a number.' },
+  codeWrong: { key: 'auth.codeWrong', text: 'That code is not right. Check the latest email and try again.' },
+  codeExpired: { key: 'auth.codeExpired', text: 'That code has expired. Ask for a new one.' },
+  tooMany: { key: 'auth.tooMany', text: 'Too many attempts. Wait a minute, then try again.' },
+  checkFields: { key: 'auth.checkFields', text: 'Check the email and password and try again.' },
+  network: { key: 'auth.network', text: 'Could not reach the sign-in service. Check the connection and try again.' },
+  failed: { key: 'auth.failed', text: 'Sign-in failed. Try again.' },
+  incomplete: { key: 'auth.incomplete', text: 'Sign-in did not complete. Try again.' },
+  newPassword: { key: 'auth.newPassword', text: 'Choose a new password to finish signing in.' },
+  notReady: { key: 'auth.notReady', text: 'Sign-in is being set up — use Try the demo.' },
+} as const;
+
+type AuthMessage = (typeof MESSAGES)[keyof typeof MESSAGES];
+
+function authError(code: AuthError['code'], m: AuthMessage, session?: string): AuthError {
+  return new AuthError(code, i18n.t(m.key, m.text), session, m.key);
 }
 
 function store(): Storage | null {
@@ -125,22 +151,22 @@ export async function fetchAuthConfig(): Promise<AuthConfig> {
   }
 }
 
-const FRIENDLY: Record<string, [AuthError['code'], string]> = {
-  NotAuthorizedException: ['bad_credentials', 'Email or password is not right.'],
-  UserNotFoundException: ['bad_credentials', 'Email or password is not right.'],
-  UserNotConfirmedException: ['confirm', 'Confirm your email first: enter the code we sent you.'],
-  UsernameExistsException: ['exists', 'An account with this email already exists. Sign in instead.'],
-  InvalidPasswordException: ['password', 'Use at least 8 characters with an upper-case letter, a lower-case letter and a number.'],
-  CodeMismatchException: ['code', 'That code is not right. Check the latest email and try again.'],
-  ExpiredCodeException: ['code', 'That code has expired. Ask for a new one.'],
-  LimitExceededException: ['limit', 'Too many attempts. Wait a minute, then try again.'],
-  TooManyRequestsException: ['limit', 'Too many attempts. Wait a minute, then try again.'],
-  TooManyFailedAttemptsException: ['limit', 'Too many attempts. Wait a minute, then try again.'],
-  InvalidParameterException: ['other', 'Check the email and password and try again.'],
+const FRIENDLY: Record<string, [AuthError['code'], AuthMessage]> = {
+  NotAuthorizedException: ['bad_credentials', MESSAGES.badCredentials],
+  UserNotFoundException: ['bad_credentials', MESSAGES.badCredentials],
+  UserNotConfirmedException: ['confirm', MESSAGES.confirmFirst],
+  UsernameExistsException: ['exists', MESSAGES.exists],
+  InvalidPasswordException: ['password', MESSAGES.passwordRule],
+  CodeMismatchException: ['code', MESSAGES.codeWrong],
+  ExpiredCodeException: ['code', MESSAGES.codeExpired],
+  LimitExceededException: ['limit', MESSAGES.tooMany],
+  TooManyRequestsException: ['limit', MESSAGES.tooMany],
+  TooManyFailedAttemptsException: ['limit', MESSAGES.tooMany],
+  InvalidParameterException: ['other', MESSAGES.checkFields],
 };
 
 async function cognito<T>(cfg: AuthConfig, target: string, body: Record<string, unknown>): Promise<T> {
-  if (!cfg.enabled || !cfg.client_id || !cfg.region) throw new AuthError('not_ready', SIGN_IN_NOT_READY);
+  if (!cfg.enabled || !cfg.client_id || !cfg.region) throw authError('not_ready', MESSAGES.notReady);
   let res: Response;
   try {
     res = await fetch(`https://cognito-idp.${cfg.region}.amazonaws.com/`, {
@@ -149,13 +175,15 @@ async function cognito<T>(cfg: AuthConfig, target: string, body: Record<string, 
       body: JSON.stringify({ ClientId: cfg.client_id, ...body }),
     });
   } catch {
-    throw new AuthError('network', 'Could not reach the sign-in service. Check the connection and try again.');
+    throw authError('network', MESSAGES.network);
   }
   const json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
   if (!res.ok) {
     const type = String(json.__type ?? '').split('#').pop() ?? '';
-    const [code, message] = FRIENDLY[type] ?? ['other', typeof json.message === 'string' ? json.message : 'Sign-in failed. Try again.'];
-    throw new AuthError(code, message);
+    const friendly = FRIENDLY[type];
+    if (friendly) throw authError(friendly[0], friendly[1]);
+    // Cognito's own wording for a case not mapped above (it comes only in English).
+    throw typeof json.message === 'string' ? new AuthError('other', json.message) : authError('other', MESSAGES.failed);
   }
   return json as T;
 }
@@ -168,7 +196,7 @@ interface AuthResult {
 
 function keep(result: AuthResult, email: string): UserClaims {
   const r = result.AuthenticationResult;
-  if (!r?.IdToken) throw new AuthError('other', 'Sign-in did not complete. Try again.');
+  if (!r?.IdToken) throw authError('other', MESSAGES.incomplete);
   const previous = readSession();
   writeSession({ id: r.IdToken, refresh: r.RefreshToken ?? previous?.refresh ?? null, email });
   leaveDemoMode();
@@ -177,7 +205,7 @@ function keep(result: AuthResult, email: string): UserClaims {
 
 export async function signIn(cfg: AuthConfig, email: string, password: string): Promise<UserClaims> {
   const out = await cognito<AuthResult>(cfg, 'InitiateAuth', { AuthFlow: 'USER_PASSWORD_AUTH', AuthParameters: { USERNAME: email.trim(), PASSWORD: password } });
-  if (out.ChallengeName === 'NEW_PASSWORD_REQUIRED') throw new AuthError('new_password', 'Choose a new password to finish signing in.', out.Session);
+  if (out.ChallengeName === 'NEW_PASSWORD_REQUIRED') throw authError('new_password', MESSAGES.newPassword, out.Session);
   return keep(out, email.trim());
 }
 
@@ -302,4 +330,5 @@ export const providerHref = (provider: OAuthProvider, next: string = APP_PATH) =
 /** Where "Sign in" goes; `next` brings the person back (default: their workspace). */
 export const loginHref = (next: string = APP_PATH) => `${LOGIN_PATH}?next=${encodeURIComponent(next)}`;
 
-export const SIGN_IN_NOT_READY = 'Sign-in is being set up — use Try the demo.';
+/** "Sign-in is being set up — use Try the demo." in the current UI language. */
+export const signInNotReady = (): string => i18n.t(MESSAGES.notReady.key, MESSAGES.notReady.text);

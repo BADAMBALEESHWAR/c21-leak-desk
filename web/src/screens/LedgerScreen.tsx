@@ -1,7 +1,7 @@
 import { memo, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { AnalysisResponse, GroupRow, LeakCause, LineKey, OrderResult } from '../api/types';
-import { ChartCard, ChartTable, type TipRow } from '../charts/ChartCard';
+import { ChartCard, ChartTable, type LegendItem, type TipRow } from '../charts/ChartCard';
 import { DivergingBars, type DivergingRow } from '../charts/DivergingBars';
 import { WhaleCurve } from '../charts/WhaleCurve';
 import { Pill, Unknown } from '../components/Badge';
@@ -21,9 +21,10 @@ import { panelId, tabId, Tabs } from '../components/Tabs';
 import { Callout, InfoTip, revealElement, StatCard } from '../components/ui';
 import { groupMarginsOf, marginsOf, rowFixedShare, unitEconomics, UnitEconomics, useFormulas } from '../components/UnitEconomics';
 import { lower } from '../i18n';
-import { formatCount, formatInr, formatMarginPct, formatPct, plural } from '../lib/format';
+import { formatCount, formatInr, formatMarginPct, formatPct } from '../lib/format';
 import { ALLOCATED_EN, ALLOCATED_KEY, ATTRIBUTION_LABEL, fullReturnPartialRecovery, handlingEstimateUsed, LEAK_LABELS } from '../lib/labels';
 import { formatMonth } from '../charts/scale';
+import { apiText } from '../lib/apiText';
 import { fromHref, hasLedgerFilter, hrefFor, ledgerHref, parseFrom, parseLedgerQuery, useHashParams, type LedgerQuery } from '../lib/router';
 import { useStore, type LedgerFilter } from '../state/store';
 
@@ -37,13 +38,14 @@ let lastHandledFocus = 0;
 const SHOWN_ELSEWHERE = [ATTRIBUTION_LABEL, 'Operational contribution, not statutory net profit.'];
 
 function Deduction({ order, k, title }: { order: OrderResult; k: LineKey; title?: string }) {
+  const { t } = useTranslation();
   const line = order.lines.find((l) => l.key === k);
   if (!line || line.amount_inr === null) return <Unknown />;
-  if (line.source === 'moved_to_channel') return <span className="cell-muted">to channel</span>;
+  if (line.source === 'moved_to_channel') return <span className="cell-muted">{t('ledger.toChannel', 'to channel')}</span>;
   if (line.source === 'not_recognised') {
     return (
-      <span className="cell-pending" title={line.note}>
-        pending
+      <span className="cell-pending" title={apiText(line.note)}>
+        {t('ledger.pending', 'pending')}
       </span>
     );
   }
@@ -67,109 +69,157 @@ function SubHead({ main, sub, title }: { main: ReactNode; sub: string; title?: s
   );
 }
 
+/** The engine's group key for rows without a channel or product, in the UI language; other keys are data. */
+const keyText = (t: TFn, key: string) => (key === 'unassigned' ? t('ledger.unassigned', 'unassigned') : key);
+
+/** The engine's product-table label (one of two fixed phrases), in the UI language. */
+function productLabelText(t: TFn, label: string): string {
+  if (label === 'before channel spend') return t('ledger.productLabel.beforeSpend', 'before channel spend');
+  if (label === 'after allocated ads') return t('ledger.productLabel.afterAds', 'after allocated ads');
+  return label;
+}
+
+/** The engine's period notes (a fixed set of sentences), in the UI language; anything else is shown as sent. */
+function noteText(t: TFn, note: string): string {
+  if (note === 'Includes labelled synthetic rows (synthetic: true); they are not observed data.') {
+    return t('ledger.note.synthetic', 'Includes labelled synthetic rows (synthetic: true); they are not observed data.');
+  }
+  const handling = /^Handling (.+) per order where the row has none \(estimate\)\.$/.exec(note);
+  if (handling) return t('ledger.note.handling', 'Handling {{inr}} per order where the row has none (estimate).', { inr: handling[1] });
+  const outside = /^(\d+) orders? (?:is|are) dated after the period end \((.+)\) and outside this period\.$/.exec(note);
+  if (outside) {
+    return t('ledger.note.outside', '{{n}} orders are dated after the period end ({{end}}) and outside this period.', { count: Number(outside[1]), n: outside[1], end: outside[2] });
+  }
+  return note;
+}
+
 function KeyCell({ value }: { value: string }) {
-  return value === 'unassigned' ? <span className="cell-muted">unassigned</span> : <>{value}</>;
+  const { t } = useTranslation();
+  return value === 'unassigned' ? <span className="cell-muted">{t('ledger.unassigned', 'unassigned')}</span> : <>{value}</>;
 }
 
 const Kpis = memo(function Kpis({ a }: { a: AnalysisResponse }) {
   const { openBridge, openMargin, focusLedgerTable } = useStore();
-  const { t: tr } = useTranslation();
-  const t = a.totals;
-  const gateOpen = a.headline_gate.open && t.headline_ready !== false && t.contribution_pct !== null;
-  const lateText = t.late_refund_count > 0 ? formatInr(t.late_refund_pending_inr) : 'none';
+  const { t } = useTranslation();
+  const tot = a.totals;
+  const gateOpen = a.headline_gate.open && tot.headline_ready !== false && tot.contribution_pct !== null;
+  const lateText = tot.late_refund_count > 0 ? formatInr(tot.late_refund_pending_inr) : t('ledger.noneLower', 'none');
+  const contributionText = tot.contribution_inr === null ? lower(t('status.unknown')) : formatInr(tot.contribution_inr);
   return (
     <div className="kpi-grid kpi-grid-6">
       <StatCard
-        label={tr('ledger.gross')}
-        value={<Money value={t.gross_inr} tone="plain" />}
+        label={t('ledger.gross')}
+        value={<Money value={tot.gross_inr} tone="plain" />}
         icon="file"
-        sub="Before discounts"
+        sub={t('ledger.beforeDiscounts', 'Before discounts')}
         onClick={() => openBridge('gross')}
-        actionLabel={`Gross sales ${formatInr(t.gross_inr)} — open period waterfall`}
-        ask={<AskAiButton question={tr('askq.gross', 'Explain gross sales')} about={tr('ledger.gross')} />}
+        actionLabel={t('ledger.grossAction', 'Gross sales {{inr}} — open period waterfall', { inr: formatInr(tot.gross_inr) })}
+        ask={<AskAiButton question={t('askq.gross', 'Explain gross sales')} about={t('ledger.gross')} />}
       />
       <StatCard
-        label={tr('ledger.netSales')}
-        value={<Money value={t.net_sales_inr} tone="plain" />}
+        label={t('ledger.netSales')}
+        value={<Money value={tot.net_sales_inr} tone="plain" />}
         icon="table"
-        sub="After discounts and refunds"
+        sub={t('ledger.afterDiscountsRefunds', 'After discounts and refunds')}
         onClick={() => openBridge('net_sales')}
-        actionLabel={`Net sales ${formatInr(t.net_sales_inr)} — open period waterfall`}
-        ask={<AskAiButton question={tr('askq.netSales', 'Explain net sales')} about={tr('ledger.netSales')} />}
+        actionLabel={t('ledger.netSalesAction', 'Net sales {{inr}} — open period waterfall', { inr: formatInr(tot.net_sales_inr) })}
+        ask={<AskAiButton question={t('askq.netSales', 'Explain net sales')} about={t('ledger.netSales')} />}
       />
       <StatCard
-        label={tr('ledger.operationalContribution', 'Operational contribution')}
+        label={t('ledger.operationalContribution', 'Operational contribution')}
         large
         tone="primary"
         icon="trending-down"
-        value={<Money value={t.contribution_inr} tone="contribution" />}
+        value={<Money value={tot.contribution_inr} tone="contribution" />}
         onClick={() => openBridge('contribution')}
-        ask={<AskAiButton question={tr('askq.contribution', 'Explain operational contribution')} about={tr('ledger.operationalContribution', 'Operational contribution')} />}
-        actionLabel={`Operational contribution ${t.contribution_inr === null ? 'unknown' : formatInr(t.contribution_inr)}${t.partial ? `, partial, ${formatCount(t.unknown_count)} unknown` : ''} — open period waterfall`}
+        ask={<AskAiButton question={t('askq.contribution', 'Explain operational contribution')} about={t('ledger.operationalContribution', 'Operational contribution')} />}
+        actionLabel={
+          tot.partial
+            ? t('ledger.contributionActionPartial', 'Operational contribution {{inr}}, partial, {{n}} unknown — open period waterfall', {
+                inr: contributionText,
+                n: formatCount(tot.unknown_count),
+              })
+            : t('ledger.contributionAction', 'Operational contribution {{inr}} — open period waterfall', { inr: contributionText })
+        }
         sub={
           <>
-            {t.partial ? (
+            {tot.partial ? (
               <Pill tone="warning" dot>
-                {tr('status.partial')} · {formatCount(t.unknown_count)} {lower(tr('status.unknown'))}
+                {t('status.partial')} · {formatCount(tot.unknown_count)} {lower(t('status.unknown'))}
               </Pill>
             ) : (
               <Pill tone="success" dot>
-                {tr('status.complete')}
+                {t('status.complete')}
               </Pill>
             )}
-            {a.attribution === 'channel' && t.channel_spend_inr ? (
+            {a.attribution === 'channel' && tot.channel_spend_inr ? (
               <span className="kpi-note">
-                {tr('ledger.afterSpend', 'after {{inr}} channel spend', { inr: formatInr(t.channel_spend_inr) })} · {tr(ALLOCATED_KEY, ALLOCATED_EN)}
+                {t('ledger.afterSpend', 'after {{inr}} channel spend', { inr: formatInr(tot.channel_spend_inr) })} · {t(ALLOCATED_KEY, ALLOCATED_EN)}
               </span>
             ) : null}
-            {handlingEstimateUsed(a) ? <span className="kpi-note">incl. estimated handling {formatInr(a.config.handling_default_inr)}/order</span> : null}
+            {handlingEstimateUsed(a) ? (
+              <span className="kpi-note">{t('ledger.inclHandling', 'incl. estimated handling {{inr}}/order', { inr: formatInr(a.config.handling_default_inr) })}</span>
+            ) : null}
           </>
         }
       />
       {gateOpen ? (
         <StatCard
-          label={tr('ledger.margin')}
-          value={<span className="num">{formatPct(t.contribution_pct as number)}</span>}
+          label={t('ledger.margin')}
+          value={<span className="num">{formatPct(tot.contribution_pct as number)}</span>}
           icon="check-circle"
           tone="success"
-          sub="Of net sales"
+          sub={t('ledger.ofNetSales', 'Of net sales')}
           onClick={openMargin}
-          actionLabel={`Margin ${formatPct(t.contribution_pct as number)} of net sales — show how it is computed`}
+          actionLabel={t('ledger.marginAction', 'Margin {{pct}} of net sales — show how it is computed', { pct: formatPct(tot.contribution_pct as number) })}
         />
       ) : (
         <StatCard
-          label={tr('ledger.margin')}
+          label={t('ledger.margin')}
           icon="lock"
           tone="warning"
           value={
             <span className="kpi-locked">
-              <Icon name="lock" size={20} /> Hidden
+              <Icon name="lock" size={20} /> {t('drawer.hidden', 'Hidden')}
             </span>
           }
-          sub="Until refund facts are complete"
+          sub={t('ledger.untilFacts', 'Until refund facts are complete')}
           onClick={openMargin}
-          actionLabel="Margin hidden until refund facts are complete — see why and the unknown orders"
+          actionLabel={t('ledger.marginHiddenAction', 'Margin hidden until refund facts are complete — see why and the unknown orders')}
         />
       )}
       <StatCard
-        label={tr('ledger.orders')}
-        value={formatCount(t.orders)}
+        label={t('ledger.orders')}
+        value={formatCount(tot.orders)}
         icon="table"
         actionIcon="arrow-right"
         onClick={() => focusLedgerTable('losing')}
-        ask={<AskAiButton question={tr('askq.orders', 'Which orders are losing money?')} about={tr('ledger.orders')} />}
-        actionLabel={`Orders ${formatCount(t.orders)}, ${formatCount(t.negative_count)} losing money — filter the table to losing orders`}
-        sub={t.negative_count > 0 ? <span className="t-loss">{formatCount(t.negative_count)} losing money</span> : 'None losing money'}
+        ask={<AskAiButton question={t('askq.orders', 'Which orders are losing money?')} about={t('ledger.orders')} />}
+        actionLabel={t('ledger.ordersAction', 'Orders {{n}}, {{losing}} losing money — filter the table to losing orders', {
+          n: formatCount(tot.orders),
+          losing: formatCount(tot.negative_count),
+        })}
+        sub={
+          tot.negative_count > 0 ? (
+            <span className="t-loss">{t('ledger.losingMoney', '{{n}} losing money', { n: formatCount(tot.negative_count) })}</span>
+          ) : (
+            t('ledger.noneLosing', 'None losing money')
+          )
+        }
       />
       <StatCard
-        label={tr('ledger.lateRefunds')}
+        label={t('ledger.lateRefunds')}
         icon="alert-triangle"
         actionIcon="arrow-right"
-        tone={t.late_refund_count > 0 ? 'warning' : 'default'}
-        value={t.late_refund_count > 0 ? <Money value={t.late_refund_pending_inr} /> : <span className="kpi-none">None</span>}
-        sub={t.late_refund_count > 0 ? `Pending if recognised · ${formatCount(t.late_refund_count)} ${plural(t.late_refund_count, 'order', 'orders')}` : 'All refunds fall in the period'}
+        tone={tot.late_refund_count > 0 ? 'warning' : 'default'}
+        value={tot.late_refund_count > 0 ? <Money value={tot.late_refund_pending_inr} /> : <span className="kpi-none">{t('ledger.none', 'None')}</span>}
+        sub={
+          tot.late_refund_count > 0
+            ? t('ledger.pendingIfRecognised', 'Pending if recognised · {{n}} orders', { count: tot.late_refund_count, n: formatCount(tot.late_refund_count) })
+            : t('ledger.allInPeriod', 'All refunds fall in the period')
+        }
         onClick={() => focusLedgerTable('late')}
-        actionLabel={`Late refunds ${lateText} pending if recognised — filter the table to late refunds`}
+        actionLabel={t('ledger.lateAction', 'Late refunds {{inr}} pending if recognised — filter the table to late refunds', { inr: lateText })}
       />
     </div>
   );
@@ -195,7 +245,7 @@ const ContributionChart = memo(function ContributionChart({ a }: { a: AnalysisRe
     if (g.unknown_count > 0) tip.push({ label: lower(t('status.unknown')), value: formatCount(g.unknown_count) });
     return {
       key: g.key,
-      label: g.key,
+      label: keyText(t, g.key),
       value: g.contribution_inr,
       share: g.orders / totalOrders,
       sub: `${ordersText(g.orders)}${g.unknown_count ? ` · ${formatCount(g.unknown_count)} ${lower(t('status.unknown'))}` : ''}`,
@@ -212,7 +262,7 @@ const ContributionChart = memo(function ContributionChart({ a }: { a: AnalysisRe
       rows={groups.map((g) => ({
         key: g.key,
         cells: [
-          <a key="k" href={ledgerHref(dim === 'channel' ? { channel: g.key } : { product: g.key })}>{g.key}</a>,
+          <a key="k" href={ledgerHref(dim === 'channel' ? { channel: g.key } : { product: g.key })}>{keyText(t, g.key)}</a>,
           formatCount(g.orders),
           formatPct((g.orders / totalOrders) * 100),
           <Money key="n" value={g.net_sales_inr} tone="plain" />,
@@ -222,6 +272,12 @@ const ContributionChart = memo(function ContributionChart({ a }: { a: AnalysisRe
       }))}
     />
   );
+  // Tones and shapes are style tokens; only the labels are text.
+  const legend: LegendItem[] = [
+    { label: t('chart.legendGain', 'Contribution ≥ ₹0'), tone: 'gain' },
+    { label: t('chart.legendLoss', 'Contribution < ₹0'), tone: 'loss' },
+    { label: t('chart.shareOfOrdersHead', 'Share of orders'), tone: 'muted', shape: 'thin' },
+  ];
   const csv = {
     filename: `contribution-by-${dim}.csv`,
     headers: [dim, 'orders', 'share_of_orders_pct', 'net_sales_inr', 'contribution_before_spend_inr', 'channel_spend_inr', 'contribution_inr', 'unknown_orders'],
@@ -238,11 +294,7 @@ const ContributionChart = memo(function ContributionChart({ a }: { a: AnalysisRe
           {t('chart.clickBar', 'Select a bar to see its orders.')}
         </>
       }
-      legend={[
-        { label: t('chart.legendGain', 'Contribution ≥ ₹0'), tone: 'gain' },
-        { label: t('chart.legendLoss', 'Contribution < ₹0'), tone: 'loss' },
-        { label: t('chart.shareOfOrdersHead', 'Share of orders'), tone: 'muted', shape: 'thin' },
-      ]}
+      legend={legend}
       table={table}
       csv={csv}
       actions={
@@ -290,7 +342,7 @@ function OrdersTable({ orders, handlingEstimate, isMatch }: { orders: OrderResul
       className: 'col-order',
       cell: (o) => (
         <span className="cell-stack">
-          <LinkButton onClick={() => openOrderResult(o)} aria-label={`Open the waterfall for ${o.order_id}`} className="order-link">
+          <LinkButton onClick={() => openOrderResult(o)} aria-label={t('ledger.openWaterfall', 'Open the waterfall for {{id}}', { id: o.order_id })} className="order-link">
             {o.order_id}
           </LinkButton>
           <span className="cell-sub">{o.date}</span>
@@ -330,7 +382,7 @@ function OrdersTable({ orders, handlingEstimate, isMatch }: { orders: OrderResul
       id: 'hand',
       header:
         handlingEstimate > 0 ? (
-          <span className="th-pill" title={`Rows without handling_inr use ${formatInr(handlingEstimate)} per order (estimate).`}>
+          <span className="th-pill" title={t('ledger.handlingEstimateTip', 'Rows without handling_inr use {{inr}} per order (estimate).', { inr: formatInr(handlingEstimate) })}>
             {t('ledger.handling')} <Pill tone="warning">{lower(t('status.estimated'))}</Pill>
           </span>
         ) : (
@@ -350,7 +402,7 @@ function OrdersTable({ orders, handlingEstimate, isMatch }: { orders: OrderResul
   ];
   return (
     <Table
-      caption="Orders with their contribution. Select an order to open its waterfall."
+      caption={t('ledger.ordersCaption', 'Orders with their contribution. Select an order to open its waterfall.')}
       columns={columns}
       rows={orders}
       rowKey={(o) => o.order_id}
@@ -360,7 +412,7 @@ function OrdersTable({ orders, handlingEstimate, isMatch }: { orders: OrderResul
       }
       sheet
       className="orders-table"
-      emptyText="No orders match this filter."
+      emptyText={t('ledger.noMatch', 'No orders match this filter.')}
     />
   );
 }
@@ -454,15 +506,15 @@ function ChannelTable({ a }: { a: AnalysisResponse }) {
     },
     ...marginCols,
   ];
-  return <Table caption="Contribution by channel, with unit economics" columns={columns} rows={rows} rowKey={(r) => r.key} className="group-table" />;
+  return <Table caption={t('ledger.channelCaption', 'Contribution by channel, with unit economics')} columns={columns} rows={rows} rowKey={(r) => r.key} className="group-table" />;
 }
 
 function ProductTable({ a }: { a: AnalysisResponse }) {
   const rows = a.groups.product;
   const unallocated = a.groups.product_unallocated_spend_inr;
   const channelMode = a.attribution === 'channel';
-  const label = a.groups.product_label;
   const { t } = useTranslation();
+  const label = a.groups.product_label ? productLabelText(t, a.groups.product_label) : a.groups.product_label;
   const marginCols = useMarginColumns(a, 'product', rows);
   const columns: Column<GroupRow>[] = [
     { id: 'key', header: t('ledger.product'), rowHeader: true, cell: (r) => <KeyCell value={r.key} />, footer: t('common.total') },
@@ -504,7 +556,7 @@ function ProductTable({ a }: { a: AnalysisResponse }) {
   ) : null;
   return (
     <Table
-      caption={`Contribution by product, ${label || 'per order'}, with unit economics`}
+      caption={t('ledger.productCaption', 'Contribution by product, {{label}}, with unit economics', { label: label || t('ledger.perOrder', 'per order') })}
       columns={columns}
       rows={rows}
       rowKey={(r) => r.key}
@@ -516,28 +568,36 @@ function ProductTable({ a }: { a: AnalysisResponse }) {
 
 function LateRefunds({ a }: { a: AnalysisResponse }) {
   const { openOrderResult } = useStore();
+  const { t } = useTranslation();
   const late = a.late_refunds;
   if (late.orders.length === 0) return null;
   const n = late.orders.length;
   return (
-    <Callout tone="warning" title={`${formatCount(n)} ${plural(n, 'refund', 'refunds')} dated after the period end (${late.period_end}) ${plural(n, 'is', 'are')} pending`}>
-      <p>Counted in this period as kept. If recognised, operational contribution changes by {formatInr(late.pending_delta_inr)} (a prior-period adjustment).</p>
+    <Callout
+      tone="warning"
+      title={t('ledger.lateTitle', '{{n}} refunds dated after the period end ({{end}}) are pending', { count: n, n: formatCount(n), end: late.period_end })}
+    >
+      <p>
+        {t('ledger.lateBody', 'Counted in this period as kept. If recognised, operational contribution changes by {{inr}} (a prior-period adjustment).', {
+          inr: formatInr(late.pending_delta_inr),
+        })}
+      </p>
       <ul className="late-list">
         {late.orders.slice(0, 5).map((o) => (
           <li key={o.order_id}>
             <LinkButton onClick={() => openOrderResult(o)}>{o.order_id}</LinkButton>
-            <span className="cell-sub"> refund {o.refund_date}</span>
+            <span className="cell-sub"> {t('ledger.refundOn', 'refund {{date}}', { date: o.refund_date ?? '' })}</span>
             <span className="late-pair">
-              in period <Money value={o.contribution_inr} tone="contribution" />
+              {t('ledger.inPeriod', 'in period')} <Money value={o.contribution_inr} tone="contribution" />
               <Icon name="arrow-right" size={14} />
-              if recognised <Money value={o.recognised_contribution_inr} tone="contribution" />
+              {t('ledger.ifRecognised', 'if recognised')} <Money value={o.recognised_contribution_inr} tone="contribution" />
             </span>
           </li>
         ))}
       </ul>
-      {n > 5 ? <p className="muted small">and {formatCount(n - 5)} more — use the Late refund filter to see them all.</p> : null}
+      {n > 5 ? <p className="muted small">{t('ledger.lateMore', 'and {{n}} more — use the Late refund filter to see them all.', { n: formatCount(n - 5) })}</p> : null}
       <p>
-        Total if recognised <Money value={late.total_if_recognised_inr} tone="contribution" />
+        {t('ledger.totalIfRecognised', 'Total if recognised')} <Money value={late.total_if_recognised_inr} tone="contribution" />
       </p>
     </Callout>
   );
@@ -559,7 +619,7 @@ function ImportWarnings() {
       : null,
     others > 0 ? (others === 1 ? t('ledger.rowSetAside', '1 row set aside') : t('ledger.rowsSetAside', '{{n}} rows set aside', { n: others })) : null,
   ].filter(Boolean);
-  const ids = dataset.flags.filter((f) => f.reason === 'duplicate').map((f) => f.order_id ?? `line ${f.line}`);
+  const ids = dataset.flags.filter((f) => f.reason === 'duplicate').map((f) => f.order_id ?? t('ledger.lineN', 'line {{n}}', { n: f.line }));
   return (
     <a
       className="warn-badge"
@@ -850,8 +910,8 @@ export function LedgerScreen() {
   if (!analysis) {
     return (
       <div className="page">
-        <PageHeader title={t('ledger.title')} subtitle="Per-order contribution after every cost, reconciled to channels and products." />
-        <NeedsAnalysis sentence="No ledger yet. Load the sample orders to see contribution per order." icon="table" />
+        <PageHeader title={t('ledger.title')} subtitle={t('ledger.subtitle', 'Per-order contribution after every cost, reconciled to channels and products.')} />
+        <NeedsAnalysis sentence={t('ledger.needs', 'No ledger yet. Load the sample orders to see contribution per order.')} icon="table" />
       </div>
     );
   }
@@ -861,13 +921,13 @@ export function LedgerScreen() {
     { id: 'channel' as const, label: t('ledger.byChannel'), count: analysis.groups.channel.length },
     { id: 'product' as const, label: t('ledger.byProduct'), count: analysis.groups.product.length },
   ];
-  // noun: the English word in the filter note sentence, which stays English.
+  // noun: the word for the filter in the "Showing N … orders." note.
   const filters: Array<{ id: Filter; label: string; noun: string }> = [
-    { id: 'all', label: t('common.all'), noun: 'all' },
-    { id: 'losing', label: t('ledger.losing'), noun: 'losing' },
-    { id: 'unknown', label: t('status.unknown'), noun: 'unknown' },
-    { id: 'late', label: t('status.lateRefund'), noun: 'late refund' },
-    { id: 'synthetic', label: t('status.syntheticTag'), noun: 'synthetic' },
+    { id: 'all', label: t('common.all'), noun: t('ledger.noun.all', 'all') },
+    { id: 'losing', label: t('ledger.losing'), noun: t('ledger.noun.losing', 'losing') },
+    { id: 'unknown', label: t('status.unknown'), noun: t('ledger.noun.unknown', 'unknown') },
+    { id: 'late', label: t('status.lateRefund'), noun: t('ledger.noun.late', 'late refund') },
+    { id: 'synthetic', label: t('status.syntheticTag'), noun: t('ledger.noun.synthetic', 'synthetic') },
   ];
   const notes = analysis.labels.filter((l) => !SHOWN_ELSEWHERE.includes(l));
   const pageCount = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
@@ -882,12 +942,12 @@ export function LedgerScreen() {
   const isMatch = focused && showAll ? (o: OrderResult) => matchesLedgerQuery(o, lq) : focused ? () => true : undefined;
 
   const tableSection = (
-    <section className="card table-card table-target" aria-label="Ledger tables" ref={tableRef} tabIndex={-1}>
+    <section className="card table-card table-target" aria-label={t('ledger.tablesLabel', 'Ledger tables')} ref={tableRef} tabIndex={-1}>
       <div className="table-toolbar">
-        <Tabs label="Ledger views" idPrefix="ledger" tabs={tabs} value={tab} onChange={setTab} />
+        <Tabs label={t('ledger.views', 'Ledger views')} idPrefix="ledger" tabs={tabs} value={tab} onChange={setTab} />
         {tab === 'orders' ? (
           <div className="toolbar-tools">
-            <div className="chips" role="group" aria-label="Filter orders">
+            <div className="chips" role="group" aria-label={t('ledger.filterOrders', 'Filter orders')}>
               {filters.map((f) => (
                 <button
                   key={f.id}
@@ -903,8 +963,8 @@ export function LedgerScreen() {
             </div>
             <label className="search">
               <Icon name="search" size={16} />
-              <span className="visually-hidden">Search order id</span>
-              <input type="search" placeholder="Search order id" value={query} onChange={(e) => setQuery(e.target.value)} />
+              <span className="visually-hidden">{t('ledger.searchId', 'Search order id')}</span>
+              <input type="search" placeholder={t('ledger.searchId', 'Search order id')} value={query} onChange={(e) => setQuery(e.target.value)} />
             </label>
           </div>
         ) : null}
@@ -935,12 +995,16 @@ export function LedgerScreen() {
         <div className="filter-note" role="status">
           <Icon name="info" size={16} />
           <span>
-            Showing {formatCount(visible.length)} {filters.find((f) => f.id === filter)?.noun} {visible.length === 1 ? 'order' : 'orders'}.
+            {t('ledger.showingFiltered', 'Showing {{n}} {{noun}} orders.', {
+              count: visible.length,
+              n: formatCount(visible.length),
+              noun: filters.find((f) => f.id === filter)?.noun ?? '',
+            })}
           </span>
           {visible.length === 1 && (filter === 'late' || filter === 'unknown') ? (
-            <LinkButton onClick={() => openOrderResult(visible[0])}>Open {visible[0].order_id}</LinkButton>
+            <LinkButton onClick={() => openOrderResult(visible[0])}>{t('ledger.openId', 'Open {{id}}', { id: visible[0].order_id })}</LinkButton>
           ) : null}
-          <LinkButton onClick={() => setFilter('all')}>Clear filter</LinkButton>
+          <LinkButton onClick={() => setFilter('all')}>{t('focus.clear', 'Clear filter')}</LinkButton>
         </div>
       ) : null}
       <div role="tabpanel" id={panelId('ledger', tab)} aria-labelledby={tabId('ledger', tab)} className="tabpanel">
@@ -950,11 +1014,16 @@ export function LedgerScreen() {
             <div className="table-foot table-foot-pager">
               <span>
                 {visible.length === 0
-                  ? 'No orders to show'
-                  : `Showing ${formatCount(first + 1)}–${formatCount(first + pageRows.length)} of ${formatCount(visible.length)}`}
-                {visible.length !== analysis.orders.length ? ` (filtered from ${formatCount(analysis.orders.length)})` : ''} · select a row for its waterfall
+                  ? t('ledger.noOrdersToShow', 'No orders to show')
+                  : t('ledger.showingRange', 'Showing {{from}}–{{to}} of {{total}}', {
+                      from: formatCount(first + 1),
+                      to: formatCount(first + pageRows.length),
+                      total: formatCount(visible.length),
+                    })}
+                {visible.length !== analysis.orders.length ? ` ${t('ledger.filteredFrom', '(filtered from {{n}})', { n: formatCount(analysis.orders.length) })}` : ''} ·{' '}
+                {t('ledger.selectRow', 'select a row for its waterfall')}
               </span>
-              <Pagination page={current} pageCount={pageCount} onPage={goPage} label="Orders pages" />
+              <Pagination page={current} pageCount={pageCount} onPage={goPage} label={t('ledger.ordersPages', 'Orders pages')} />
             </div>
           </>
         ) : tab === 'channel' ? (
@@ -972,8 +1041,8 @@ export function LedgerScreen() {
         title={t('ledger.title')}
         subtitle={
           <>
-            Per-order contribution after every cost, reconciled to channels and products.
-            {notes.length > 0 ? <InfoTip label="About this data" text={notes.join(' ')} /> : null}
+            {t('ledger.subtitle', 'Per-order contribution after every cost, reconciled to channels and products.')}
+            {notes.length > 0 ? <InfoTip label={t('ledger.aboutData', 'About this data')} text={notes.map((n) => noteText(t, n)).join(' ')} /> : null}
           </>
         }
         actions={
@@ -1015,8 +1084,11 @@ export function LedgerScreen() {
 
       <NextStep route="leaks" label={t('actions.reviewLeaks')}>
         {analysis.totals.negative_count > 0
-          ? `${formatCount(analysis.totals.negative_count)} ${plural(analysis.totals.negative_count, 'order loses', 'orders lose')} money. See why, grouped by cause.`
-          : 'See whether any order loses money, grouped by cause.'}
+          ? t('ledger.nextLosing', '{{n}} orders lose money. See why, grouped by cause.', {
+              count: analysis.totals.negative_count,
+              n: formatCount(analysis.totals.negative_count),
+            })
+          : t('ledger.nextNone', 'See whether any order loses money, grouped by cause.')}
       </NextStep>
     </div>
   );

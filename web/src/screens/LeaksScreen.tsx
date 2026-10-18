@@ -16,7 +16,8 @@ import { Table, type Column } from '../components/Table';
 import { EmptyPanel, revealElement } from '../components/ui';
 import { lower } from '../i18n';
 import { leakQuestion } from '../lib/ask';
-import { formatInr, plural } from '../lib/format';
+import { apiText } from '../lib/apiText';
+import { formatInr } from '../lib/format';
 import { fullReturnPartialRecovery, LEAK_LABELS } from '../lib/labels';
 import { hrefFor, ledgerHref, useHashLocation } from '../lib/router';
 import { useStore } from '../state/store';
@@ -124,17 +125,17 @@ function LeakCard({
         </span>
         <span className="leak-top-end">
           <Pill tone="neutral">{t('leaks.orderCount', { count: g.count })}</Pill>
-          <AskAiButton question={leakQuestion(t, g.cause, g.label || LEAK_LABELS[g.cause])} about={g.label || LEAK_LABELS[g.cause]} />
+          <AskAiButton question={leakQuestion(t, g.cause, apiText(g.label) || LEAK_LABELS[g.cause])} about={apiText(g.label) || LEAK_LABELS[g.cause]} />
         </span>
       </div>
       <h2 id={`leak-${g.cause}`} className="leak-title">
-        {g.label || LEAK_LABELS[g.cause]}
+        {apiText(g.label) || LEAK_LABELS[g.cause]}
       </h2>
       <p className="leak-amount">
         {unknown ? (
           <>
             <span className="leak-amount-unknown">{t('status.unknown')}</span>
-            <span className="leak-amount-sub">amount not computable</span>
+            <span className="leak-amount-sub">{t('leaks.notComputable', 'amount not computable')}</span>
           </>
         ) : (
           <>
@@ -143,7 +144,7 @@ function LeakCard({
           </>
         )}
       </p>
-      <div className="order-chips" aria-label="Orders in this group">
+      <div className="order-chips" aria-label={t('leaks.groupOrders', 'Orders in this group')}>
         {ids.slice(0, 6).map((id) => {
           const c = contributionOf(id);
           return (
@@ -152,14 +153,14 @@ function LeakCard({
               type="button"
               className={`order-chip${c !== null && c < 0 ? ' is-loss' : ''}`}
               onClick={() => onOpen(id)}
-              aria-label={`Open the waterfall for ${id}`}
+              aria-label={t('leaks.openWaterfall', 'Open the waterfall for {{id}}', { id })}
               title={c === null ? undefined : formatInr(c)}
             >
               {id}
             </button>
           );
         })}
-        {more > 0 ? <span className="muted small">+{more} more</span> : null}
+        {more > 0 ? <span className="muted small">{t('leaks.more', '+{{n}} more', { n: more })}</span> : null}
       </div>
       <p className="leak-why">{why}</p>
       <AiBadge source={source} compact />
@@ -212,8 +213,8 @@ export function LeaksScreen() {
   if (!analysis) {
     return (
       <div className="page">
-        <PageHeader title={t('leaks.pageTitle')} subtitle="Losing orders grouped by their primary cause, largest loss first." />
-        <NeedsAnalysis sentence="No analysis yet. Load the sample orders to see which orders lose money and why." icon="alert-triangle" />
+        <PageHeader title={t('leaks.pageTitle')} subtitle={t('leaks.subtitle', 'Losing orders grouped by their primary cause, largest loss first.')} />
+        <NeedsAnalysis sentence={t('leaks.empty', 'No analysis yet. Load the sample orders to see which orders lose money and why.')} icon="alert-triangle" />
       </div>
     );
   }
@@ -225,34 +226,34 @@ export function LeaksScreen() {
 
   const rows: BarRow[] = leaks.map((g) => ({
     key: g.cause,
-    label: g.label || LEAK_LABELS[g.cause],
+    label: apiText(g.label) || LEAK_LABELS[g.cause],
     sub: t('leaks.orderCount', { count: g.count }),
-    values: [{ series: 'Lost', value: g.lost_inr, tone: 'loss', text: g.lost_inr === null ? 'unknown' : formatInr(g.lost_inr) }],
+    values: [{ series: t('leaks.lost'), value: g.lost_inr, tone: 'loss', text: g.lost_inr === null ? lower(t('status.unknown')) : formatInr(g.lost_inr) }],
   }));
 
   return (
     <div className="page">
-      <PageHeader title={t('leaks.pageTitle')} subtitle="Losing orders grouped by their primary cause, largest loss first." />
+      <PageHeader title={t('leaks.pageTitle')} subtitle={t('leaks.subtitle', 'Losing orders grouped by their primary cause, largest loss first.')} />
 
       {leaks.length === 0 ? (
-        <EmptyPanel icon="check-circle" title="No negative-contribution orders in this period." />
+        <EmptyPanel icon="check-circle" title={t('leaks.none', 'No negative-contribution orders in this period.')} />
       ) : (
         <>
-          <section className="card summary-card" aria-label="Loss summary">
+          <section className="card summary-card" aria-label={t('leaks.summaryLabel', 'Loss summary')}>
             <button
               type="button"
               className="summary-figure summary-figure-btn card-action"
               onClick={() => revealElement(gridRef.current)}
-              aria-label={"Contribution lost " + formatInr(knownLoss) + " across " + orderCount + " orders — show the causes"}
+              aria-label={t('leaks.summaryAria', 'Contribution lost {{inr}} across {{count}} orders — show the causes', { inr: formatInr(knownLoss), count: orderCount })}
             >
               <span className="summary-label">{t('leaks.contributionLost')}</span>
               <span className="summary-value t-loss">{formatInr(knownLoss)}</span>
               <span className="summary-sub">
-                across {orderCount} {plural(orderCount, 'order', 'orders')} in {leaks.length} {plural(leaks.length, 'cause', 'causes')}
+                {t('leaks.summarySub', 'across {{orders}} in {{causes}}', { orders: t('leaks.orderCount', { count: orderCount }), causes: t('leaks.inCauses', { count: leaks.length }) })}
               </span>
               {anyUnknown ? (
                 <Pill tone="warning" dot>
-                  Plus orders whose loss is unknown
+                  {t('leaks.plusUnknown', 'Plus orders whose loss is unknown')}
                 </Pill>
               ) : null}
               <span className="kpi-go" aria-hidden="true">
@@ -260,12 +261,12 @@ export function LeaksScreen() {
               </span>
             </button>
             <div className="summary-chart">
-              <h2 className="card-title">₹ lost by cause</h2>
-              <BarRows rows={rows} ariaLabel="Rupees lost by cause" labelWidth={210} />
+              <h2 className="card-title">{t('leaks.byCause', '₹ lost by cause')}</h2>
+              <BarRows rows={rows} ariaLabel={t('leaks.byCauseAria', 'Rupees lost by cause')} labelWidth={210} />
             </div>
           </section>
 
-          <div className="leak-grid reveal-target" ref={gridRef} tabIndex={-1} aria-label="Causes">
+          <div className="leak-grid reveal-target" ref={gridRef} tabIndex={-1} aria-label={t('leaks.causes', 'Causes')}>
             {leaks.map((g) => {
               const ai = narration?.leaks[g.cause];
               const useAi = ai !== undefined && ai.why_source === 'ai';
@@ -280,7 +281,7 @@ export function LeaksScreen() {
       )}
 
       <NextStep route="scenario" label={t('scenario.pageTitle')}>
-        Change one assumption — recovery, return rate, shipping — and see which fix pays most.
+        {t('leaks.next', 'Change one assumption — recovery, return rate, shipping — and see which fix pays most.')}
       </NextStep>
 
       <FixAdvisor cause={fixCause} open={fixOpen && fixCause !== null} onClose={closeFix} />

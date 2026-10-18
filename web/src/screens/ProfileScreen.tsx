@@ -1,4 +1,5 @@
 import { useEffect, useId, useState, type FormEvent } from 'react';
+import type { TFunction } from 'i18next';
 import { useTranslation } from 'react-i18next';
 import { api, downloadFile, isNotFound, toErrorInfo, type ErrorInfo } from '../api/client';
 import type { AuditEntry, Consent, LoginEntry, MeProfile } from '../api/types';
@@ -11,7 +12,41 @@ import { PageHeader } from '../components/Page';
 import { formatDateTime } from '../lib/format';
 import { useStore } from '../state/store';
 
-const PROVIDER_NAMES: Record<string, string> = { google: 'Google', github: 'GitHub', email: 'Email' };
+/** Google and GitHub are names; email is a word, so it is translated. */
+function providerName(t: TFunction, provider: string): string {
+  if (provider === 'google') return 'Google';
+  if (provider === 'github') return 'GitHub';
+  if (provider === 'email') return t('profile.email', 'Email');
+  return provider;
+}
+
+/** An audit event kind in words ("ai_call" reads "ai call"); a kind this build does not know is shown as sent. */
+function auditAction(t: TFunction, kind: string): string {
+  switch (kind) {
+    case 'import':
+      return t('profile.kind.import', 'import');
+    case 'ai_call':
+      return t('profile.kind.aiCall', 'ai call');
+    case 'decision':
+      return t('profile.kind.decision', 'decision');
+    case 'export':
+      return t('profile.kind.export', 'export');
+    case 'login':
+      return t('profile.kind.login', 'login');
+    case 'consent':
+      return t('profile.kind.consent', 'consent');
+    case 'mapping':
+      return t('profile.kind.mapping', 'mapping');
+    case 'connector_connected':
+      return t('profile.kind.connectorConnected', 'connector connected');
+    case 'connector_sync':
+      return t('profile.kind.connectorSync', 'connector sync');
+    case 'connector_disconnected':
+      return t('profile.kind.connectorDisconnected', 'connector disconnected');
+    default:
+      return kind.replace(/_/g, ' ');
+  }
+}
 
 function when(v: unknown): string {
   return typeof v === 'string' && !Number.isNaN(Date.parse(v)) ? formatDateTime(v) : '—';
@@ -172,7 +207,7 @@ export function ProfileScreen() {
               <p className="profile-name">{name ?? email ?? t('topbar.signedIn')}</p>
               {email && name ? <p className="muted">{email}</p> : null}
               {provider ? (
-                <Pill tone="neutral">{t('profile.provider', 'Signed in with {{provider}}', { provider: PROVIDER_NAMES[provider] ?? provider })}</Pill>
+                <Pill tone="neutral">{t('profile.provider', 'Signed in with {{provider}}', { provider: providerName(t, provider) })}</Pill>
               ) : null}
             </div>
             <Button variant="secondary" size="sm" icon="log-out" onClick={auth.signOut} className="profile-signout">
@@ -224,7 +259,7 @@ export function ProfileScreen() {
                 {logins.slice(0, 10).map((l, i) => (
                   <tr key={`${String(l.at)}-${i}`}>
                     <td className="num">{when(l.at)}</td>
-                    <td>{l.provider ? PROVIDER_NAMES[l.provider] ?? l.provider : '—'}</td>
+                    <td>{l.provider ? providerName(t, l.provider) : '—'}</td>
                     <td className="cell-wrap small">{typeof l.user_agent === 'string' ? l.user_agent.slice(0, 60) : '—'}</td>
                   </tr>
                 ))}
@@ -257,7 +292,7 @@ export function ProfileScreen() {
                 {audit.slice(0, 50).map((a, i) => (
                   <tr key={`${String(a.at)}-${i}`}>
                     <td className="num">{when(a.at)}</td>
-                    <td>{typeof a.action === 'string' ? a.action.replace(/_/g, ' ') : '—'}</td>
+                    <td>{typeof a.action === 'string' ? auditAction(t, a.action) : '—'}</td>
                     <td className="cell-wrap small">{typeof a.detail === 'string' ? a.detail : ''}</td>
                   </tr>
                 ))}

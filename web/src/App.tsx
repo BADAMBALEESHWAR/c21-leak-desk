@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { SESSION_ENDED, toErrorInfo, type ErrorInfo } from './api/client';
+import type { TFunction } from 'i18next';
+import { useTranslation } from 'react-i18next';
+import { sessionEndedMessage, toErrorInfo, type ErrorInfo } from './api/client';
 import { isSampleSource, SAMPLE_SOURCES, type AttributionMode } from './api/types';
 import { useAuth, WORKSPACE_URL } from './auth/AuthContext';
 import { BRAND } from './brand';
@@ -12,7 +14,7 @@ import { Sidebar } from './components/Sidebar';
 import { TopBar } from './components/TopBar';
 import { Callout, SkeletonCards } from './components/ui';
 import { Toast } from './components/Toast';
-import { SAMPLE_NAMES } from './lib/labels';
+import { i18n } from './i18n';
 import { navigate, parseHash, replaceWithBareRoute, useHashLocation, type Location, type Route } from './lib/router';
 import { AiScreen } from './screens/AiScreen';
 import { ChangelogScreen } from './screens/ChangelogScreen';
@@ -53,7 +55,19 @@ const START_LOAD = parseHash(window.location.hash).params.has('load');
 
 type PendingDrawer = { order: string | null; worked: boolean; checks?: boolean; about?: boolean };
 
-const loadingLabel = (source: string) => (SAMPLE_NAMES[source] ? `the ${SAMPLE_NAMES[source].toLowerCase()}` : `the ${source.replace(/_/g, ' ')} sample`);
+/** "Loading the sample orders…": the built-in samples by name, anything else by its source id. */
+function loadingLine(t: TFunction, source: string): string {
+  switch (source) {
+    case 'fixture':
+      return t('app.loading.fixture', 'Loading the sample orders…');
+    case 'extended':
+      return t('app.loading.extended', 'Loading the extended sample…');
+    case 'demo_12m':
+      return t('app.loading.demo12m', 'Loading the 12-month demo…');
+    default:
+      return t('app.loading.sample', 'Loading the {{name}} sample…', { name: source.replace(/_/g, ' ') });
+  }
+}
 
 /**
  * Deep links for demos and screenshots, on any route:
@@ -86,7 +100,9 @@ function useDeepLink(loc: Location, ready: boolean) {
       return;
     }
     if (!isSampleSource(load)) {
-      setError({ info: { message: `“${load}” is not a sample.`, hint: `Use one of: ${SAMPLE_SOURCES.join(', ')}.`, issues: [] }, fromImport: false });
+      const message = i18n.t('app.notSample', '“{{name}}” is not a sample.', { name: load });
+      const hint = i18n.t('app.useOneOf', 'Use one of: {{list}}.', { list: SAMPLE_SOURCES.join(', ') });
+      setError({ info: { message, hint, issues: [] }, fromImport: false });
       return;
     }
     const attribution: AttributionMode = p.get('attribution') === 'channel' ? 'channel' : 'allocate';
@@ -137,19 +153,21 @@ function useDeepLink(loc: Location, ready: boolean) {
 
 /** Before the mode is known: no screen at all, so neither the demo nor an empty workspace flashes. */
 function Opening() {
+  const { t } = useTranslation();
   return (
     <div className="app-opening" role="status" aria-live="polite">
       <span className="app-opening-mark" aria-hidden="true">
         <Icon name="drop" size={22} strokeWidth={2} />
       </span>
       <p className="loading-line">
-        <span className="spinner" aria-hidden="true" /> Opening {BRAND.name}…
+        <span className="spinner" aria-hidden="true" /> {t('app.opening', 'Opening {{brand}}…', { brand: BRAND.name })}
       </p>
     </div>
   );
 }
 
 export function App() {
+  const { t } = useTranslation();
   const loc = useHashLocation();
   const auth = useAuth();
   const { apiStatus, restoreError, starting, analysis } = useStore();
@@ -184,7 +202,7 @@ export function App() {
   return (
     <>
       <button type="button" className="skip-link" onClick={() => mainRef.current?.focus()}>
-        Skip to content
+        {t('app.skipToContent', 'Skip to content')}
       </button>
       <div className="shell">
         <Sidebar route={loc.route} />
@@ -192,7 +210,7 @@ export function App() {
           {auth.mode === 'demo' && auth.hasSession ? (
             <div className="mode-banner">
               <Icon name="info" size={16} />
-              <span>You&rsquo;re viewing the demo.</span>
+              <span>{t('app.viewingDemo', 'You’re viewing the demo.')}</span>
               <a
                 href={WORKSPACE_URL}
                 onClick={(e) => {
@@ -200,7 +218,7 @@ export function App() {
                   auth.backToWorkspace();
                 }}
               >
-                Back to your workspace
+                {t('app.backToWorkspace', 'Back to your workspace')}
               </a>
             </div>
           ) : null}
@@ -208,37 +226,37 @@ export function App() {
           <main id="main" ref={mainRef} className="content" tabIndex={-1}>
             <div className="notices">
               {auth.sessionEnded ? (
-                <Callout tone="warning" title={SESSION_ENDED} role="alert" className="session-callout">
-                  <p className="callout-hint">Anything already saved stays in your account.</p>
+                <Callout tone="warning" title={sessionEndedMessage()} role="alert" className="session-callout">
+                  <p className="callout-hint">{t('app.savedStays', 'Anything already saved stays in your account.')}</p>
                   <ButtonLink variant="primary" size="sm" href={auth.loginUrl} icon="user">
-                    Sign in again
+                    {t('app.signInAgain', 'Sign in again')}
                   </ButtonLink>
                 </Callout>
               ) : null}
               {apiStatus === 'down' ? (
                 import.meta.env.DEV ? (
-                  <Callout tone="danger" title="The API is not reachable at /api/v1." role="alert">
-                    <p className="callout-hint">Start it with &ldquo;npm run dev&rdquo; in the api folder; this page checks again every few seconds.</p>
+                  <Callout tone="danger" title={t('app.apiDownDev', 'The API is not reachable at /api/v1.')} role="alert">
+                    <p className="callout-hint">{t('app.apiDownDevHint', 'Start it with “npm run dev” in the api folder; this page checks again every few seconds.')}</p>
                   </Callout>
                 ) : (
-                  <Callout tone="info" title="Reconnecting to Profyn…" role="status">
-                    <p className="callout-hint">This page checks again every few seconds. Nothing you saved is lost.</p>
+                  <Callout tone="info" title={t('app.reconnecting', 'Reconnecting to {{brand}}…', { brand: BRAND.name })} role="status">
+                    <p className="callout-hint">{t('app.reconnectingHint', 'This page checks again every few seconds. Nothing you saved is lost.')}</p>
                   </Callout>
                 )
               ) : null}
               {restoreError ? <Callout tone="danger" title={restoreError} /> : null}
               {deepLink.busy ? (
                 <p className="loading-line" role="status">
-                  <span className="spinner" aria-hidden="true" /> Loading {loadingLabel(deepLink.busy)}…
+                  <span className="spinner" aria-hidden="true" /> {loadingLine(t, deepLink.busy)}
                 </p>
               ) : null}
               {deepLink.error && !(deepLink.error.fromImport && loc.route === 'import') ? <ErrorNote error={deepLink.error.info} /> : null}
               <ErrorNote error={topError} />
             </div>
             {opening ? (
-              <div className="page" role="status" aria-label="Opening your workspace">
+              <div className="page" role="status" aria-label={t('app.openingWorkspaceAria', 'Opening your workspace')}>
                 <p className="loading-line">
-                  <span className="spinner" aria-hidden="true" /> Opening your workspace…
+                  <span className="spinner" aria-hidden="true" /> {t('app.openingWorkspace', 'Opening your workspace…')}
                 </p>
                 <SkeletonCards count={4} />
                 <div className="card skeleton-block" aria-hidden="true" />

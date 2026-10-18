@@ -89,10 +89,11 @@ function readErrorBody(body: unknown): ApiErrorBody['error'] | null {
   return null;
 }
 
-/** Shown only after the automatic retries below have run out; developers also get the local hint. */
-const UNREACHABLE = import.meta.env.DEV
-  ? 'Could not reach the API at /api/v1. Start it with "npm run dev" in the api folder, then try again.'
-  : 'Profyn could not be reached just now. Nothing was lost; please try again in a moment.';
+/** Shown only after the automatic retries below have run out; developers also get the local hint. In the UI language. */
+const unreachable = (): string =>
+  import.meta.env.DEV
+    ? i18n.t('api.unreachableDev', 'Could not reach the API at /api/v1. Start it with "npm run dev" in the api folder, then try again.')
+    : i18n.t('api.unreachable', 'Profyn could not be reached just now. Nothing was lost; please try again in a moment.');
 
 // A deploy restarts the API for a few seconds. Network failures and gateway errors (502/503/504 without our own JSON
 // error body) are retried quietly before anything is shown, so a person never sees a blip.
@@ -124,10 +125,16 @@ export function bindSession(b: SessionBinding | null): void {
   ended = false;
 }
 
-export const SESSION_ENDED = 'Your session has ended. Sign in again to keep working with your saved data.';
+/** The one notice for an ended session, in the UI language. */
+export function sessionEndedMessage(): string {
+  return i18n.t('api.sessionEnded', 'Your session has ended. Sign in again to keep working with your saved data.');
+}
 
-const sessionEndedError = () =>
-  new ApiError(401, { error: { code: 'unauthorized', message: SESSION_ENDED, hint: 'Your saved data is safe; it opens again after you sign in.' } }, SESSION_ENDED);
+const sessionEndedError = () => {
+  const message = sessionEndedMessage();
+  const hint = i18n.t('api.sessionSafe', 'Your saved data is safe; it opens again after you sign in.');
+  return new ApiError(401, { error: { code: 'unauthorized', message, hint } }, message);
+};
 
 /** The session has ended: the app shows one notice for it, so screens need not repeat the error. */
 export function isSessionEnded(err: unknown): boolean {
@@ -224,7 +231,7 @@ async function send(method: Method, path: string, body?: unknown, auth = true): 
       await wait(RETRY_DELAYS_MS[attempt]);
       continue;
     }
-    if (!res) throw new ApiError(0, null, UNREACHABLE);
+    if (!res) throw new ApiError(0, null, unreachable());
     if (res.status === 401 && (token || (auth && cookieSession()))) endSession();
     return { res, parsed };
   }
@@ -235,8 +242,8 @@ async function request<T>(method: Method, path: string, body?: unknown, auth = t
   if (!res.ok) {
     if (res.status === 401 && binding?.account) throw sessionEndedError();
     // A proxy or gateway page without a JSON error body means the API process is down.
-    if (!readErrorBody(parsed) && res.status >= 500) throw new ApiError(res.status, null, UNREACHABLE);
-    throw new ApiError(res.status, parsed, `The request failed with status ${res.status}.`);
+    if (!readErrorBody(parsed) && res.status >= 500) throw new ApiError(res.status, null, unreachable());
+    throw new ApiError(res.status, parsed, i18n.t('api.requestFailed', 'The request failed with status {{status}}.', { status: res.status }));
   }
   return parsed as T;
 }
@@ -274,7 +281,7 @@ export async function downloadFile(url: string, filename: string): Promise<void>
   try {
     res = await fetch(url, { headers });
   } catch {
-    throw new ApiError(0, null, UNREACHABLE);
+    throw new ApiError(0, null, unreachable());
   }
   if (res.status === 401 && (token || cookieSession())) {
     endSession();
@@ -282,7 +289,7 @@ export async function downloadFile(url: string, filename: string): Promise<void>
   }
   if (!res.ok) {
     const parsed = await res.json().catch(() => null);
-    throw new ApiError(res.status, parsed, `The download failed with status ${res.status}.`);
+    throw new ApiError(res.status, parsed, i18n.t('api.downloadFailed', 'The download failed with status {{status}}.', { status: res.status }));
   }
   saveBlob(await res.blob(), filename);
 }
@@ -304,7 +311,7 @@ export const api = {
   health: async (): Promise<Health> => {
     const { res, parsed } = await send('GET', '/health', undefined, false);
     if (parsed && typeof parsed === 'object' && 'engine_version' in parsed) return parsed as Health;
-    throw new ApiError(res.status, parsed, UNREACHABLE);
+    throw new ApiError(res.status, parsed, unreachable());
   },
   samples: () => request<Sample[]>('GET', '/samples', undefined, false),
   checks: () => request<Checks>('GET', '/checks', undefined, false),
@@ -430,7 +437,7 @@ export function isNotFound(err: unknown): boolean {
 export function toErrorInfo(err: unknown): ErrorInfo {
   if (err instanceof ApiError) return { message: err.message, hint: err.hint, issues: err.issues };
   if (err instanceof Error) return { message: err.message, hint: null, issues: [] };
-  return { message: 'Something went wrong. Try again.', hint: null, issues: [] };
+  return { message: i18n.t('api.somethingWrong', 'Something went wrong. Try again.'), hint: null, issues: [] };
 }
 
 export function errorMessage(err: unknown): string {

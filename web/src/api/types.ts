@@ -176,6 +176,20 @@ export type InterventionKey =
   | 'none';
 
 export type Confidence = 'high' | 'low' | 'unknown';
+
+/** Bootstrap evidence for a fix: level, 95% range and how often it gained money across resamples of the owner's orders. */
+export interface Evidence {
+  level: 'high' | 'medium' | 'low';
+  delta_inr: number;
+  ci_low_inr: number;
+  ci_high_inr: number;
+  p_positive: number;
+  orders_checked: number;
+  orders_driving: number;
+  orders_left_out: number;
+  method: string;
+  reason: string;
+}
 export type TextSource = 'template' | 'ai';
 
 export interface Candidate {
@@ -229,6 +243,8 @@ export interface BridgeLine {
 }
 
 export interface AnalysisResult {
+  /** Bootstrap evidence per candidate fix (keyed by intervention). */
+  evidence?: Record<string, Evidence>;
   engine_version: string;
   bridge?: BridgeLine[];
   attribution: AttributionMode;
@@ -810,6 +826,7 @@ export interface AutopilotAction {
   overrides?: ScenarioOverrides | null;
   expected_delta_inr: number | null;
   confidence: Confidence | null;
+  evidence?: Evidence | null;
   explanation?: AiText | null;
   decision_draft?: DecisionDraft | null;
 }
@@ -838,6 +855,7 @@ export interface AdvisorIntervention {
   overrides?: ScenarioOverrides | null;
   expected_delta_inr: number | null;
   confidence: Confidence | null;
+  evidence?: Evidence | null;
 }
 
 /** POST /analyses/:id/advisor: one leak cause explained, with 2–3 fixes and a drafted test. */

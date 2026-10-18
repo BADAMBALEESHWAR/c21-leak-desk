@@ -8,22 +8,27 @@ import {
   fetchMissingRefund,
   fetchWorkedOrder,
   formatPct2,
+  interventionText,
+  lineText,
   ProofError,
   readAssumptionControl,
   readFormula,
+  totalLabelText,
   type CheckOutcome,
   type MissingRefund,
   type ProofChecks,
   type SumKey,
   type WorkedOrder,
 } from '../api/proof';
+import type { TFunction } from 'i18next';
 import type { AttributionMode } from '../api/types';
-import { Pill } from '../components/Badge';
+import { CONFIDENCE_KEY, Pill } from '../components/Badge';
 import { Button, ButtonLink } from '../components/Button';
 import { Icon } from '../components/Icon';
 import { PageHeader } from '../components/Page';
 import { Callout, Skeleton } from '../components/ui';
-import { localeFor } from '../i18n';
+import { localeFor, lower } from '../i18n';
+import { apiText } from '../lib/apiText';
 import { formatInr } from '../lib/format';
 import { INTERVENTION_LABELS } from '../lib/labels';
 import { hrefFor } from '../lib/router';
@@ -36,8 +41,8 @@ type CheckId = (typeof CHECK_IDS)[number];
 /** Return rates offered when the API does not list its own. */
 const FALLBACK_RATES = [0, 10, 20, 30, 50];
 
-const interventionName = (o: CheckOutcome | undefined) =>
-  o ? o.label ?? INTERVENTION_LABELS[o.intervention] ?? String(o.intervention).replace(/_/g, ' ') : null;
+const interventionName = (t: TFunction, o: CheckOutcome | undefined) =>
+  o ? interventionText(t, o.intervention, o.label ?? INTERVENTION_LABELS[o.intervention] ?? String(o.intervention).replace(/_/g, ' ')) : null;
 
 function Status({ pass }: { pass: boolean | null }) {
   const { t } = useTranslation();
@@ -184,7 +189,7 @@ function Check1({ data, worked }: { data: ProofChecks; worked: WorkedOrder | nul
                 return (
                   <tr key={`${l.key}-${i}`}>
                     <td className="muted proof-col-n">{i + 1}</td>
-                    <th scope="row">{l.label}</th>
+                    <th scope="row">{lineText(t, l.key, l.label)}</th>
                     <td className={`r num${l.amount_inr < 0 ? ' t-loss' : ''}`}>{formatInr(l.amount_inr)}</td>
                     <td className="r num proof-strong">{formatInr(l.running_total_inr)}</td>
                     <td className="proof-col-bar" aria-hidden="true">
@@ -368,7 +373,7 @@ function Check2({ data, currentMode }: { data: ProofChecks; currentMode: Attribu
 
 function Outcome({ heading, o, tone }: { heading: ReactNode; o: CheckOutcome | undefined; tone: 'before' | 'after' }) {
   const { t } = useTranslation();
-  const name = interventionName(o);
+  const name = interventionName(t, o);
   return (
     <div className={`proof-outcome is-${tone}`}>
       <span className="proof-outcome-head">{heading}</span>
@@ -414,8 +419,19 @@ function Check3({ data, runId }: { data: ProofChecks; runId: number }) {
   }, [rate, runId]);
 
   const unknownOrder = result?.unknown_order ?? 'O05';
-  const totalLabel = result?.total_label ?? (c3?.unknown_labelled ? 'partial (1 unknown)' : null);
-  const label = result?.label ?? null;
+  const totalLabel =
+    result?.total_label != null
+      ? totalLabelText(t, result.total_label)
+      : c3?.unknown_labelled
+        ? t('checks.c3.totalPartial', 'partial ({{n}} unknown)', { n: 1 })
+        : null;
+  // The engine's scenario label, worded again from its rate when it is the standard one.
+  const rate0 = result?.return_rate_pct;
+  const label =
+    result?.label != null && typeof rate0 === 'number' && result.label === `Scenario: assumes ${rate0}% returns`
+      ? t('checks.c3.scenarioLabel', 'Scenario: assumes {{x}}% returns', { x: rate0 })
+      : result?.label ?? null;
+  const confidenceWord = c3 ? (CONFIDENCE_KEY[c3.confidence] ? lower(t(CONFIDENCE_KEY[c3.confidence])) : c3.confidence) : '';
   const before = result?.before ?? c3?.before;
   const after = result ? result.after : c3?.after_recovery_50;
   const changed = result ? result.changed : c3?.recommendation_changed ?? null;
@@ -443,7 +459,7 @@ function Check3({ data, runId }: { data: ProofChecks; runId: number }) {
               </li>
               <li>
                 <Icon name={c3.confidence === 'unknown' ? 'check' : 'x'} size={14} strokeWidth={2.5} />
-                {t('checks.c3.confidence', 'Recommendation confidence: {{value}}', { value: c3.confidence })}
+                {t('checks.c3.confidence', 'Recommendation confidence: {{value}}', { value: confidenceWord })}
               </li>
               <li>
                 <Icon name={c3.recommendation_changed ? 'check' : 'x'} size={14} strokeWidth={2.5} />
@@ -530,7 +546,7 @@ function Check3({ data, runId }: { data: ProofChecks; runId: number }) {
             {result?.assumptions?.length ? (
               <ul className="proof-assumptions">
                 {result.assumptions.map((a) => (
-                  <li key={a}>{a}</li>
+                  <li key={a}>{apiText(a)}</li>
                 ))}
               </ul>
             ) : null}
@@ -611,7 +627,7 @@ function Check4({ data }: { data: ProofChecks }) {
                     <th scope="row">{r.label}</th>
                     <td className="r num proof-strong">{r.value}</td>
                     <td className="cell-wrap">
-                      {formula ? <code className="proof-code">{formula}</code> : <span className="muted">{t('checks.c4.noFormula', 'Formula not sent')}</span>}
+                      {formula ? <code className="proof-code">{apiText(formula)}</code> : <span className="muted">{t('checks.c4.noFormula', 'Formula not sent')}</span>}
                     </td>
                   </tr>
                 );

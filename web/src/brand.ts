@@ -1,4 +1,6 @@
 // The product brand in one place. Change the name here and every screen follows.
+// tagline and description are the English defaults for the page <title> and meta tags (vite.config.ts); on screen the
+// tagline is t('tagline') from web/src/i18n, so it follows the chosen language.
 export const BRAND = {
   name: 'Profyn',
   tagline: 'Know More. Earn Better.',
