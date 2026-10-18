@@ -58,7 +58,7 @@ const has = (dict: Record<string, string>, k: string) => k in dict || `${k}_othe
 const placeholders = (s: string) => [...s.matchAll(/\{\{\s*([\w.]+)[^}]*\}\}/g)].map((m) => m[1]).sort();
 
 /** Terms kept in Latin script in every language, plus numbers, placeholders and punctuation. */
-const ALLOWLIST = ['Profyn', 'AI', 'CSV', 'JSON', 'CM1', 'CM2', 'CM3', '₹', 'COD', 'UPI', 'Shopify', 'Meta Ads', 'Google Ads', 'Shiprocket', 'Razorpay'];
+const ALLOWLIST = ['Profyn', 'AI', 'CSV', 'JSON', 'CM1', 'CM2', 'CM3', '₹', 'COD', 'UPI', 'Shopify', 'Meta Ads', 'Google Ads', 'Shiprocket', 'Razorpay', 'Amazon', 'Flipkart', 'Myntra'];
 /** Language names are written in their own script on purpose (the switcher shows "English", "हिन्दी", "తెలుగు" in every language). */
 const ENDONYM_KEYS = new Set(['lang.en', 'lang.hi', 'lang.te']);
 
