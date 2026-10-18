@@ -1771,7 +1771,10 @@
     "pdfFailed": "Could not make the PDF. Use Print / Save as PDF.",
     "pdfMaking": "Making PDF…",
     "pdfButton": "Send {{month}} report on WhatsApp",
-    "openReport": "Monthly report · send as PDF"
+    "openReport": "Monthly report · send as PDF",
+    "pdfMessage": "Profyn report for {{month}} (PDF): {{url}}",
+    "linkCopied": "Report link copied (valid for 7 days)",
+    "copyLink": "Copy report link"
   },
   "shopify": {
     "never": "never",

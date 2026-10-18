@@ -1771,7 +1771,10 @@
     "pdfFailed": "PDF తయారు కాలేదు. ప్రింట్ / PDF గా సేవ్ చేయండి వాడండి.",
     "pdfMaking": "PDF తయారవుతోంది…",
     "pdfButton": "{{month}} రిపోర్ట్‌ను WhatsAppలో పంపండి",
-    "openReport": "నెలవారీ రిపోర్ట్ · PDF గా పంపండి"
+    "openReport": "నెలవారీ రిపోర్ట్ · PDF గా పంపండి",
+    "pdfMessage": "{{month}} Profyn రిపోర్ట్ (PDF): {{url}}",
+    "linkCopied": "రిపోర్ట్ లింక్ కాపీ అయింది (7 రోజులు చెల్లుతుంది)",
+    "copyLink": "రిపోర్ట్ లింక్ కాపీ చేయండి"
   },
   "shopify": {
     "never": "ఎప్పుడూ లేదు",
