@@ -175,7 +175,7 @@ export type InterventionKey =
   | 'add_handling_to_price'
   | 'none';
 
-export type Confidence = 'high' | 'low' | 'unknown';
+export type Confidence = 'high' | 'medium' | 'low' | 'unknown';
 
 /** Bootstrap evidence for a fix: level, 95% range and how often it gained money across resamples of the owner's orders. */
 export interface Evidence {

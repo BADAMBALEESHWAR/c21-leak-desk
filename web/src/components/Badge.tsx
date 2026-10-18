@@ -58,13 +58,14 @@ export function Unknown({ title }: { title?: string }) {
   );
 }
 
-export const CONFIDENCE_KEY: Record<Confidence, string> = { high: 'scenario.high', low: 'scenario.low', unknown: 'status.unknown' };
+export const CONFIDENCE_KEY: Record<Confidence, string> = { high: 'scenario.high', medium: 'evidence.mediumShort', low: 'scenario.low', unknown: 'status.unknown' };
 
 export function ConfidenceBadge({ confidence, prefix }: { confidence: Confidence; prefix?: string }) {
   const { t } = useTranslation();
   const word = CONFIDENCE_KEY[confidence] ? lower(t(CONFIDENCE_KEY[confidence])) : confidence;
   const text = prefix ? `${prefix} ${word}` : word;
   if (confidence === 'high') return <Pill tone="success">{text}</Pill>;
+  if (confidence === 'medium') return <Pill tone="primary">{text}</Pill>;
   if (confidence === 'low') return <Pill tone="warning">{text}</Pill>;
   return (
     <Pill tone="unknown" title={t('badge.confidenceUnknown', 'Confidence is unknown while facts are missing')}>
