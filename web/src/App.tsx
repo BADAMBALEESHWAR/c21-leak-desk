@@ -3,6 +3,7 @@ import { SESSION_ENDED, toErrorInfo, type ErrorInfo } from './api/client';
 import { isSampleSource, SAMPLE_SOURCES, type AttributionMode } from './api/types';
 import { useAuth, WORKSPACE_URL } from './auth/AuthContext';
 import { BRAND } from './brand';
+import { AskDrawer } from './components/AskDrawer';
 import { ButtonLink } from './components/Button';
 import { ErrorNote } from './components/ErrorNote';
 import { Icon } from './components/Icon';
@@ -13,18 +14,24 @@ import { Callout, SkeletonCards } from './components/ui';
 import { Toast } from './components/Toast';
 import { SAMPLE_NAMES } from './lib/labels';
 import { navigate, parseHash, replaceWithBareRoute, useHashLocation, type Location, type Route } from './lib/router';
+import { AiScreen } from './screens/AiScreen';
 import { ChangelogScreen } from './screens/ChangelogScreen';
 import { ChecksScreen } from './screens/ChecksScreen';
 import { DecisionScreen } from './screens/DecisionScreen';
 import { ImportScreen } from './screens/ImportScreen';
 import { LeaksScreen } from './screens/LeaksScreen';
 import { LedgerScreen } from './screens/LedgerScreen';
+import { OverviewScreen } from './screens/OverviewScreen';
+import { ProfileScreen } from './screens/ProfileScreen';
 import { PulseScreen } from './screens/PulseScreen';
 import { ReportScreen } from './screens/ReportScreen';
 import { ScenarioScreen } from './screens/ScenarioScreen';
+import { TrustScreen } from './screens/TrustScreen';
 import { useStore } from './state/store';
+import './styles/v2.css';
 
 const SCREENS: Record<Route, () => JSX.Element> = {
+  overview: OverviewScreen,
   import: ImportScreen,
   ledger: LedgerScreen,
   leaks: LeaksScreen,
@@ -34,6 +41,9 @@ const SCREENS: Record<Route, () => JSX.Element> = {
   checks: ChecksScreen,
   changelog: ChangelogScreen,
   report: ReportScreen,
+  trust: TrustScreen,
+  ai: AiScreen,
+  profile: ProfileScreen,
 };
 
 /** Read at load, before the router fills in a default route: "/app/" with no route opens the workspace's own start page. */
@@ -87,6 +97,8 @@ function useDeepLink(loc: Location, ready: boolean) {
         const ds = await importDataset({ source: load });
         imported = true;
         await runAnalysis(attribution, periodEnd, ds.dataset_id);
+        // A load without a screen of its own (bare /app/?load= or #/import?load=) lands on the overview.
+        if (loc.route === 'import') navigate('overview');
         if (order || worked || checks || about) setPending({ order, worked, checks, about });
       } catch (err) {
         setError({ info: toErrorInfo(err), fromImport: !imported });
@@ -156,12 +168,12 @@ export function App() {
     window.scrollTo(0, 0);
   }, [loc.route]);
 
-  // Workspace start: "/app/" opens the owner dashboard on the latest saved analysis, or Import when nothing is saved yet.
+  // Workspace start: "/app/" opens the overview on the latest saved analysis, or Import when nothing is saved yet.
   useEffect(() => {
     if (startRouted.current || !auth.ready || (auth.mode === 'account' && starting)) return;
     startRouted.current = true;
     if (auth.mode !== 'account' || !START_BARE || START_LOAD) return;
-    navigate(analysis ? 'pulse' : 'import');
+    navigate(analysis ? 'overview' : 'import');
   }, [auth.ready, auth.mode, starting, analysis]);
 
   if (!auth.ready) return <Opening />;
@@ -237,6 +249,7 @@ export function App() {
         </div>
       </div>
       <OrderDrawer />
+      <AskDrawer />
       <Toast />
     </>
   );

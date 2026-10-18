@@ -125,12 +125,18 @@ export function TopBar({ route, onError }: { route: Route; onError: (e: ErrorInf
 
         {!auth.ready ? null : account && auth.user && !auth.sessionEnded ? (
           <span className="user-chip">
-            <span className="avatar" aria-hidden="true">
-              {(email ?? auth.user.sub).charAt(0).toUpperCase()}
-            </span>
-            <span className="user-email" title={email ?? undefined}>
-              {email ?? t('topbar.signedIn')}
-            </span>
+            <a className="user-chip-link" href={hrefFor('profile')} title={t('topbar.profile', 'Your profile')}>
+              {auth.user.avatarUrl ? (
+                <img className="avatar avatar-img" src={auth.user.avatarUrl} alt="" width={28} height={28} referrerPolicy="no-referrer" />
+              ) : (
+                <span className="avatar" aria-hidden="true">
+                  {(auth.user.name ?? email ?? auth.user.sub).charAt(0).toUpperCase()}
+                </span>
+              )}
+              <span className="user-email" title={email ?? undefined}>
+                {auth.user.name ?? email ?? t('topbar.signedIn')}
+              </span>
+            </a>
             <Button variant="ghost" size="sm" icon="log-out" className="signout-btn" onClick={auth.signOut}>
               {t('actions.signOut')}
             </Button>
