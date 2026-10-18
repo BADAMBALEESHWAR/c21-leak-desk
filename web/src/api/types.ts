@@ -445,6 +445,8 @@ export type AnalysisResponse = AnalysisResult & {
 };
 
 export type ScenarioResponse = ScenarioResult & {
+  /** Bootstrap evidence per fix under this scenario. */
+  evidence?: Record<string, Evidence>;
   scenario_id: string;
   analysis_id: string;
   observed: Observed;

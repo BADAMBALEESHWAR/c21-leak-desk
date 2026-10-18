@@ -431,7 +431,8 @@ function DecisionForm({ a, s, rec, candidates, onSaved }: FormProps) {
   const { t } = useTranslation();
   const groupName = useId();
   // Statistical evidence (bootstrap over the owner's orders) decides pre-selection at the observed baseline; under a scenario the engine's own rule stands.
-  const ev = !s ? a.evidence?.[rec.intervention] : undefined;
+  const evMap = s ? s.evidence : a.evidence;
+  const ev = evMap?.[rec.intervention];
   const preselect = rec.preselect || (!!ev && ev.level !== 'low' && rec.intervention !== 'none');
   const [choice, setChoice] = useState<string>(preselect ? rec.intervention : '');
   const [custom, setCustom] = useState('');
@@ -569,7 +570,7 @@ function DecisionForm({ a, s, rec, candidates, onSaved }: FormProps) {
                 </span>
               </span>
               <span className="choice-rule">{apiText(o.rule)}</span>
-              {!s && isRec && a.evidence?.[o.key] ? <EvidenceBadge evidence={a.evidence[o.key]} /> : null}
+              {isRec && evMap?.[o.key] ? <EvidenceBadge evidence={evMap[o.key]} /> : null}
             </label>
           );
         })}
