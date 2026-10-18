@@ -1,0 +1,46 @@
+{
+  "id": "amazon_settlement",
+  "label": "Amazon settlement report (flat file V2)",
+  "marketplace": "amazon",
+  "match_headers": ["settlement-id", "settlement-start-date", "transaction-type", "order-id", "amount-type", "amount-description", "amount", "posted-date", "sku", "quantity-purchased"],
+  "map": {
+    "order_id": "order-id",
+    "date": ["posted-date", "posted-date-time"],
+    "gross_inr": "amount",
+    "discount_inr": "amount",
+    "refund_inr": "amount",
+    "payment_fee_inr": "amount",
+    "shipping_inr": "amount",
+    "return_cost_inr": "amount",
+    "returned": "transaction-type",
+    "product_id": "sku",
+    "units": "quantity-purchased",
+    "channel": "marketplace-name",
+    "product_cost_inr": null,
+    "recovered_product_cost_inr": null
+  },
+  "transforms": {
+    "date": { "op": "date" }
+  },
+  "pivot": {
+    "key": "order-id",
+    "value": "amount",
+    "rules": [
+      { "field": "gross_inr", "when": { "transaction-type": "^order$", "amount-type": "^itemprice$", "amount-description": "^principal$" }, "abs": true, "default": null },
+      { "field": "discount_inr", "when": { "transaction-type": "^order$", "amount-type": "promotion" }, "abs": true, "default": 0 },
+      { "field": "refund_inr", "when": { "transaction-type": "^refund$", "amount-type": "^itemprice$", "amount-description": "^principal$" }, "abs": true, "default": 0 },
+      { "field": "payment_fee_inr", "when": { "transaction-type": "^order$", "amount-type": "^itemfees$", "amount-description": "commission|closing|technology|collection|referral" }, "abs": true, "default": null },
+      { "field": "shipping_inr", "when": { "transaction-type": "^order$", "amount-type": "^itemfees$", "amount-description": "fba|shipping|weight|pick|pack|fulfil|easyship" }, "abs": true, "default": null },
+      { "field": "return_cost_inr", "when": { "transaction-type": "^refund$", "amount-type": "^itemfees$" }, "abs": true, "default": null },
+      { "field": "returned", "when": { "transaction-type": "^refund$" }, "exists": true }
+    ]
+  },
+  "notes": [
+    "The settlement file has one row per amount per order; rows are grouped by order-id and summed by amount-type and amount-description.",
+    "Marketplace fees (referral commission, closing, technology and collection fees) are counted as payment_fee_inr; FBA, weight-handling and shipping fees as shipping_inr.",
+    "An order with a Refund transaction is counted as returned; refund fees become return_cost_inr.",
+    "Product cost is not in the settlement report: it stays unknown (null), never zero.",
+    "Rows without an order-id (the settlement summary line, reserve and service fees) are skipped.",
+    "Amazon writes tab-separated .txt files; upload them as they are."
+  ]
+}

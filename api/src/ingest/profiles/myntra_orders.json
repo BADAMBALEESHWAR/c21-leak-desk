@@ -1,0 +1,32 @@
+{
+  "id": "myntra_orders",
+  "label": "Myntra Partner Portal orders report",
+  "marketplace": "myntra",
+  "match_headers": ["store order id", "order release id", "order line id", "seller sku code", "order status", "created on", "total mrp", "discount", "coupon discount", "final amount", "return creation date", "rto creation date"],
+  "map": {
+    "order_id": ["store order id", "order release id", "order id"],
+    "date": ["created on", "order date"],
+    "gross_inr": ["total mrp", "mrp"],
+    "discount_inr": "discount",
+    "returned": ["return creation date", "rto creation date"],
+    "product_id": ["seller sku code", "sku id", "style id"],
+    "payment_type": ["payment method", "payment type", "payment mode"],
+    "product_cost_inr": null,
+    "shipping_inr": null,
+    "payment_fee_inr": null,
+    "refund_inr": null,
+    "return_cost_inr": null,
+    "recovered_product_cost_inr": null
+  },
+  "constants": { "channel": "myntra" },
+  "transforms": {
+    "date": { "op": "date" },
+    "discount_inr": { "op": "add", "column": "coupon discount" },
+    "returned": { "op": "present", "columns": ["return creation date", "rto creation date"] }
+  },
+  "notes": [
+    "gross is the MRP total; discount adds the coupon discount to the trade discount.",
+    "A return or RTO creation date marks the order as returned.",
+    "Commission, shipping and payment fees are in the Myntra settlement report, not the orders report: they stay unknown (null), never zero."
+  ]
+}

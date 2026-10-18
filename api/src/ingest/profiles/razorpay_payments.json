@@ -1,0 +1,34 @@
+{
+  "id": "razorpay_payments",
+  "label": "Razorpay payments export",
+  "marketplace": "razorpay",
+  "match_headers": ["id", "amount", "currency", "status", "order_id", "method", "amount_refunded", "refund_status", "captured", "fee", "tax", "created_at"],
+  "filter": { "column": "status", "pattern": "^(captured|refunded)$" },
+  "map": {
+    "order_id": ["order_id", "id"],
+    "date": "created_at",
+    "gross_inr": "amount",
+    "refund_inr": "amount_refunded",
+    "payment_fee_inr": "fee",
+    "returned": "refund_status",
+    "payment_type": "method",
+    "customer_id": ["email", "contact"],
+    "discount_inr": null,
+    "product_cost_inr": null,
+    "shipping_inr": null,
+    "return_cost_inr": null,
+    "recovered_product_cost_inr": null
+  },
+  "transforms": {
+    "date": { "op": "date" },
+    "returned": { "op": "match", "pattern": "partial|full" },
+    "customer_id": { "op": "hash" }
+  },
+  "notes": [
+    "Only captured or refunded payments are read; failed and authorised-only attempts are skipped.",
+    "Razorpay's fee already includes the GST shown in tax, so payment_fee_inr = fee.",
+    "Dashboard CSV exports show rupees. API (JSON) exports are in paise: divide by 100 before uploading.",
+    "A refund_status of partial or full counts as returned.",
+    "Email (or phone) is hashed into customer_id; the value itself is not stored."
+  ]
+}
