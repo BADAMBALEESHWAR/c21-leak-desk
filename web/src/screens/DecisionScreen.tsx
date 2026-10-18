@@ -447,6 +447,7 @@ function DecisionForm({ a, s, rec, candidates, onSaved }: FormProps) {
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
+    if (drafting) return; // the draft is still loading; Save is disabled until it lands
     setErrors({});
     setFormError(null);
     const intervention = choice === CUSTOM ? custom.trim() : choice;
@@ -687,7 +688,7 @@ function DecisionForm({ a, s, rec, candidates, onSaved }: FormProps) {
       <ErrorNote error={formError} />
 
       <div className="card-actions">
-        <Button variant="primary" size="lg" type="submit" icon="check" disabled={saving}>
+        <Button variant="primary" size="lg" type="submit" icon="check" disabled={saving || drafting} title={drafting ? t('actions.drafting') : undefined}>
           {saving ? t('actions.saving') : t('actions.saveDecision')}
         </Button>
       </div>
