@@ -2529,5 +2529,16 @@
     "decisions": "Decisions",
     "signIns": "Sign-ins",
     "audit": "Activity log entries"
+  },
+  "impact": {
+    "title": "What this change moved",
+    "sub": "You changed {{what}}. Everything below comes from the same calculation on your orders.",
+    "caption": "Lines that changed",
+    "none": "No cost line moved; only the treatment of existing figures changed.",
+    "unknown": "{{n}} orders still have missing facts and are left out of these totals, never counted as zero.",
+    "recSame": "Its gain is unchanged ({{inr}}): this change does not touch what this fix works on.",
+    "recMoved": "Its gain moved from {{was}} to {{now}} under this scenario.",
+    "was": "was {{v}}",
+    "atBaseline": "At baseline"
   }
 }
