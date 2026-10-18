@@ -2486,7 +2486,8 @@
     "low": "Low confidence",
     "range": "95% range {{low}} to {{high}}",
     "pGain": "gains in {{pct}}% of resamples",
-    "tip": "Your orders were resampled many times. The fix gained money in {{pct}}% of them, and the change stayed between {{low}} and {{high}} 95% of the time. {{reason}}"
+    "tip": "Your orders were resampled many times. The fix gained money in {{pct}}% of them, and the change stayed between {{low}} and {{high}} 95% of the time. {{reason}}",
+    "useBoth": "Use this recommendation to save a decision or to test it in the Scenario."
   },
   "askbar": {
     "title": "Ask Profyn",
