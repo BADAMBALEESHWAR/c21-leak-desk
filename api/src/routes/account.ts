@@ -7,9 +7,9 @@ import { dbState } from '../db.js';
 import { ah, HttpError } from '../errors.js';
 import { connectors, publicView } from '../connectors/store.js';
 import { savedMappings } from '../ingest/mapper.js';
-import { AutopilotModel } from '../models/index.js';
+import { AnalysisModel, AuditEventModel, AutopilotModel, DatasetModel, DecisionModel, LoginModel, ScenarioModel } from '../models/index.js';
 import { analyses, datasets, decisions, scenarios } from '../repo.js';
-import { removePrefixes } from '../storage.js';
+import { removePrefixes, storageKind } from '../storage.js';
 import { logins, users } from '../users.js';
 
 // Trust (v2 §5.2): the owner's audit log, a full export of everything saved under their account, and hard delete.
@@ -72,6 +72,33 @@ export function accountRouter(oauth: OAuthSettings = oauthFromEnv()) {
       const account = owner(req);
       const events = await audit.list(account, 200);
       res.json(events.map((e) => ({ at: e.at, kind: e.kind, action: e.kind, detail: describe(e), data: e.detail })));
+    }),
+  );
+
+  /** Where the account's data lives and how much of it there is, for the Profile page (counts only, no content). */
+  router.get(
+    '/me/data',
+    ah(async (req, res) => {
+      const account = owner(req);
+      const connected = dbState() === 'connected';
+      const analysisIds = connected ? (await AnalysisModel.find({ account }).select('_id').lean()).map((a) => String(a._id)) : [];
+      const count = async (f: () => Promise<number>) => (connected ? f() : 0);
+      const [dsN, anN, scN, dcN, lgN, auN] = await Promise.all([
+        count(() => DatasetModel.countDocuments({ account })),
+        count(() => AnalysisModel.countDocuments({ account })),
+        count(() => ScenarioModel.countDocuments({ analysis_id: { $in: analysisIds } })),
+        count(() => DecisionModel.countDocuments({ account })),
+        count(() => LoginModel.countDocuments({ user_id: account })),
+        count(() => AuditEventModel.countDocuments({ account })),
+      ]);
+      const s3 = storageKind() === 's3';
+      res.json({
+        database: connected ? 'MongoDB' : 'memory',
+        region: s3 ? (process.env.AWS_REGION ?? 'ap-south-1') : 'local',
+        file_storage: s3 ? 's3' : 'local',
+        backups: s3 && connected ? 'hourly' : 'none',
+        counts: { datasets: dsN, analyses: anN, scenarios: scN, decisions: dcN, sign_ins: lgN, audit_events: auN },
+      });
     }),
   );
 
