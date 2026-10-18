@@ -9,7 +9,8 @@ import { decisionMarkdown } from '../export/markdown.js';
 import { decisions, newId, scenarios, type DecisionRecord } from '../repo.js';
 import { DecisionRequestSchema } from '../schema/orders.js';
 import { put } from '../storage.js';
-import { loadAnalysis, marginsFor } from './analyses.js';
+import { ledgerOptionsOf, loadAnalysis, marginsFor } from './analyses.js';
+import { evidenceFor } from '../stats/evidence.js';
 
 export const decisionsRouter = Router();
 
@@ -28,6 +29,8 @@ export async function createDecision(req: Request, analysisId: string, rawBody: 
   const a = analysis.result;
   const rec = scenario?.result.recommendation ?? a.recommendation;
   const known = body.intervention in INTERVENTIONS;
+  // At the observed baseline a saved fix carries its statistical confidence (bootstrap over the owner's orders), not the engine's "unknown".
+  const evidence = !scenario && known && body.intervention !== 'none' ? evidenceFor(analysis._id, dataset.rows, ledgerOptionsOf(analysis))[body.intervention as keyof ReturnType<typeof evidenceFor>] : undefined;
 
   // The server owns the snapshot so a decision can be re-run exactly (R13 note, §7).
   const assumptions: Record<string, unknown> = {
@@ -59,7 +62,7 @@ export async function createDecision(req: Request, analysisId: string, rawBody: 
     ...(body.notes ? { notes: body.notes } : {}),
     assumptions,
     expected_delta_inr: body.expected_delta_inr,
-    confidence: opts.confidence ?? (rec.intervention === body.intervention ? rec.confidence : known ? 'low' : 'custom'),
+    confidence: evidence?.level ?? opts.confidence ?? (rec.intervention === body.intervention ? rec.confidence : known ? 'low' : 'custom'),
     test_30d: body.test_30d,
     stop_rule: body.stop_rule,
     owner: body.owner,
