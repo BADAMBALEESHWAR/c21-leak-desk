@@ -8,6 +8,7 @@ interface Formatters {
   money: Intl.NumberFormat;
   count: Intl.NumberFormat;
   oneDecimal: Intl.NumberFormat;
+  twoDecimals: Intl.NumberFormat;
 }
 
 const formatters = new Map<string, Formatters>();
@@ -22,6 +23,7 @@ function fmt(): Formatters {
       money: new Intl.NumberFormat(tag, { maximumFractionDigits: 2 }),
       count: new Intl.NumberFormat(tag, { maximumFractionDigits: 0 }),
       oneDecimal: new Intl.NumberFormat(tag, { maximumFractionDigits: 1 }),
+      twoDecimals: new Intl.NumberFormat(tag, { maximumFractionDigits: 2 }),
     };
     formatters.set(locale, f);
   }
@@ -48,6 +50,12 @@ export function formatSignedInr(n: number): string {
 export function formatPct(n: number): string {
   const body = `${fmt().oneDecimal.format(Math.abs(n))}%`;
   return n < 0 && !isZero(n, 1) ? `${MINUS}${body}` : body;
+}
+
+/** Margin percent with up to two decimals: 50% · 41.25% · −3.5% */
+export function formatMarginPct(n: number): string {
+  const body = `${fmt().twoDecimals.format(Math.abs(n))}%`;
+  return n < 0 && !isZero(n, 2) ? `${MINUS}${body}` : body;
 }
 
 export function formatSignedPct(n: number): string {
@@ -92,6 +100,16 @@ export function formatDate(iso: string): string {
   const d = new Date(day ? `${iso}T00:00:00` : iso);
   if (Number.isNaN(d.getTime())) return iso;
   return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+
+/** A calendar day some days after a date or timestamp, as YYYY-MM-DD (local time). */
+export function addDays(iso: string, days: number): string {
+  const day = /^\d{4}-\d{2}-\d{2}$/.test(iso);
+  const d = new Date(day ? `${iso}T00:00:00` : iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  d.setDate(d.getDate() + days);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
 export function plural(n: number, one: string, many: string): string {

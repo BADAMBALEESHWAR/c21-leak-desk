@@ -1,4 +1,4 @@
-import type { LeakCause, LineSource, OverrideKey } from '../api/types';
+import type { LeakCause, LineSource, OrderResult, OverrideKey } from '../api/types';
 
 /** Same wording as the engine's leak labels, for places that only have the cause key. */
 export const LEAK_LABELS: Record<LeakCause, string> = {
@@ -27,6 +27,31 @@ export const OVERRIDE_LABELS: Record<OverrideKey | 'assume_unknown_refund', stri
 };
 
 export const ATTRIBUTION_LABEL = 'Attribution is allocation, not causation.';
+
+/** Shown beside every ads value and channel-spend line (translated at the call site with this key). */
+export const ALLOCATED_KEY = 'attribution.allocated';
+export const ALLOCATED_EN = 'allocated, not caused';
+/** The attribution toggle's tooltip. */
+export const ATTRIBUTION_TIP_KEY = 'attribution.tip';
+export const ATTRIBUTION_TIP_EN =
+  'Attribution is allocation, not causation. Ads and channel spend are allocated, not caused: moving them between orders or channels never changes the total.';
+
+/**
+ * A full return (refund equals revenue after discount) where only part of the product cost came back to stock.
+ * Same test as the engine's leak cause, read from the order's inputs when the cause is not set.
+ */
+export function fullReturnPartialRecovery(o: OrderResult): { recovered: number; cost: number } | null {
+  const { product_cost: cost, recovered, refund, gross, discount } = o.inputs;
+  // A late refund is a kept order in its period; it is shown as pending instead.
+  if (!o.returned || o.late_refund || cost === null || recovered === null || refund === null) return null;
+  if (o.leak_cause !== 'full_return_partial_recovery' && (refund !== gross - discount || recovered >= cost)) return null;
+  return { recovered, cost };
+}
+
+/** Sample sources are demo data; uploads start with "upload:". */
+export function isUploadSource(source: string | undefined | null): boolean {
+  return typeof source === 'string' && source.startsWith('upload:');
+}
 
 /**
  * True only when the handling estimate was applied: a default above zero and at least one row without handling_inr.
@@ -68,6 +93,7 @@ export const DRILL_TAGS: Record<string, { tag: string; key?: string; tone: 'prim
   refund_over_gross: { tag: 'Invalid', key: 'status.invalid', tone: 'danger' },
   recovery_400: { tag: 'Recovery', key: 'scenario.recovery', tone: 'teal' },
   bad_schema: { tag: 'Schema', key: 'status.schema', tone: 'danger' },
+  bad_values: { tag: 'Invalid', key: 'status.invalid', tone: 'danger' },
 };
 
 /** Plain names for the built-in samples. */

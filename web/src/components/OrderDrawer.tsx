@@ -3,8 +3,8 @@ import type { AnalysisResponse, OrderResult, WorkedOrderResult } from '../api/ty
 import { BridgeChart } from '../charts/BridgeChart';
 import { WaterfallChart, WaterfallNotes } from '../charts/WaterfallChart';
 import { BRAND } from '../brand';
-import { formatInr, formatPct, plural } from '../lib/format';
-import { handlingEstimateUsed, LEAK_LABELS } from '../lib/labels';
+import { formatCount, formatDate, formatDecimal, formatInr, formatPct, plural } from '../lib/format';
+import { ALLOCATED_EN, ALLOCATED_KEY, fullReturnPartialRecovery, handlingEstimateUsed, LEAK_LABELS } from '../lib/labels';
 import { useStore, type BridgeFocus } from '../state/store';
 import { Pill } from './Badge';
 import { Button } from './Button';
@@ -13,9 +13,32 @@ import { ReconciliationLine } from './Reconciliation';
 import { Drawer } from './Drawer';
 import { AboutDetail, ChecksDetail } from './InfoDrawers';
 import { Money } from './Money';
+import { Provenance } from './Provenance';
 import { Callout, Skeleton } from './ui';
 
-export function OrderPills({ order }: { order: OrderResult }) {
+const plainNumber = (n: number) => (Number.isInteger(n) ? formatCount(n) : formatDecimal(n));
+
+/** "Full return · recovery 350 of 400" for a fully refunded return where only part of the stock cost came back. */
+export function FullReturnChip({ order }: { order: OrderResult }) {
+  const { t } = useTranslation();
+  const fr = fullReturnPartialRecovery(order);
+  if (!fr) return null;
+  return (
+    <Pill
+      tone="danger"
+      icon="alert-triangle"
+      className="pill-full-return"
+      title={t('status.fullReturnTip', 'Refunded in full; {{recovered}} of the {{cost}} product cost came back to stock.', {
+        recovered: formatInr(fr.recovered),
+        cost: formatInr(fr.cost),
+      })}
+    >
+      {t('status.fullReturn', 'Full return · recovery {{recovered}} of {{cost}}', { recovered: plainNumber(fr.recovered), cost: plainNumber(fr.cost) })}
+    </Pill>
+  );
+}
+
+export function OrderPills({ order, corrected = false }: { order: OrderResult; corrected?: boolean }) {
   const { t } = useTranslation();
   return (
     <>
@@ -42,12 +65,69 @@ export function OrderPills({ order }: { order: OrderResult }) {
           {t('status.syntheticTag')}
         </Pill>
       ) : null}
+      <FullReturnChip order={order} />
+      {corrected ? <Provenance kind="corrected" title={t('status.correctedTip', 'A value on this order was corrected on the import report; the original is kept.')} /> : null}
     </>
   );
 }
 
-function OrderDetail({ order, periodEnd }: { order: OrderResult; periodEnd: string | null }) {
+/** Product cost − recovered = net product cost, for a returned order whose recovery is known. */
+function RecoveryLine({ order }: { order: OrderResult }) {
+  const { t } = useTranslation();
+  const { product_cost: cost, recovered } = order.inputs;
+  if (!order.returned || cost === null || recovered === null) return null;
+  const partial = recovered < cost;
+  return (
+    <section className={`recovery-card${partial && !order.late_refund ? ' is-partial' : ''}`} aria-label={t('drawer.recovery', 'Recovery')}>
+      <h3 className="section-label">{t('drawer.recovery', 'Recovery')}</h3>
+      <div className="formula-card formula-card-3">
+        <div>
+          <span className="compare-label">{t('drawer.productCost', 'Product cost')}</span>
+          <span className="compare-value">
+            <Money value={cost} tone="plain" />
+          </span>
+        </div>
+        <span className="formula-op" aria-hidden="true">
+          −
+        </span>
+        <div>
+          <span className="compare-label">{t('drawer.recovered', 'Recovered to stock')}</span>
+          <span className="compare-value">
+            <Money value={recovered} tone="plain" />
+          </span>
+        </div>
+        <span className="formula-op" aria-hidden="true">
+          =
+        </span>
+        <div>
+          <span className="compare-label">{t('drawer.netProductCost', 'Net product cost')}</span>
+          <span className="compare-value">
+            <Money value={cost - recovered} tone="plain" />
+          </span>
+        </div>
+      </div>
+      <p className="compare-note">
+        {order.late_refund
+          ? t('drawer.recoveryPending', 'Not yet recognised in this period: the refund is dated after the period end.')
+          : partial
+            ? t('drawer.recoveryPartial', 'Recovery {{recovered}} of {{cost}}: {{lost}} of stock cost did not come back.', {
+                recovered: formatInr(recovered),
+                cost: formatInr(cost),
+                lost: formatInr(cost - recovered),
+              })
+            : t('drawer.recoveryFull', 'All of the product cost came back to stock.')}
+      </p>
+    </section>
+  );
+}
+
+function OrderDetail({ order, periodEnd, attribution }: { order: OrderResult; periodEnd: string | null; attribution: AnalysisResponse['attribution'] | null }) {
+  const { t } = useTranslation();
   const flags = order.flags.filter((f) => f !== 'late_refund' || !order.late_refund);
+  const ads = order.lines.find((l) => l.key === 'ads');
+  const adsInr = ads && ads.amount_inr !== null ? Math.abs(ads.amount_inr) : null;
+  const adjustment =
+    order.late_refund && order.contribution_inr !== null && order.recognised_contribution_inr !== null ? order.recognised_contribution_inr - order.contribution_inr : null;
   return (
     <div className="drawer-stack">
       <dl className="kv kv-2">
@@ -87,28 +167,45 @@ function OrderDetail({ order, periodEnd }: { order: OrderResult; periodEnd: stri
       ) : null}
 
       {order.late_refund ? (
-        <div className="compare-card">
+        <div className="compare-card compare-card-late">
           <div>
-            <span className="compare-label">In period</span>
+            <span className="compare-label">{t('late.periodView', 'Period view (as reported)')}</span>
             <span className="compare-value">
               <Money value={order.contribution_inr} tone="contribution" />
             </span>
           </div>
           <div>
-            <span className="compare-label">If recognised</span>
+            <span className="compare-label">{t('late.restatedView', 'Restated (refund recognised)')}</span>
             <span className="compare-value">
               <Money value={order.recognised_contribution_inr} tone="contribution" />
             </span>
           </div>
+          {adjustment !== null ? (
+            <p className="compare-adjust">
+              <span>{t('late.adjustment', 'Prior-period adjustment')}</span> <Money value={adjustment} />
+            </p>
+          ) : null}
           <p className="compare-note">
-            Refund dated {order.refund_date} falls after the period end{periodEnd ? ` (${periodEnd})` : ''}, so it is pending.
+            {t('late.drawerNote', 'Refund dated {{date}} falls after the period end{{end}}. The period figure is never overwritten; the restated view sits beside it.', {
+              date: order.refund_date ? formatDate(order.refund_date) : '',
+              end: periodEnd ? ` (${formatDate(periodEnd)})` : '',
+            })}
           </p>
         </div>
       ) : null}
 
+      <RecoveryLine order={order} />
+
       <section className="drawer-section" aria-label="Waterfall">
         <h3 className="section-label">Waterfall</h3>
         <WaterfallChart lines={order.lines} contribution={order.contribution_inr} label={order.late_refund ? 'In period' : 'Contribution'} />
+        {attribution === 'channel' ? (
+          <p className="field-hint attr-note">{t('drawer.adsChannel', 'Ads move to the channel line in this mode; channel spend is {{note}}.', { note: t(ALLOCATED_KEY, ALLOCATED_EN) })}</p>
+        ) : adsInr ? (
+          <p className="field-hint attr-note">
+            {t('drawer.adsLine', 'Ads {{inr}}', { inr: formatInr(adsInr) })} · {t(ALLOCATED_KEY, ALLOCATED_EN)}
+          </p>
+        ) : null}
       </section>
 
       {order.unknown_fields.length > 0 ? (
@@ -154,7 +251,7 @@ function WorkedDetail({ data }: { data: WorkedOrderResult }) {
   );
 }
 
-const FOCUS_LABEL: Record<BridgeFocus, string> = { gross: 'Gross sales', net_sales: 'Net sales', contribution: 'Contribution' };
+const FOCUS_LABEL: Record<BridgeFocus, string> = { gross: 'Gross sales', net_sales: 'Net sales', contribution: 'Operational contribution' };
 
 function BridgeDetail({ a, focus }: { a: AnalysisResponse; focus: BridgeFocus }) {
   const lines = a.bridge ?? [];
@@ -195,7 +292,7 @@ function BridgeDetail({ a, focus }: { a: AnalysisResponse; focus: BridgeFocus })
         </p>
       ) : null}
       {a.attribution === 'channel' ? (
-        <p className="field-hint">Channel mode: ads move off the orders and channel spend is deducted once, at the channel line.</p>
+        <p className="field-hint">Channel mode: ads move off the orders and channel spend is deducted once, at the channel line. Channel spend is allocated, not caused.</p>
       ) : null}
       <ReconciliationLine rec={a.reconciliation} />
     </div>
@@ -280,7 +377,7 @@ function MarginDetail({ a }: { a: AnalysisResponse }) {
 }
 
 export function OrderDrawer() {
-  const { drawer, drawerOpen, closeDrawer, analysis } = useStore();
+  const { drawer, drawerOpen, closeDrawer, analysis, correctedOrderIds } = useStore();
 
   let title = '';
   let meta = null;
@@ -291,10 +388,10 @@ export function OrderDrawer() {
     meta = (
       <>
         <span className="drawer-date">{o.date}</span>
-        <OrderPills order={o} />
+        <OrderPills order={o} corrected={(correctedOrderIds ?? []).includes(o.order_id)} />
       </>
     );
-    body = <OrderDetail order={o} periodEnd={analysis?.period_end ?? null} />;
+    body = <OrderDetail order={o} periodEnd={analysis?.period_end ?? null} attribution={analysis?.attribution ?? null} />;
   } else if (drawer?.kind === 'worked') {
     title = 'Worked example order';
     meta = drawer.data ? (
