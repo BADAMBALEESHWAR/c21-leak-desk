@@ -5,7 +5,7 @@
   "description": "Order Contribution and Profit Leak Desk (Fynd x NMIMS case C21)",
   "scripts": {
     "setup": "npm install && npm --prefix api install && npm --prefix web install",
-    "test": "vitest run",
+    "test": "vitest run --exclude tests/perf.test.ts && vitest run tests/perf.test.ts",
     "check": "node scripts/check.mjs",
     "ui:smoke": "node scripts/ui-smoke.mjs",
     "dev:api": "npm --prefix api run dev",

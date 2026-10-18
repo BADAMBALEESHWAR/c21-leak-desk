@@ -4,11 +4,12 @@ import { INTERVENTIONS } from '../engine/scenario.js';
 import { ENGINE_VERSION, type InterventionKey } from '../engine/types.js';
 import { canSee, accountOf, type AuthSettings } from '../auth.js';
 import { ah, HttpError, notFound } from '../errors.js';
+import { assumedInputsFor, checkInFor, decisionExport, startingStateFor } from '../export/decision.js';
 import { decisionMarkdown } from '../export/markdown.js';
 import { decisions, newId, scenarios, type DecisionRecord } from '../repo.js';
 import { DecisionRequestSchema } from '../schema/orders.js';
 import { put } from '../storage.js';
-import { loadAnalysis } from './analyses.js';
+import { loadAnalysis, marginsFor } from './analyses.js';
 
 export const decisionsRouter = Router();
 
@@ -40,8 +41,10 @@ decisionsRouter.post(
       observed_recovery_pct: a.observed.recovery_pct,
       engine_version: ENGINE_VERSION,
       ...(scenario ? { scenario_notes: scenario.result.assumptions } : {}),
+      ...(body.fixed_costs_inr !== undefined ? { fixed_costs_inr: body.fixed_costs_inr } : {}),
       ...(body.assumptions ? { client_notes: body.assumptions } : {}),
     };
+    const savedAt = new Date();
 
     const w = await workedOrder();
     const record: DecisionRecord = {
@@ -74,14 +77,28 @@ decisionsRouter.post(
           check3: { unknown_orders: a.totals.unknown_count, confidence: rec.confidence },
         },
       },
-      saved_at: new Date(),
+      ...(body.fixed_costs_inr !== undefined ? { fixed_costs_inr: body.fixed_costs_inr } : {}),
+      starting_state: startingStateFor(a, dataset.source, marginsFor(a).margins, body.fixed_costs_inr),
+      check_in_30_days: checkInFor(body.intervention, a, body.expected_delta_inr, savedAt, scenario ? scenario.result.scenario.contribution_inr : undefined),
+      assumed_inputs: assumedInputsFor(a, scenario?.overrides ?? null, body.fixed_costs_inr),
+      saved_at: savedAt,
     };
-    // With sign-in on, a guest's decision lives in the demo workspace (memory) and is never written to the database.
+    // With sign-in on, a guest's decision is in the demo workspace; it is saved like any other, under account "guest".
     const demoWorkspace = (req.app.locals.auth as AuthSettings).enabled && !req.user;
     const persisted = await decisions.save(record);
     await put(`exports/decision-${record._id}.md`, decisionMarkdown(record), 'text/markdown').catch(() => undefined);
     req.log.info({ analysis_id: analysis._id, decision_id: record._id, persisted }, 'decision saved');
-    res.status(201).json({ decision_id: record._id, saved_at: record.saved_at, assumptions, engine_version: ENGINE_VERSION, persisted, workspace: demoWorkspace ? 'demo' : req.user ? 'account' : 'shared' });
+    res.status(201).json({
+      decision_id: record._id,
+      saved_at: record.saved_at,
+      assumptions,
+      engine_version: ENGINE_VERSION,
+      persisted,
+      workspace: demoWorkspace ? 'demo' : req.user ? 'account' : 'shared',
+      check_in_30_days: record.check_in_30_days,
+      assumed_inputs: record.assumed_inputs,
+      export_url: `/api/v1/decisions/${record._id}/export?format=json`,
+    });
   }),
 );
 
@@ -121,8 +138,7 @@ decisionsRouter.get(
     const format = req.query.format === 'json' ? 'json' : 'md';
     res.setHeader('Content-Disposition', `attachment; filename="decision-${d._id}.${format}"`);
     if (format === 'json') {
-      const { _id, ...rest } = d;
-      res.type('application/json').send(JSON.stringify({ decision_id: _id, ...rest }, null, 2));
+      res.type('application/json').send(JSON.stringify(decisionExport(d), null, 2));
     } else {
       res.type('text/markdown; charset=utf-8').send(decisionMarkdown(d));
     }

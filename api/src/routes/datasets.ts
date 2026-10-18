@@ -5,6 +5,7 @@ import { dbState } from '../db.js';
 import { defaultPeriodEnd, validateRows, type SourceFile } from '../engine/validate.js';
 import { templateCsv } from '../export/csv.js';
 import { canSee, accountOf } from '../auth.js';
+import { correctDataset, CorrectionRequestSchema, correctedOrderIds, MAX_REJECTED_ROWS, rejectedRowsOf } from '../corrections.js';
 import { ah, HttpError, notFound } from '../errors.js';
 import { parseCsv, parseJsonPayload, parseJsonText, type Ingested } from '../ingest.js';
 import { analyses, datasets, newId, type DatasetRecord } from '../repo.js';
@@ -107,6 +108,10 @@ const summary = (d: DatasetRecord) => ({
   period_end: d.period_end,
   schema_version: d.schema_version,
   ...(d.files ? { files: d.files } : {}),
+  ...(d.supersedes ? { supersedes: d.supersedes } : {}),
+  rejected_rows: d.rejected_rows ?? [],
+  corrections: d.corrections ?? [],
+  corrected_order_ids: correctedOrderIds(d.corrections),
 });
 
 /** Adding to saved data: the later of two ISO dates. */
@@ -183,6 +188,8 @@ datasetsRouter.post(
     if (rows.length > config.maxRows) {
       throw new HttpError(413, 'file_too_large', `Saved orders plus this upload come to ${rows.length.toLocaleString('en-IN')}; the limit is ${config.maxRows.toLocaleString('en-IN')}.`, { hint: 'Start a new dataset for a later period.' });
     }
+    const rejectedHere = rejectedRowsOf(v.flags, incoming.ingested.orders, { line_offset: incoming.ingested.line_offset, files: incoming.files });
+    const rejectedRows = [...(base?.rejected_rows ?? []), ...rejectedHere].slice(0, MAX_REJECTED_ROWS);
     const files = base ? [...(base.files ?? [{ name: base.source.replace(/^upload:/, ''), rows: base.rows.length }]), ...thisUpload] : incoming.files ? thisUpload : undefined;
     for (const raw of incoming.raw ?? []) await put(`uploads/${id}-${safeName(raw.name)}`, raw.body, raw.type).catch(() => undefined);
     const record: DatasetRecord = {
@@ -199,6 +206,8 @@ datasetsRouter.post(
       rows_kept: rows.length,
       ...(files ? { files } : {}),
       ...(base ? { supersedes: base._id } : {}),
+      rejected_rows: rejectedRows,
+      ...(base?.corrections ? { corrections: base.corrections } : {}),
       created_at: new Date(),
     };
     const persisted = await datasets.save(record);
@@ -252,6 +261,23 @@ datasetsRouter.get(
       datasets: list,
       latest: latest ? { dataset_id: latest.dataset_id, analysis_id: latest.latest_analysis?.analysis_id ?? null } : null,
     });
+  }),
+);
+
+/**
+ * Correct one row: a kept row (by order_id) or a rejected raw row (by order_id, or line and file). The same validation
+ * re-runs over every row and the result is saved as a new version owned by the caller; the old version is unchanged.
+ */
+datasetsRouter.patch(
+  '/datasets/:id/rows',
+  ah(async (req, res) => {
+    const body = CorrectionRequestSchema.parse(req.body ?? {});
+    const d = await datasets.get(req.params.id);
+    if (!d || !canSee(d.account, req.user)) throw notFound('Dataset', req.params.id);
+    const { record, added, still_flagged } = correctDataset(d, body, accountOf(req.user));
+    const persisted = await datasets.save(record);
+    req.log.info({ dataset_id: record._id, supersedes: d._id, corrections: added.length, still_flagged: still_flagged.length }, 'dataset corrected');
+    res.status(201).json({ ...summary(record), corrections_added: added, still_flagged, persisted });
   }),
 );
 

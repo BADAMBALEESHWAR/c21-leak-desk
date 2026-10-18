@@ -1,0 +1,22 @@
+{
+  "raise_recovery_via_inspection": {
+    "label": "Raise recovery via inspection",
+    "description": "Inspect returns before restocking so recovered stock reaches {{target}}% of product cost."
+  },
+  "charge_return_shipping": {
+    "label": "Charge return shipping",
+    "description": "Charge the customer the return shipping cost on returned orders."
+  },
+  "cap_discount": {
+    "label": "Cap discount",
+    "description": "Cap discounts at {{cap}}% of gross."
+  },
+  "add_handling_to_price": {
+    "label": "Add handling to price",
+    "description": "Add the per-order handling cost to the product price."
+  },
+  "none": {
+    "label": "No change",
+    "description": "No rule in the set improves contribution under these assumptions."
+  }
+}

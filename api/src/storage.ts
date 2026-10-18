@@ -17,6 +17,7 @@ export const SAMPLES: Record<SampleSource, { file: string; label: string; descri
   refund_over_gross: { file: 'negative_tests/refund_over_gross.json', label: 'Refund over gross', description: 'O03 refund 1,500. Expect O03 invalid and excluded; ₹5,580.' },
   recovery_400: { file: 'negative_tests/recovery_400.json', label: 'Full recovery', description: 'Recovered cost 400 on returns. Expect returns at −130; ₹6,200.' },
   bad_schema: { file: 'negative_tests/bad_schema.csv', label: 'Bad schema (CSV)', description: 'No product_cost_inr column. Expect 422 with the field path.' },
+  bad_values: { file: 'negative_tests/bad_values.csv', label: 'Bad values (CSV)', description: 'A negative cost, a text value and a bad date. Expect each row rejected with its line and reason.' },
   demo_12m: { file: 'demo_12m.json', label: '12-month demo brand (synthetic)', description: '3,020 labelled synthetic orders, Oct 2025 – Sep 2026, with payment type, customer and units, for the Pulse owner analytics. Not used by the engine checks.' },
 };
 

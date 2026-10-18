@@ -5,15 +5,16 @@ import { config } from '../config.js';
 import { dbState } from '../db.js';
 import { logger } from '../logger.js';
 import { AiCacheModel } from '../models/index.js';
+import { LANGUAGE_NAMES, type Lang } from './templates.js';
 
 // Optional narration (Blueprint §13). The engine decides; the model may only reword a template sentence.
 
-export const PROMPT_VERSION = 'c21-narrate-1';
+export const PROMPT_VERSION = 'c21-narrate-2';
 export const TIMEOUT_MS = 6000;
 export const MAX_CALLS_PER_ANALYSIS = 4;
 const DAILY_CAP = Number(process.env.AI_DAILY_CAP ?? 200);
 
-export const SYSTEM_PROMPT = `You write short, plain-English explanations of order contribution leaks for the operator of a small Indian D2C brand.
+export const SYSTEM_PROMPT = `You write short, plain-language explanations of order contribution leaks for the operator of a small Indian D2C brand.
 You receive ONE leak group or ONE recommendation as JSON computed by a deterministic engine, together with a
 template sentence that is already correct. Your only job is to make that sentence clearer and more natural.
 Rules:
@@ -22,7 +23,8 @@ Rules:
 3. Do not say that advertising caused sales. Attribution is allocation, not causation.
 4. Do not use the words profit, net profit or margin; say contribution.
 5. If any required field is missing, return {"error":"insufficient_data"} and nothing else.
-6. Output valid JSON matching the schema. No markdown, no preamble. Max 45 words per field.`;
+6. Output valid JSON matching the schema. No markdown, no preamble. Max 45 words per field.
+7. Reply in the language the request names. Keep every number in Latin digits (0-9), exactly as given.`;
 
 export const NarrationSchema = z
   .object({
@@ -52,7 +54,15 @@ const RESPONSE_SCHEMA: ResponseSchema = {
 export interface NarrationInput {
   kind: 'leak' | 'recommendation';
   data: Record<string, unknown>;
+  /** The template sentence, already in the requested language. */
   template: string;
+  /** Reply language; English when absent. */
+  lang?: Lang;
+}
+
+/** The user message: "Reply in {language}." and the engine's JSON. */
+export function userPrompt(input: NarrationInput): string {
+  return `Reply in ${LANGUAGE_NAMES[input.lang ?? 'en']}.\n${JSON.stringify({ input: input.data, template: input.template })}`;
 }
 
 export interface Narration {
@@ -68,6 +78,10 @@ export interface ModelClient {
 }
 
 const BANNED = /\b(net profit|profit|margin|caused|drove sales)\b/i;
+/** The same banned ideas in Hindi and Telugu (no \b: word boundaries are ASCII-only in JS). */
+const BANNED_INDIC = /(लाभ|मुनाफ़ा|मुनाफा|मार्जिन|లాభం|మార్జిన్)/;
+/** Devanagari and Telugu digits: numbers must stay in the Latin digits the engine produced. */
+const NATIVE_DIGITS = /[०-९౦-౯]/;
 const URL = /\bhttps?:\/\/\S+/gi;
 
 function numbersIn(text: string): string[] {
@@ -88,8 +102,9 @@ export function guard(raw: string, input: NarrationInput): { ok: true; value: Na
   const value = Object.fromEntries(Object.entries(result.data).map(([k, v]) => [k, typeof v === 'string' ? v.replace(URL, '').trim() : v])) as NarrationOutput;
   const allowed = new Set(numbersIn(JSON.stringify(input.data) + ' ' + input.template));
   const text = Object.values(value).join(' ');
+  if (NATIVE_DIGITS.test(text)) return { ok: false, reason: 'native_digits' };
   for (const n of numbersIn(text)) if (!allowed.has(n)) return { ok: false, reason: `foreign_number:${n}` };
-  if (BANNED.test(text)) return { ok: false, reason: 'banned_word' };
+  if (BANNED.test(text) || BANNED_INDIC.test(text)) return { ok: false, reason: 'banned_word' };
   return { ok: true, value };
 }
 
@@ -157,7 +172,7 @@ export async function narrate(input: NarrationInput, client: ModelClient | null 
 
   const started = Date.now();
   try {
-    const raw = await withTimeout(client.generate(SYSTEM_PROMPT, JSON.stringify({ input: input.data, template: input.template })), TIMEOUT_MS);
+    const raw = await withTimeout(client.generate(SYSTEM_PROMPT, userPrompt(input)), TIMEOUT_MS);
     const checked = guard(raw, input);
     logger.info({ model: client.model, ai_ms: Date.now() - started, guard: checked.ok ? 'pass' : checked.reason }, 'ai narration');
     if (!checked.ok) return { ...template, reason: checked.reason };
@@ -181,7 +196,7 @@ function scheduleRetry(key: string, input: NarrationInput, client: ModelClient) 
   pendingRetries.add(key);
   setTimeout(async () => {
     try {
-      const raw = await withTimeout(client.generate(SYSTEM_PROMPT, JSON.stringify({ input: input.data, template: input.template })), TIMEOUT_MS);
+      const raw = await withTimeout(client.generate(SYSTEM_PROMPT, userPrompt(input)), TIMEOUT_MS);
       const checked = guard(raw, input);
       if (checked.ok) await cacheSet(key, client.model, checked.value);
       logger.info({ model: client.model, guard: checked.ok ? 'pass' : checked.reason }, 'ai background retry');

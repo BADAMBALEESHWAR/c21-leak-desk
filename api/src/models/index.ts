@@ -19,6 +19,9 @@ const DatasetSchema = new Schema(
     rows_kept: Number,
     files: Mixed,
     supersedes: String,
+    // Raw rejected rows (capped at 1,000) and the correction log; large rejected rows go to the blob with the rows.
+    rejected_rows: Mixed,
+    corrections: Mixed,
     // Large rows live in object storage; this is their key.
     blob: String,
     created_at: Date,
@@ -72,6 +75,10 @@ const DecisionSchema = new Schema(
     notes: String,
     engine_version: String,
     evidence: Mixed,
+    fixed_costs_inr: Number,
+    starting_state: Mixed,
+    check_in_30_days: Mixed,
+    assumed_inputs: Mixed,
     saved_at: Date,
   },
   opts,
