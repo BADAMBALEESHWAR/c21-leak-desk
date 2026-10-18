@@ -415,6 +415,8 @@ export const api = {
   // ---- Connectors: Shopify Admin API ----------------------------------------------------------------------------------
 
   /** Saved connectors for this workspace, and whether the one-click Shopify install is set up. */
+  razorpayStatus: () => request<{ enabled: boolean; mode: string | null }>('GET', '/razorpay/status'),
+  razorpayLink: (body: { amount_inr: number; description: string; customer_contact?: string }) => request<{ id: string; short_url: string; status: string; amount_inr: number; mode: string }>('POST', '/razorpay/payment-link', body),
   connectors: () => request<ConnectorsResponse>('GET', '/connectors'),
   /** Checks the store address and token without importing anything. */
   shopifyTest: (body: ShopifyTestRequest) => request<ShopifyTestResult>('POST', '/connectors/shopify/test', body),
