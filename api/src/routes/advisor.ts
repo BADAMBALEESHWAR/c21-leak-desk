@@ -10,6 +10,7 @@ import type { AnalysisResult, Candidate, Confidence, LeakCause, LeakGroup, Order
 import { ah, notFound } from '../errors.js';
 import type { ScenarioOverrides } from '../schema/orders.js';
 import { ledgerOptionsOf, loadAnalysis } from './analyses.js';
+import { evidenceFor, type CandidateKey, type Evidence } from '../stats/evidence.js';
 
 // Fix Advisor (v2 §1.2): for one leak cause, what is happening, the two or three interventions that address it (each
 // with the engine's ₹ delta and confidence), and the 30-day test and stop rule. Template text first; AI may reword it.
@@ -37,6 +38,8 @@ export interface AdvisorIntervention {
   overrides: ScenarioOverrides | null;
   expected_delta_inr: number | null;
   confidence: Confidence;
+  /** Bootstrap range and level for engine candidates; absent for assumption-only scenarios. */
+  evidence?: Evidence;
 }
 
 const sum = (rows: OrderRow[], f: (r: OrderRow) => number | null) => rows.reduce((s, r) => s + (f(r) ?? 0), 0);
@@ -71,7 +74,7 @@ export function leakFacts(leak: Omit<LeakGroup, 'why' | 'why_source'>, rows: Ord
 }
 
 /** Interventions for a cause: engine candidates filtered by cause, override scenarios where the cause calls for one. */
-export function interventionsFor(cause: LeakCause, a: AnalysisResult, rows: OrderRow[], opts: ReturnType<typeof ledgerOptionsOf>, lang: Lang): AdvisorIntervention[] {
+export function interventionsFor(cause: LeakCause, a: AnalysisResult, rows: OrderRow[], opts: ReturnType<typeof ledgerOptionsOf>, lang: Lang, evidence?: Record<CandidateKey, Evidence>): AdvisorIntervention[] {
   const p = PHRASES[lang];
   const labels = new Map(interventionLabels(lang).map((l) => [l.intervention, l.label]));
   const fromCandidate = (c: Candidate): AdvisorIntervention => ({
@@ -81,6 +84,7 @@ export function interventionsFor(cause: LeakCause, a: AnalysisResult, rows: Orde
     overrides: CANDIDATE_OVERRIDES[c.intervention],
     expected_delta_inr: c.delta_inr,
     confidence: candidateConfidence(a, c),
+    ...(evidence ? { evidence: evidence[c.intervention] } : {}),
   });
   const scenario = (candidate_id: string, label: string, overrides: ScenarioOverrides): AdvisorIntervention => {
     const s = scenarioFor(rows, opts, overrides);
@@ -123,7 +127,7 @@ advisorRouter.post(
     const { why: _why, why_source: _ws, ...group } = leak;
     const facts = leakFacts(group, rows);
     const label = PHRASES[lang].leakLabel(leak.cause);
-    const interventions = interventionsFor(leak.cause, a, dataset.rows, ledgerOptionsOf(analysis), lang);
+    const interventions = interventionsFor(leak.cause, a, dataset.rows, ledgerOptionsOf(analysis), lang, evidenceFor(analysis._id, dataset.rows, ledgerOptionsOf(analysis)));
 
     // The 30-day test and stop rule for the first intervention.
     const first = interventions[0];

@@ -13,6 +13,7 @@ import { AutopilotModel } from './models/index.js';
 import { analyses, newId, type AnalysisRecord, type DatasetRecord } from './repo.js';
 import { marginsFor, runAnalysisRequest } from './routes/analyses.js';
 import type { ScenarioOverrides } from './schema/orders.js';
+import { evidenceFor, type Evidence } from './stats/evidence.js';
 
 // Autopilot (v2 §1.1): on import, one job runs analyse → leaks → the four candidate scenarios → margins → Pulse and
 // stores an autopilot document. Numbers are filled first (synchronously, from the engine); explanations follow and
@@ -32,6 +33,8 @@ export interface AutopilotAction {
   overrides: ScenarioOverrides | null;
   expected_delta_inr: number;
   confidence: Confidence;
+  /** Statistical confidence: bootstrap range and level (high / medium / low) around the engine's exact delta. */
+  evidence?: Evidence;
   driving_orders: number;
   explanation: { text: string; source: 'ai' | 'template' };
   decision_draft: { intervention: CandidateKey; expected_delta_inr: number; test_30d: string; stop_rule: string };
@@ -133,7 +136,7 @@ export function candidateConfidence(a: AnalysisResult, c: Candidate): Confidence
 }
 
 /** One candidate as an action card: label, delta, confidence, template explanation and the decision draft. */
-export function actionFor(a: AnalysisResult, c: Candidate, rank: number, lang: Lang): AutopilotAction & { ai_input: FieldInput } {
+export function actionFor(a: AnalysisResult, c: Candidate, rank: number, lang: Lang, evidence?: Evidence): AutopilotAction & { ai_input: FieldInput } {
   const label = interventionLabels(lang).find((l) => l.intervention === c.intervention)?.label ?? c.label;
   const text = recommendationText(lang, { intervention: c.intervention, expected_delta_inr: c.delta_inr }, a.observed, c.driving_orders);
   const template = c.delta_inr > 0 ? text.why : PHRASES[lang].noGain(label, inr(lang, c.delta_inr));
@@ -146,6 +149,7 @@ export function actionFor(a: AnalysisResult, c: Candidate, rank: number, lang: L
     overrides: CANDIDATE_OVERRIDES[c.intervention],
     expected_delta_inr: c.delta_inr,
     confidence,
+    ...(evidence ? { evidence } : {}),
     driving_orders: c.driving_orders,
     explanation: { text: template, source: 'template' },
     decision_draft: { intervention: c.intervention, expected_delta_inr: c.delta_inr, test_30d: text.test_30d_draft, stop_rule: text.stop_rule_draft },
@@ -252,8 +256,9 @@ export async function runAutopilot(req: Request, dataset: DatasetRecord, rawBody
     doc.top_leaks = a.leaks.slice(0, 3).map((l) => ({ cause: l.cause, label: PHRASES[lang].leakLabel(l.cause), orders: l.count, inr_at_stake: l.lost_inr }));
   });
   stage('scenarios', () => {
+    const evidence = evidenceFor(analysis._id, dataset.rows, { attribution: a.attribution, period_end: a.period_end, handling_default_inr: a.config.handling_default_inr, ...(body.channel_spend ? { channel_spend: body.channel_spend } : {}) });
     doc.actions = rankCandidates(a.candidates).map((c, i) => {
-      const { ai_input, ...action } = actionFor(a, c, i + 1, lang);
+      const { ai_input, ...action } = actionFor(a, c, i + 1, lang, evidence[c.intervention]);
       aiInputs.push(ai_input);
       return action;
     });
