@@ -300,7 +300,7 @@ export interface CookieUser {
  */
 export async function fetchCookieUser(): Promise<CookieUser | null> {
   try {
-    const res = await fetch('/api/v1/me', { credentials: 'same-origin', headers: { Accept: 'application/json' } });
+    const res = await fetch('/api/v1/me?quiet=1', { credentials: 'same-origin', headers: { Accept: 'application/json' } });
     if (!res.ok) return null;
     const body = (await res.json()) as { user?: Record<string, unknown> | null };
     const u = body?.user;
