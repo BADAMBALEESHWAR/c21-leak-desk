@@ -97,7 +97,7 @@ function DecisionsList({ version }: { version: number }) {
 
   const columns: Column<DecisionSummary>[] = [
     { id: 'saved', header: t('common.saved'), rowHeader: true, className: 'col-nowrap', cell: (d) => <span className="num">{formatDateTime(d.saved_at)}</span> },
-    { id: 'intervention', header: t('decision.intervention'), cell: (d) => d.intervention_label || d.intervention },
+    { id: 'intervention', header: t('decision.intervention'), cell: (d) => apiText(d.intervention_label) || d.intervention },
     { id: 'expected', header: t('decision.expectedInr'), align: 'right', cell: (d) => <Money value={d.expected_delta_inr} tone="contribution" /> },
     {
       id: 'confidence',

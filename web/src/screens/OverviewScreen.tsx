@@ -20,13 +20,12 @@ import { AskBar } from '../components/AskBar';
 import { AskAiButton } from '../components/AskAiButton';
 import { Pill } from '../components/Badge';
 import { EvidenceBadge } from '../components/EvidenceBadge';
-import { Button } from '../components/Button';
+import { Button, ButtonLink } from '../components/Button';
 import { NeedsAnalysis } from '../components/EmptyState';
 import { Icon } from '../components/Icon';
 import { Money } from '../components/Money';
 import { PageHeader } from '../components/Page';
 import { Provenance } from '../components/Provenance';
-import { ShareActions } from '../components/ShareActions';
 import { Callout, ErrorCallout, Skeleton } from '../components/ui';
 import { i18n } from '../i18n';
 import { actionQuestion, leakQuestion } from '../lib/ask';
@@ -34,7 +33,6 @@ import { apiText } from '../lib/apiText';
 import { formatCount, formatInr, formatMarginPct } from '../lib/format';
 import { datasetName, handlingEstimateUsed, INTERVENTION_LABELS, LEAK_LABELS } from '../lib/labels';
 import { hrefFor, navigate } from '../lib/router';
-import { appUrl, shareText } from '../lib/share';
 import { isRunnable, useStore } from '../state/store';
 import { sortLeakGroups } from './LeaksScreen';
 
@@ -483,20 +481,6 @@ export function OverviewScreen() {
 
   const owner = auth.user?.name || auth.user?.email || null;
 
-  // Share: only figures the page shows (headline, the three actions, the briefing), in the UI language.
-  const share = doc?.headline
-    ? shareText({
-        t,
-        heading: name ? t('share.headingNamed', 'Profyn summary · {{name}}', { name }) : t('share.heading', 'Profyn summary'),
-        contribution: doc.headline.contribution_inr,
-        actions: doc.actions
-          .slice(0, 3)
-          .map((a) => ({ label: a.label || interventionText(t, a.intervention, INTERVENTION_LABELS[a.intervention] || a.intervention), delta: a.expected_delta_inr })),
-        digest: digest.digest,
-        url: appUrl(auth.mode !== 'account'),
-      })
-    : null;
-
   const draftOf =(a: AutopilotAction): DecisionRequest => ({
     intervention: a.decision_draft?.intervention ?? a.intervention,
     expected_delta_inr: a.decision_draft?.expected_delta_inr ?? a.expected_delta_inr,
@@ -553,7 +537,7 @@ export function OverviewScreen() {
 
   return (
     <div className="page ov-page">
-      <PageHeader title={title} subtitle={subtitle} actions={<ShareActions text={share} />} />
+      <PageHeader title={title} subtitle={subtitle} actions={<ButtonLink variant="secondary" size="sm" icon="message" href={hrefFor('report')}>{t('share.openReport', 'Monthly report · send as PDF')}</ButtonLink>} />
 
       <AskBar />
 

@@ -11,15 +11,13 @@ import { CONFIDENCE_KEY, Pill } from '../components/Badge';
 import { Button, ButtonLink } from '../components/Button';
 import { LogoMark } from '../components/LogoMark';
 import { Money } from '../components/Money';
-import { ShareActions } from '../components/ShareActions';
+import { ShareReportPdf } from '../components/ShareReportPdf';
 import { EmptyPanel, SkeletonCards } from '../components/ui';
 import { localeFor, lower } from '../i18n';
 import { apiText } from '../lib/apiText';
 import { formatCount, formatDate, formatInr, formatPct } from '../lib/format';
 import { datasetName, handlingEstimateUsed, LEAK_LABELS } from '../lib/labels';
 import { hrefFor, useHashLocation } from '../lib/router';
-import { appUrl, shareText } from '../lib/share';
-import { autopilotFromAnalysis } from './OverviewScreen';
 import { useStore } from '../state/store';
 import '../styles/proof.css';
 
@@ -285,16 +283,6 @@ export function ReportScreen() {
   const generated = new Date().toLocaleDateString(locale, { day: '2-digit', month: 'short', year: 'numeric' });
   const attribution = analysis.attribution === 'channel' ? t('report.attrChannel', 'channel spend') : t('report.attrAllocate', 'ads allocated per order');
 
-  // Share: the month's contribution as shown (else the analysis total), the engine's top three fixes and the brief.
-  const share = shareText({
-    t,
-    heading: t('share.reportHeading', 'Profyn monthly report · {{month}}', { month: month ? monthLabel(month) : '' }),
-    contribution: headline ? headline.contribution_inr : analysis.totals.contribution_inr,
-    actions: autopilotFromAnalysis(analysis).actions.map((a) => ({ label: a.label, delta: a.expected_delta_inr })),
-    digest,
-    url: appUrl(auth.mode !== 'account'),
-  });
-
   return (
     <div className="page report-page">
       <div className="report-toolbar">
@@ -317,11 +305,11 @@ export function ReportScreen() {
             <PrinterIcon />
             {t('report.print', 'Print / Save as PDF')}
           </Button>
-          <ShareActions text={share} />
+          <ShareReportPdf sheetId="report-sheet" monthLabel={month ? monthLabel(month) : ''} monthKey={month ?? 'month'} />
         </div>
       </div>
 
-      <article className={`report-sheet${extra.loading ? ' is-refreshing' : ''}`} aria-label={t('report.sheetAria', 'Monthly report for {{month}}', { month: month ? monthLabel(month) : '' })}>
+      <article id="report-sheet" className={`report-sheet${extra.loading ? ' is-refreshing' : ''}`} aria-label={t('report.sheetAria', 'Monthly report for {{month}}', { month: month ? monthLabel(month) : '' })}>
         <header className="report-head">
           <div className="report-brand">
             <LogoMark size={36} />

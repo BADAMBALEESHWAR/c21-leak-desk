@@ -638,3 +638,13 @@ code {
   background: var(--surface);
   border-top: 1px solid var(--border);
 }
+
+/* The logo stays put while the menu scrolls. */
+.sidebar > .brand {
+  position: sticky;
+  top: -20px;
+  z-index: 2;
+  margin: -20px -16px 0;
+  padding: 22px 24px 22px;
+  background: var(--surface);
+}
