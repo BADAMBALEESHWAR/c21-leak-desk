@@ -1,0 +1,11 @@
+{
+  "_comment": "Intentional Latin text in web/src/**/*.tsx that tests/no-literals.test.ts accepts outside t(). 'terms' are words that stay in Latin script in every language (brands, formats, units); 'texts' are whole literals kept on purpose (code identifiers, file names, scope names shown as code). Tokens with an underscore, a dot or a slash (refund_inr, docs/SCOPE.md, shpat_) count as code and are always accepted.",
+  "terms": [
+    "Profyn", "AI", "CSV", "JSON", "CM1", "CM2", "CM3", "COD", "UPI", "GST", "SKU", "SKUs", "ID", "IDs", "PDF", "API", "URL", "Markdown",
+    "Shopify", "Amazon", "Flipkart", "Myntra", "Razorpay", "Shiprocket", "Meta", "Google", "Ads", "GitHub", "AWS", "Cognito",
+    "D2C", "Fynd", "NMIMS", "C21", "OK", "Σ", "INR", "MB", "KB", "ms", "px"
+  ],
+  "texts": [
+    "AttributionConflict"
+  ]
+}

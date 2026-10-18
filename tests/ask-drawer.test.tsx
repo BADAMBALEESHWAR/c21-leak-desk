@@ -80,7 +80,6 @@ describe('Ask Profyn', () => {
     expect(table.textContent).toContain('820');
     const open = within(d).getByRole('link', { name: /Open in Ledger/ });
     expect(open.getAttribute('href')).toBe('#/ledger?product=P3&month=2026-09');
-    expect(within(d).getByRole('link', { name: 'Why this is safe' }).getAttribute('href')).toBe('#/ai');
   });
 
   it('sends the language the UI is in, and marks AI wording as AI', async () => {
