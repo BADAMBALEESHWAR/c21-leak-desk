@@ -25,8 +25,7 @@ export async function reportPdf(el: HTMLElement, filename: string): Promise<File
 
 /** Opens the phone's share sheet with the PDF attached (WhatsApp is listed there); false when the browser cannot share files. */
 export async function sharePdf(file: File, title: string, text: string): Promise<boolean> {
-  // Phones only: on a computer the share sheet is a poor fit, so the PDF is saved and WhatsApp opened instead.
-  if (!/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) return false;
+  // Any browser that can share files (phones, and Chrome or Edge on Windows with WhatsApp installed) shows its share sheet with the PDF attached.
   const nav = navigator as Navigator & { canShare?: (d: ShareData) => boolean };
   if (!nav.share || !nav.canShare || !nav.canShare({ files: [file] })) return false;
   try {

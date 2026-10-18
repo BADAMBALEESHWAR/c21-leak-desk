@@ -23,7 +23,7 @@ export function ShareReportPdf({ sheetId, monthLabel, monthKey }: { sheetId: str
       const note = t('share.pdfNote', 'Profyn report for {{month}}', { month: monthLabel });
       if (await sharePdf(file, note, note)) return;
       downloadFileBlob(file);
-      showToast(t('share.pdfSaved', 'PDF saved. Attach it in WhatsApp.'), 'success');
+      showToast(t('share.pdfSaved', 'PDF saved in your Downloads. In WhatsApp, tap the attach (clip) button and choose it.'), 'success');
       window.open(whatsappUrl(note), '_blank', 'noopener');
     } catch {
       showToast(t('share.pdfFailed', 'Could not make the PDF. Use Print / Save as PDF.'), 'info');
