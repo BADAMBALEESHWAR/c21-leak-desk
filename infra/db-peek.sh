@@ -4,6 +4,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 set -a; . ./.env.aws; set +a
+command -v aws >/dev/null 2>&1 || PATH="$PATH:/c/Program Files/Amazon/AWSCLIV2"
 export MSYS_NO_PATHCONV=1 AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-ap-south-1}
 INSTANCE=i-072e8e3b4aec9f324
 JS='const d=db.getSiblingDB("leakdesk");
