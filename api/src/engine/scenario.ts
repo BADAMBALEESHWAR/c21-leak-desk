@@ -119,7 +119,7 @@ export function applyOverrides(rows: OrderRow[], o: ScenarioOverrides, base: Led
 }
 
 /** One candidate intervention applied to a copy of the rows (R13). */
-function applyCandidate(key: (typeof CANDIDATE_KEYS)[number], rows: OrderRow[], handlingDefault: number, periodEnd: string): OrderRow[] {
+export function applyCandidate(key: (typeof CANDIDATE_KEYS)[number], rows: OrderRow[], handlingDefault: number, periodEnd: string): OrderRow[] {
   const out = copy(rows);
   for (const r of out) {
     switch (key) {
