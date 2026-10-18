@@ -333,7 +333,21 @@
     "faqRefundsA": "A refund used to count as lost revenue, and stock recovered from a return was ignored. Now a refund lowers net sales, recovered cost comes off product cost, the payment fee is its own line, and a refund dated after the period end is shown as a separate adjustment.",
     "faqRefundsLink": "See the change log",
     "github": "GitHub",
-    "trust": "Trust and privacy"
+    "trust": "Trust and privacy",
+    "trustKicker": "Why Profyn",
+    "trustTitle": "AI that explains. An engine that counts. Your data stays yours.",
+    "trustWhyTitle": "Why not just ask ChatGPT?",
+    "trustQuote": "ChatGPT gives you a story once; Profyn gives you a ledger every month.",
+    "trustWhy1": "Every rupee comes from a tested engine with 360+ automated tests; the AI only explains the numbers.",
+    "trustWhy2": "Any AI sentence with a figure the engine did not produce is rejected before you see it.",
+    "trustWhy3": "Thousands of orders reconcile to channel and product totals, the same way every month.",
+    "trustWhy4": "Each decision is saved with the numbers it was based on and a 30-day check.",
+    "trustPromiseTitle": "Your data promise",
+    "trustPromise1": "Stored in India on AWS Mumbai; uploaded files are encrypted at rest and every connection uses HTTPS.",
+    "trustPromise2": "Your account only: other accounts cannot read your data, and we never sell it.",
+    "trustPromise3": "The AI sees totals by cause, never your order rows, and it is off for your uploads unless you switch it on.",
+    "trustPromise4": "Export or delete everything at any time.",
+    "privacyPolicy": "Read the privacy policy"
   },
   "footer": {
     "note": "Operational contribution, not statutory profit."
