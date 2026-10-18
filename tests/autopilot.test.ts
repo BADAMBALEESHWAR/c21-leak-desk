@@ -109,7 +109,7 @@ describe('autopilot (v2 §1.1)', () => {
       intervention: 'charge_return_shipping',
       expected_delta_inr: 280,
       owner: 'Owner',
-      confidence: action.confidence,
+      confidence: action.evidence?.level ?? action.confidence, // the card shows the statistical level, so the saved decision records the same
       test_30d: action.decision_draft.test_30d,
       stop_rule: action.decision_draft.stop_rule,
     });

@@ -150,10 +150,11 @@ describe('Fix Advisor', () => {
     expect(group).toBeTruthy();
     await within(panel()).findByText(/engine’s own explanation and ranking/);
     expect(panel().querySelector('.fix-summary')?.textContent).toBe(group!.why);
-    // A fix without one assumption to change cannot be applied here; the Scenario step is offered instead.
+    // A fix without one assumption to change is still applied: it shows the engine's exact gain on the baseline.
     const apply = within(panel()).getByRole('button', { name: 'Apply this scenario' }) as HTMLButtonElement;
-    expect(apply.disabled).toBe(true);
-    expect(within(panel()).getByRole('link', { name: 'Open the Scenario step' }).getAttribute('href')).toBe('#/scenario');
+    expect(apply.disabled).toBe(false);
+    fireEvent.click(apply);
+    await within(panel()).findByText('After');
     // Closing drops ?fix= so a reload does not reopen it.
     fireEvent.keyDown(document, { key: 'Escape' });
     await waitFor(() => expect(window.location.hash).toBe('#/leaks'));
