@@ -172,3 +172,11 @@ export function apiText(text: string | null | undefined, depth = 0): string {
   }
   return text;
 }
+
+/** Long lists of order ids in a note ("D00002, D00005, …") keep the first five and say how many more. */
+export function shortIds(text: string, keep = 5): string {
+  return text.replace(/\b[A-Z]{1,3}\d{1,6}(?:, [A-Z]{1,3}\d{1,6}){5,}/g, (list) => {
+    const ids = list.split(', ');
+    return ids.length <= keep ? list : `${ids.slice(0, keep).join(', ')} … +${ids.length - keep}`;
+  });
+}

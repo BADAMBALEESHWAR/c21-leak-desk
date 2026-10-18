@@ -18,7 +18,7 @@ import { NumberInput, SliderField } from '../components/SliderField';
 import { Table, type Column } from '../components/Table';
 import { Callout, Collapsible, InfoTip, revealElement, Skeleton, StatCard } from '../components/ui';
 import { lower } from '../i18n';
-import { apiText } from '../lib/apiText';
+import { apiText, shortIds } from '../lib/apiText';
 import { formatCount, formatInr, formatPct, formatSignedDecimal, formatSignedInr } from '../lib/format';
 import { OVERRIDE_LABELS } from '../lib/labels';
 import { hrefFor, navigate } from '../lib/router';
@@ -469,9 +469,10 @@ function CandidatesChart({ rec, candidates, baseline }: { rec: Recommendation; c
     label: c.label,
     sub: `${apiText(c.rule)} · ${t('leaks.orderCount', { count: c.driving_orders })}`,
     emphasis: c.intervention === rec.intervention,
-    values: [{ series: t('scenario.changeInContribution', 'Change in contribution'), value: c.delta_inr, tone: c.intervention === rec.intervention ? 'series-1' : 'muted', text: baseline && was(c.intervention) !== null && was(c.intervention) !== c.delta_inr ? `${formatSignedInr(c.delta_inr)} (${t('impact.was', 'was {{v}}', { v: formatSignedInr(was(c.intervention) as number) })})` : formatSignedInr(c.delta_inr) }],
+    values: [{ series: t('scenario.changeInContribution', 'Change in contribution'), value: c.delta_inr, tone: c.intervention === rec.intervention ? 'series-1' : 'muted', text: formatSignedInr(c.delta_inr) }],
   }));
   const table = (
+    <div className="table-scroll">
     <table className="table table-compact">
       <caption className="visually-hidden">{t('scenario.candidatesCaption', 'Candidates with rule, change and driving orders')}</caption>
       <thead>
@@ -499,6 +500,7 @@ function CandidatesChart({ rec, candidates, baseline }: { rec: Recommendation; c
         ))}
       </tbody>
     </table>
+    </div>
   );
   return (
     <ChartCard
@@ -657,7 +659,7 @@ export function ScenarioScreen() {
             <Callout tone="info" title={t('scenario.notes', 'Scenario notes')}>
               <ul className="plain-list">
                 {current.assumptions.map((l) => (
-                  <li key={l}>{apiText(l)}</li>
+                  <li key={l}>{shortIds(apiText(l))}</li>
                 ))}
               </ul>
             </Callout>
