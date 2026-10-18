@@ -4,7 +4,6 @@ import type { Candidate, ScenarioResponse } from '../api/types';
 import { formatPct2, readMargins } from '../api/proof';
 import { formatInr, formatSignedInr } from '../lib/format';
 import { OVERRIDE_LABELS } from '../lib/labels';
-import { apiText } from '../lib/apiText';
 import { Provenance } from './Provenance';
 
 type Line = { key: 'net_sales_inr' | 'net_product_cost_inr' | 'shipping_inr' | 'payment_fee_inr' | 'return_cost_inr' | 'handling_inr' | 'ads_inr'; labelKey: string; label: string };
@@ -90,7 +89,6 @@ export function ScenarioImpact({ s }: { s: ScenarioResponse }) {
       {s.delta.unknown !== 0 || s.scenario.unknown > 0 ? (
         <p className="muted small">{t('impact.unknown', '{{n}} orders still have missing facts and are left out of these totals, never counted as zero.', { n: s.scenario.unknown })}</p>
       ) : null}
-      {s.assumptions.length > 0 ? <p className="muted small">{s.assumptions.map((x) => apiText(x)).join(' ')}</p> : null}
     </section>
   );
 }
