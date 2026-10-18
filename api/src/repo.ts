@@ -6,6 +6,7 @@ import { HttpError } from './errors.js';
 import { logger } from './logger.js';
 import { AnalysisModel, DatasetModel, DecisionModel, ScenarioModel } from './models/index.js';
 import type { ScenarioOverrides } from './schema/orders.js';
+import type { AssumedInput, CheckIn, StartingState } from './export/decision.js';
 import { get as getObject, put as putObject } from './storage.js';
 
 export interface DatasetRecord {
@@ -23,9 +24,34 @@ export interface DatasetRecord {
   rows_kept?: number;
   /** Files merged into this dataset, in upload order. */
   files?: Array<{ name: string; rows: number }>;
-  /** The dataset this one extends (an upload added to saved data). */
+  /** The dataset this one extends (an upload added to saved data, or a correction). */
   supersedes?: string;
+  /** Raw rows the import rejected (at most 1,000), kept so they can be corrected. */
+  rejected_rows?: RejectedRow[];
+  /** Every correction made to this dataset's rows, oldest first, carried into each new version. */
+  corrections?: Correction[];
   created_at: Date;
+}
+
+export interface RejectedRow {
+  /** 1-based line in its file (CSV counts the header). */
+  line: number;
+  file?: string;
+  order_id: string | null;
+  raw: unknown;
+}
+
+export interface Correction {
+  order_id: string | null;
+  line: number | null;
+  file?: string;
+  field: string;
+  from: unknown;
+  to: unknown;
+  at: string;
+  /** Account that made it, or "guest". */
+  by: string;
+  note?: string;
 }
 
 export interface AnalysisRecord {
@@ -65,6 +91,12 @@ export interface DecisionRecord {
   owner: string;
   engine_version: string;
   evidence: Record<string, unknown>;
+  /** Fixed costs per period entered with the decision (assumed); only for the estimated net margin. */
+  fixed_costs_inr?: number;
+  /** Decision file fields (A6); absent on records saved before the export existed. */
+  starting_state?: StartingState;
+  check_in_30_days?: CheckIn;
+  assumed_inputs?: AssumedInput[];
   saved_at: Date;
 }
 
@@ -81,6 +113,8 @@ export const newId = () => new mongoose.Types.ObjectId().toHexString();
 
 interface Heavy<T> {
   field: keyof T & string;
+  /** Further large fields stored in the same blob (e.g. a dataset's rejected raw rows). */
+  extra?: Array<keyof T & string>;
   /** Rough JSON size of the field, without serialising it. */
   bytes: (doc: T) => number;
 }
@@ -124,8 +158,11 @@ class Collection<T extends { _id: string }> {
       let stored: T | (Omit<T, keyof T & string> & Record<string, unknown>) = doc;
       if (this.heavy && bytes > BLOB_BYTES) {
         const key = `blobs/${this.name}/${doc._id}.json.gz`;
-        await putObject(key, gzipSync(JSON.stringify(doc[this.heavy.field])), 'application/gzip');
-        stored = { ...doc, [this.heavy.field]: null, blob: key };
+        const extra = (this.heavy.extra ?? []).filter((f) => doc[f] !== undefined);
+        // One field: the blob is that field's JSON (the original format). Several: {__fields: {name: value}}.
+        const body = extra.length ? { __fields: Object.fromEntries([this.heavy.field, ...extra].map((f) => [f, doc[f]])) } : doc[this.heavy.field];
+        await putObject(key, gzipSync(JSON.stringify(body)), 'application/gzip');
+        stored = { ...doc, [this.heavy.field]: null, ...Object.fromEntries(extra.map((f) => [f, null])), blob: key };
       }
       await this.model.create(stored);
       return true;
@@ -153,7 +190,9 @@ class Collection<T extends { _id: string }> {
           logger.warn({ collection: this.name, id, blob: doc.blob }, 'stored record body is missing');
           return null;
         }
-        (doc as Record<string, unknown>)[this.heavy.field] = JSON.parse(gunzipSync(buf).toString('utf8'));
+        const body = JSON.parse(gunzipSync(buf).toString('utf8'));
+        if (body && !Array.isArray(body) && typeof body === 'object' && '__fields' in body) Object.assign(doc, body.__fields);
+        else (doc as Record<string, unknown>)[this.heavy.field] = body;
         delete doc.blob;
         this.remember(doc);
       }
@@ -186,18 +225,18 @@ class Collection<T extends { _id: string }> {
   }
 }
 
-export const datasets = new Collection<DatasetRecord>('datasets', DatasetModel, { field: 'rows', bytes: (d) => (d.rows?.length ?? 0) * 450 });
+export const datasets = new Collection<DatasetRecord>('datasets', DatasetModel, {
+  field: 'rows',
+  extra: ['rejected_rows'],
+  bytes: (d) => ((d.rows?.length ?? 0) + (d.rejected_rows?.length ?? 0)) * 450,
+});
 export const analyses = new Collection<AnalysisRecord>('analyses', AnalysisModel, { field: 'result', bytes: (a) => (a.result?.orders?.length ?? 0) * 1700 });
 export const scenarios = new Collection<ScenarioRecord>('scenarios', ScenarioModel);
 const decisionStore = new Collection<DecisionRecord>('decisions', DecisionModel);
 
 /** Decisions are the saved result: they need the database when one is configured. */
 export const decisions = {
-  async save(doc: DecisionRecord, opts: { memoryOnly?: boolean } = {}): Promise<boolean> {
-    if (opts.memoryOnly) {
-      decisionStore.remember(doc);
-      return false;
-    }
+  async save(doc: DecisionRecord): Promise<boolean> {
     const state = dbState();
     if (state === 'down') {
       throw new HttpError(503, 'db_unavailable', 'The database is not reachable, so the decision was not saved. Check that Mongo is running, then save again.');
