@@ -1765,7 +1765,13 @@
     "headingNamed": "Profyn summary · {{name}}",
     "reportHeading": "Profyn monthly report · {{month}}",
     "contribution": "Operational contribution: {{inr}}",
-    "actions": "Top actions (expected change):"
+    "actions": "Top actions (expected change):",
+    "pdfNote": "Profyn report for {{month}}",
+    "pdfSaved": "PDF saved. Attach it in WhatsApp.",
+    "pdfFailed": "Could not make the PDF. Use Print / Save as PDF.",
+    "pdfMaking": "Making PDF…",
+    "pdfButton": "Send {{month}} report on WhatsApp",
+    "openReport": "Monthly report · send as PDF"
   },
   "shopify": {
     "never": "never",

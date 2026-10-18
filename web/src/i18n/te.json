@@ -1765,7 +1765,13 @@
     "headingNamed": "Profyn సారాంశం · {{name}}",
     "reportHeading": "Profyn నెలవారీ నివేదిక · {{month}}",
     "contribution": "ఆపరేషనల్ కంట్రిబ్యూషన్: {{inr}}",
-    "actions": "ముఖ్య చర్యలు (ఆశించిన మార్పు):"
+    "actions": "ముఖ్య చర్యలు (ఆశించిన మార్పు):",
+    "pdfNote": "{{month}} Profyn రిపోర్ట్",
+    "pdfSaved": "PDF సేవ్ అయింది. WhatsAppలో అటాచ్ చేయండి.",
+    "pdfFailed": "PDF తయారు కాలేదు. ప్రింట్ / PDF గా సేవ్ చేయండి వాడండి.",
+    "pdfMaking": "PDF తయారవుతోంది…",
+    "pdfButton": "{{month}} రిపోర్ట్‌ను WhatsAppలో పంపండి",
+    "openReport": "నెలవారీ రిపోర్ట్ · PDF గా పంపండి"
   },
   "shopify": {
     "never": "ఎప్పుడూ లేదు",
