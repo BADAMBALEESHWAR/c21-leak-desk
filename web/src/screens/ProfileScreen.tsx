@@ -5,6 +5,7 @@ import { api, downloadFile, isNotFound, toErrorInfo, type ErrorInfo } from '../a
 import type { AuditEntry, Consent, LoginEntry, MeProfile } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
 import { signOut as endSession } from '../auth/auth';
+import { DataLocation } from '../components/DataLocation';
 import { Pill } from '../components/Badge';
 import { Button, ButtonLink } from '../components/Button';
 import { EmptyPanel, ErrorCallout, Skeleton } from '../components/ui';
@@ -216,6 +217,8 @@ export function ProfileScreen() {
           </div>
         )}
       </section>
+
+      {account ? <DataLocation /> : null}
 
       <div className="profile-grid">
         <section className="card" aria-labelledby="profile-consent">

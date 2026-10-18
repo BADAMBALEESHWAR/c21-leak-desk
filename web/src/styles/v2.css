@@ -1646,3 +1646,29 @@ body .toast-region {
   overflow-wrap: anywhere;
   font-weight: 600;
 }
+
+/* Where your data lives (Profile). */
+.data-list {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+}
+
+.data-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.data-row dt {
+  color: var(--text-3);
+}
+
+.data-row dd {
+  margin: 0;
+  font-weight: 600;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
