@@ -1,8 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { fetchProviders } from '../auth/auth';
-import { ProviderButtons } from '../auth/ProviderButtons';
-import { APP_PATH, BRAND } from '../brand';
+import { BRAND } from '../brand';
 import { LANGS, setLanguage } from '../i18n';
 import { CHANGELOG_URL, DEMO_MEDIA, FAQ, FEATURES, HERO, SOURCES, STEPS, TRUST } from './content';
 import { SeeItInAction, WatchModal } from './DemoVideo';
@@ -136,19 +134,6 @@ function SectionHead({ kicker, title, lead, id, center = false }: { kicker: stri
   );
 }
 
-/** "Continue with Google / GitHub" under the hero, only when the API has those sign-ins switched on. */
-function HeroSignIn() {
-  const [providers, setProviders] = useState({ google: false, github: false });
-  useEffect(() => {
-    let alive = true;
-    void fetchProviders().then((p) => alive && setProviders(p));
-    return () => {
-      alive = false;
-    };
-  }, []);
-  return <ProviderButtons providers={providers} next={APP_PATH} compact className="l-hero-signin" />;
-}
-
 export function Landing() {
   const { t } = useTranslation();
   const [watching, setWatching] = useState(false);
@@ -190,7 +175,6 @@ export function Landing() {
                   <span className="l-btn-meta">· {t('landing.watchDemoLength', '2 min')}</span>
                 </button>
               </div>
-              <HeroSignIn />
               <p className="l-hero-meta">
                 <span>{t('landing.demoDisclaimer', 'Demo uses synthetic data. Not a live production system.')}</span>
                 <a href={LINKS.signUp}>{t('landing.startFreeOwn', 'Or start free on your own orders')}</a>
