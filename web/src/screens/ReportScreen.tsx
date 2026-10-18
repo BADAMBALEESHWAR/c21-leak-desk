@@ -2,19 +2,23 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { api } from '../api/client';
 import { addDays, monthOf, monthStart, readMargins, formatPct2, type Margins } from '../api/proof';
-import type { AnalysisResponse, DecisionSummary, Digest, PulseLeaks, PulseOverview } from '../api/types';
+import type { AnalysisResponse, DecisionSummary, PulseLeaks, PulseOverview } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
 import { BRAND } from '../brand';
 import { AiBadge } from '../components/AiBadge';
+import { useDigest } from '../components/AiBriefing';
 import { Pill } from '../components/Badge';
 import { Button, ButtonLink } from '../components/Button';
 import { LogoMark } from '../components/LogoMark';
 import { Money } from '../components/Money';
+import { ShareActions } from '../components/ShareActions';
 import { EmptyPanel, SkeletonCards } from '../components/ui';
 import { localeFor } from '../i18n';
 import { formatCount, formatDate, formatInr, formatPct } from '../lib/format';
 import { datasetName, handlingEstimateUsed, LEAK_LABELS } from '../lib/labels';
 import { hrefFor, useHashLocation } from '../lib/router';
+import { appUrl, shareText } from '../lib/share';
+import { autopilotFromAnalysis } from './OverviewScreen';
 import { useStore } from '../state/store';
 import '../styles/proof.css';
 
@@ -75,26 +79,6 @@ function useReportData(analysis: AnalysisResponse | null, month: string | null):
     };
   }, [id, month]);
   return extra;
-}
-
-/** GET /analyses/:id/digest in the UI language; null while loading, on a server without it, or on failure. */
-function useDigest(analysisId: string | null, lang: string): Digest | null {
-  const [digest, setDigest] = useState<Digest | null>(null);
-  useEffect(() => {
-    setDigest(null);
-    if (!analysisId) return undefined;
-    let cancelled = false;
-    api
-      .digest(analysisId, lang)
-      .then((d) => {
-        if (!cancelled && d && Array.isArray(d.sections)) setDigest(d);
-      })
-      .catch(() => undefined);
-    return () => {
-      cancelled = true;
-    };
-  }, [analysisId, lang]);
-  return digest;
 }
 
 function Section({ n, title, meta, children }: { n: number; title: string; meta?: ReactNode; children: ReactNode }) {
@@ -225,7 +209,7 @@ export function ReportScreen() {
   const month = asked && months.includes(asked) ? asked : months[months.length - 1] ?? null;
   const extra = useReportData(analysis, month);
   const locale = localeFor(i18n.language);
-  const digest = useDigest(analysis?.analysis_id ?? null, i18n.resolvedLanguage ?? i18n.language);
+  const { digest } = useDigest(analysis?.analysis_id ?? null, i18n.resolvedLanguage ?? i18n.language);
 
   if (!analysis) {
     if (restoring || analysing || importing) {
@@ -300,6 +284,16 @@ export function ReportScreen() {
   const generated = new Date().toLocaleDateString(locale, { day: '2-digit', month: 'short', year: 'numeric' });
   const attribution = analysis.attribution === 'channel' ? t('report.attrChannel', 'channel spend') : t('report.attrAllocate', 'ads allocated per order');
 
+  // Share: the month's contribution as shown (else the analysis total), the engine's top three fixes and the brief.
+  const share = shareText({
+    t,
+    heading: t('share.reportHeading', 'Profyn monthly report · {{month}}', { month: month ? monthLabel(month) : '' }),
+    contribution: headline ? headline.contribution_inr : analysis.totals.contribution_inr,
+    actions: autopilotFromAnalysis(analysis).actions.map((a) => ({ label: a.label, delta: a.expected_delta_inr })),
+    digest,
+    url: appUrl(auth.mode !== 'account'),
+  });
+
   return (
     <div className="page report-page">
       <div className="report-toolbar">
@@ -322,6 +316,7 @@ export function ReportScreen() {
             <PrinterIcon />
             {t('report.print', 'Print / Save as PDF')}
           </Button>
+          <ShareActions text={share} />
         </div>
       </div>
 
