@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { AuthConfig } from '../api/types';
 import {
   AuthError,
@@ -10,6 +11,8 @@ import {
   currentUser,
   ensureIdToken,
   fetchAuthConfig,
+  fetchCookieUser,
+  fetchProviders,
   forgotPassword,
   resendCode,
   signIn,
@@ -19,6 +22,8 @@ import {
 import { APP_PATH, BRAND, DEMO_URL } from '../brand';
 import { Icon } from '../landing/icons';
 import { Spinner, Wordmark } from '../landing/shared';
+import { ProviderButtons } from '../auth/ProviderButtons';
+
 
 type View = 'loading' | 'signedIn' | 'notReady' | 'signin' | 'signup' | 'confirm' | 'forgot' | 'reset' | 'newPassword';
 
@@ -174,6 +179,8 @@ function ErrorLine({ error, action }: { error: string | null; action?: ReactNode
 
 export function Login() {
   const uid = useId();
+  const { t } = useTranslation();
+  const [providers, setProviders] = useState<{ google: boolean; github: boolean; email: boolean }>({ google: false, github: false, email: false });
   const [cfg, setCfg] = useState<AuthConfig | null>(null);
   const [view, setView] = useState<View>('loading');
   const [email, setEmail] = useState('');
@@ -209,11 +216,20 @@ export function Login() {
       };
     }
     void (async () => {
-      const c = await fetchAuthConfig();
+      // A Google / GitHub session is an httpOnly cookie: only GET /me can tell.
+      const [c, p] = await Promise.all([fetchAuthConfig(), fetchProviders()]);
+      const cookieUser = p.google || p.github ? await fetchCookieUser() : null;
       if (!alive) return;
       setCfg(c);
+      setProviders(p);
+      if (cookieUser) {
+        setSignedInAs(cookieUser.name ?? cookieUser.email ?? 'your account');
+        setView('signedIn');
+        return;
+      }
       if (!c.enabled) {
-        setView('notReady');
+        // Email sign-in is not set up; Google or GitHub may still be.
+        setView(p.google || p.github ? 'signin' : 'notReady');
         return;
       }
       if (user) {
@@ -446,8 +462,21 @@ export function Login() {
     tabRefs.current[nextTab === 'signin' ? 0 : 1]?.focus();
   };
 
+  const emailReady = cfg?.enabled === true;
+  const anyProvider = providers.google || providers.github;
+  const providerBlock = anyProvider ? (
+    <>
+      <ProviderButtons providers={providers} next={next} />
+      {emailReady ? (
+        <p className="lg-divider">
+          <span>{t('auth.orEmail', 'or with email')}</span>
+        </p>
+      ) : null}
+    </>
+  ) : null;
+
   const tabBar =
-    view === 'signin' || view === 'signup' ? (
+    emailReady && (view === 'signin' || view === 'signup') ? (
       <div className="lg-tabs" role="tablist" aria-label="Sign in or create an account" onKeyDown={onTabKey}>
         {tabs.map((t, i) => (
           <button
@@ -576,8 +605,14 @@ export function Login() {
     case 'signin':
       title = 'Welcome back';
       sub = 'Sign in to your workspace.';
-      body = (
+      body = !emailReady ? (
+        <div className="lg-stack">
+          {providerBlock}
+          <p className="lg-sub">{t('auth.emailSoon', 'Email sign-in is being set up.')}</p>
+        </div>
+      ) : (
         <form className="lg-form" onSubmit={onSignIn} noValidate>
+          {providerBlock}
           {noticeLine}
           <EmailField id={ids.email} value={email} onChange={setEmail} autoFocus invalid={touched && !looksLikeEmail(email)} />
           <PasswordField
@@ -604,6 +639,7 @@ export function Login() {
       sub = 'Start your 14-day free trial on your own CSV.';
       body = (
         <form className="lg-form" onSubmit={onSignUp} noValidate>
+          {providerBlock}
           {noticeLine}
           <EmailField id={ids.email} value={email} onChange={setEmail} autoFocus invalid={touched && !looksLikeEmail(email)} />
           <PasswordField

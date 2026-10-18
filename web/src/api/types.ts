@@ -554,6 +554,8 @@ export interface Health {
   storage?: string;
   engine_version: string;
   uptime_s?: number;
+  /** Where the data is stored, e.g. ap-south-1. Absent on servers that do not report it. */
+  region?: string;
 }
 
 export type ErrorCode =
@@ -760,4 +762,209 @@ export interface PulseInsights {
     | { customers: number; repeat_customers: number; repeat_rate_pct: number | null; contribution_per_order_first_inr: number | null; contribution_per_order_repeat_inr: number | null };
   labels: string[];
   unknown_count?: number;
+}
+
+// ---- Profyn v2: autopilot, fix advisor, Ask Profyn, digest, AI guard, import mapping, accounts -----------------------
+
+/** Where a piece of wording came from: AI (numbers still from the engine) or the deterministic template. */
+export type AiTextSource = 'ai' | 'template';
+
+export interface AiText {
+  text: string;
+  source: AiTextSource;
+}
+
+export const AUTOPILOT_STAGES = ['analysis', 'leaks', 'scenarios', 'margins', 'pulse', 'explanations'] as const;
+export type AutopilotStage = (typeof AUTOPILOT_STAGES)[number];
+/** pending | running | done | failed | skipped. */
+export type StageStatus = string;
+
+export interface AutopilotHeadline {
+  contribution_inr: Inr;
+  net_sales_inr: Inr;
+  orders: number;
+  unknown_orders: number;
+  partial: boolean;
+  margins?: Margins | null;
+}
+
+export interface AutopilotLeak {
+  cause: string;
+  label: string;
+  orders: number;
+  inr_at_stake: Inr;
+}
+
+export interface DecisionDraft {
+  intervention: string;
+  expected_delta_inr: number | null;
+  test_30d: string;
+  stop_rule: string;
+}
+
+export interface AutopilotAction {
+  rank: number;
+  candidate_id: string;
+  intervention: string;
+  label: string;
+  overrides?: ScenarioOverrides | null;
+  expected_delta_inr: number | null;
+  confidence: Confidence | null;
+  explanation?: AiText | null;
+  decision_draft?: DecisionDraft | null;
+}
+
+/** POST /datasets/:id/autopilot and GET /autopilot/:id. */
+export interface Autopilot {
+  autopilot_id: string;
+  dataset_id: string;
+  analysis_id: string | null;
+  status: 'running' | 'done' | 'failed' | string;
+  stages: Partial<Record<AutopilotStage, StageStatus>>;
+  headline: AutopilotHeadline | null;
+  top_leaks: AutopilotLeak[];
+  actions: AutopilotAction[];
+}
+
+export interface AutopilotRequest {
+  attribution?: AttributionMode;
+  lang?: string;
+}
+
+export interface AdvisorIntervention {
+  candidate_id: string;
+  intervention: string;
+  label: string;
+  overrides?: ScenarioOverrides | null;
+  expected_delta_inr: number | null;
+  confidence: Confidence | null;
+}
+
+/** POST /analyses/:id/advisor: one leak cause explained, with 2–3 fixes and a drafted test. */
+export interface Advisor {
+  cause: string;
+  label: string;
+  summary: AiText;
+  /** Engine facts behind the summary: a list of sentences, label/value pairs or a plain object. */
+  facts?: unknown;
+  interventions: AdvisorIntervention[];
+  test_30d: AiText | null;
+  stop_rule: AiText | null;
+}
+
+export type AskSource = 'ai' | 'template' | 'table';
+
+export interface AskLink {
+  route: string;
+  params?: { cause?: string; channel?: string; product?: string; month?: string };
+}
+
+/** POST /analyses/:id/ask. */
+export interface AskAnswer {
+  answer: string;
+  source: AskSource;
+  tool?: { name: string; args?: Record<string, unknown> } | null;
+  result?: unknown;
+  link?: AskLink | null;
+  /** Set when the guard refused the AI wording or the question. */
+  rejected?: boolean | string | null;
+}
+
+/** GET /analyses/:id/digest. */
+export interface Digest {
+  sections: Array<{ key: string; title: string; text: string }>;
+  source: AiTextSource;
+  badge?: string;
+}
+
+export interface AiFeatureCount {
+  calls?: number;
+  accepted?: number;
+  rejected?: number;
+}
+
+/** GET /ai/status: the AI guard's live log. */
+export interface AiStatus {
+  enabled: boolean;
+  model: string | null;
+  provider: string | null;
+  calls: number;
+  accepted: number;
+  rejected: number;
+  by_feature: Record<string, AiFeatureCount | number>;
+  /** The aggregate fields each AI feature may send, e.g. { narrate: ['totals.contribution_inr', …] }. */
+  fields_sent: Record<string, unknown> | string[];
+  /** Calls that failed (timeout, provider error) and fell back to the template. */
+  failed?: number;
+  /** One sentence on where data is stored and what leaves the API. */
+  region_note?: string;
+}
+
+export interface ImportProfile {
+  id: string;
+  label: string;
+  marketplace: string;
+  fields_mapped: number | string[];
+}
+
+/** Schema field → column in the uploaded file (null: not in the file). */
+export type ColumnMapping = Record<string, string | null>;
+
+export interface ImportMapRequest {
+  headers: string[];
+  sample_rows?: string[][];
+  profile?: string;
+}
+
+/** POST /import/map. */
+export interface ImportMapResult {
+  profile: string | null;
+  source: 'profile' | 'alias' | 'ai' | 'saved';
+  mapping: ColumnMapping;
+  /** Overall (0–1) or per schema field. */
+  confidence: number | Record<string, number> | null;
+  unmapped_required: string[];
+  saved: boolean;
+}
+
+export interface AuthProviders {
+  google: boolean;
+  github: boolean;
+  email: boolean;
+}
+
+export interface Consent {
+  ai?: boolean;
+  email_digest?: boolean;
+}
+
+export interface ProfileUser {
+  _id: string;
+  provider: string;
+  email: string | null;
+  name: string | null;
+  avatar_url: string | null;
+  consent?: Consent;
+}
+
+export interface LoginEntry {
+  at?: string;
+  provider?: string;
+  ip?: string;
+  user_agent?: string;
+  [key: string]: unknown;
+}
+
+/** GET /me with a cookie session (401 for a guest). */
+export interface MeProfile {
+  user: ProfileUser;
+  logins?: LoginEntry[];
+  consent?: Consent;
+}
+
+export interface AuditEntry {
+  at?: string;
+  action?: string;
+  detail?: string;
+  [key: string]: unknown;
 }

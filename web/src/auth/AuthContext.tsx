@@ -2,16 +2,33 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import { bindSession } from '../api/client';
 import type { AuthConfig } from '../api/types';
 import { parseHash } from '../lib/router';
-import { clearSession, currentUser, ensureIdToken, fetchAuthConfig, isDemoMode, leaveDemoMode, loginHref, signOut as doSignOut } from './auth';
+import {
+  clearSession,
+  currentUser,
+  ensureIdToken,
+  fetchAuthConfig,
+  fetchCookieUser,
+  fetchProviders,
+  isDemoMode,
+  leaveDemoMode,
+  loginHref,
+  signOut as doSignOut,
+} from './auth';
 
 export interface AuthUser {
   sub: string;
   email: string | null;
+  /** Google / GitHub sign-in only. */
+  name?: string | null;
+  avatarUrl?: string | null;
+  /** 'google' | 'github' for a cookie session; 'email' for the Cognito email sign-in. */
+  provider?: string;
 }
 
 /**
  * demo: "Try the demo" (?mode=demo), sign-in not set up, or no valid session. No token is sent; uploads go to the shared
- * demo workspace. account: a valid session and not demo. Every call carries the id token and data is the owner's.
+ * demo workspace. account: a valid session and not demo. Every call carries the session (the Cognito id token, or the
+ * httpOnly cookie after Google / GitHub sign-in) and data is the owner's.
  */
 export type AppMode = 'demo' | 'account';
 
@@ -22,6 +39,8 @@ interface AuthValue {
   mode: AppMode;
   /** The signed-in owner in workspace mode; null in demo mode. */
   user: AuthUser | null;
+  /** Signed in with Google or GitHub (cookie session) rather than the email form. */
+  cookie?: boolean;
   /** Demo mode with a session in this browser: offer the way back to the workspace. */
   hasSession: boolean;
   /** The session ended (expired, or the API refused it): ask the person to sign in again. */
@@ -39,6 +58,11 @@ export function useAuth(): AuthValue {
   const v = useContext(AuthContext);
   if (!v) throw new Error('useAuth must be used inside <AuthProvider>.');
   return v;
+}
+
+/** The auth value, or null outside <AuthProvider> (a component rendered on its own, e.g. in a test). */
+export function useOptionalAuth(): AuthValue | null {
+  return useContext(AuthContext);
 }
 
 export const WORKSPACE_URL = '/app/?mode=account';
@@ -64,6 +88,7 @@ function forgetRejectedSession(): void {
 interface Resolved {
   config: AuthConfig;
   account: boolean;
+  cookie: boolean;
   user: AuthUser | null;
   hasSession: boolean;
   sessionEnded: boolean;
@@ -80,12 +105,23 @@ function resolveMode(): Promise<Resolved> {
     // ensureIdToken renews an expired token with the refresh token; null means no usable session.
     const token = config.enabled && !demo ? await ensureIdToken(config) : null;
     const claims = token ? currentUser() : null;
-    const account = Boolean(token && claims);
+    let account = Boolean(token && claims);
+    let user: AuthUser | null = account && claims ? { sub: claims.sub, email: claims.email, provider: 'email' } : null;
+    // No email session: a Google / GitHub sign-in is the httpOnly cookie, which only GET /me can see. Asked only when
+    // one of those sign-ins is switched on, so a guest on a server without them never gets a 401 in the console.
+    const providers = account ? null : await fetchProviders();
+    const cookieUser = providers && (providers.google || providers.github) ? await fetchCookieUser() : null;
+    const cookie = Boolean(cookieUser && !demo);
+    if (cookie && cookieUser) {
+      account = true;
+      user = { sub: cookieUser.sub, email: cookieUser.email, name: cookieUser.name, avatarUrl: cookieUser.avatarUrl, provider: cookieUser.provider };
+    }
     return {
       config,
       account,
-      user: account && claims ? { sub: claims.sub, email: claims.email } : null,
-      hasSession: config.enabled && demo && stored !== null,
+      cookie,
+      user,
+      hasSession: demo && ((config.enabled && stored !== null) || cookieUser !== null),
       // A session that was here and could not be renewed: say so rather than quietly showing the demo.
       sessionEnded: config.enabled && !demo && stored !== null && !account,
     };
@@ -98,6 +134,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [config, setConfig] = useState<AuthConfig>({ enabled: false });
   const [mode, setMode] = useState<AppMode>('demo');
   const [user, setUser] = useState<AuthUser | null>(null);
+  const [cookie, setCookie] = useState(false);
   const [hasSession, setHasSession] = useState(false);
   const [sessionEnded, setSessionEnded] = useState(false);
   const [loginUrl, setLoginUrl] = useState(() => loginHref(returnPath()));
@@ -109,11 +146,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setConfig(r.config);
       setMode(r.account ? 'account' : 'demo');
       setUser(r.user);
+      setCookie(r.cookie);
       setHasSession(r.hasSession);
       setSessionEnded(r.sessionEnded);
       bindSession({
         account: r.account,
-        renew: () => ensureIdToken(r.config),
+        cookie: r.cookie,
+        renew: () => (r.cookie ? Promise.resolve(null) : ensureIdToken(r.config)),
         onEnded: () => {
           forgetRejectedSession();
           setSessionEnded(true);
@@ -133,6 +172,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => window.removeEventListener('hashchange', update);
   }, []);
 
+  // Sign out ends both kinds of session: the email token in this browser and the Google / GitHub cookie on the API.
   const signOut = useCallback(() => {
     bindSession(null);
     doSignOut();
@@ -144,8 +184,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo<AuthValue>(
-    () => ({ ready, config, mode, user, hasSession, sessionEnded, signOut, loginUrl, backToWorkspace }),
-    [ready, config, mode, user, hasSession, sessionEnded, signOut, loginUrl, backToWorkspace],
+    () => ({ ready, config, mode, user, cookie, hasSession, sessionEnded, signOut, loginUrl, backToWorkspace }),
+    [ready, config, mode, user, cookie, hasSession, sessionEnded, signOut, loginUrl, backToWorkspace],
   );
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

@@ -28,6 +28,20 @@ import type {
   PulseLeaks,
   PulseInsights,
   WorkspaceResponse,
+  Advisor,
+  AiStatus,
+  AskAnswer,
+  AuditEntry,
+  AuthProviders,
+  Autopilot,
+  AutopilotRequest,
+  ColumnMapping,
+  Consent,
+  Digest,
+  ImportMapRequest,
+  ImportMapResult,
+  ImportProfile,
+  MeProfile,
 } from './types';
 
 import { getIdToken } from '../auth/auth';
@@ -88,6 +102,8 @@ const isGatewayError = (res: Response) => res.status === 502 || res.status === 5
 interface SessionBinding {
   /** Workspace mode: every call carries the session. */
   account: boolean;
+  /** Signed in with Google or GitHub: the httpOnly profyn_session cookie is the session, so no Bearer token is sent. */
+  cookie?: boolean;
   /** Renews an expired id token with the refresh token; null when that is no longer possible. */
   renew: () => Promise<string | null>;
   /** Called once when the session is gone (a 401, or a token that cannot be renewed). */
@@ -123,6 +139,7 @@ function endSession(): void {
 async function bearer(): Promise<string | null> {
   if (!binding?.account) return null;
   if (ended) throw sessionEndedError();
+  if (binding.cookie) return null;
   const token = getIdToken();
   if (token) return token;
   const renewed = await binding.renew();
@@ -132,12 +149,43 @@ async function bearer(): Promise<string | null> {
 }
 
 /** The UI language, so explanation text from the API comes back in it (English when the API has no translation). */
-function language(): string {
+export function language(): string {
   return i18n.resolvedLanguage || i18n.language || 'en';
 }
 
-async function send(method: 'GET' | 'POST' | 'PATCH', path: string, body?: unknown, auth = true): Promise<{ res: Response; parsed: unknown }> {
+// ---- AI switch for guests ----------------------------------------------------------------------
+// Signed in, the switch is the account's consent (PATCH /me/consent). A guest's choice stays in this browser and every API
+// call says so with X-Profyn-AI: off, so the API answers with template text only.
+
+const AI_PREF_KEY = 'profyn.ai';
+
+export function aiLocalOff(): boolean {
+  try {
+    return window.localStorage.getItem(AI_PREF_KEY) === 'off';
+  } catch {
+    return false;
+  }
+}
+
+export function setAiLocalOff(off: boolean): void {
+  try {
+    if (off) window.localStorage.setItem(AI_PREF_KEY, 'off');
+    else window.localStorage.removeItem(AI_PREF_KEY);
+  } catch {
+    // Blocked storage: the choice lasts for this page only.
+  }
+}
+
+/** True while the signed-in session is the httpOnly cookie (Google or GitHub sign-in). */
+export function cookieSession(): boolean {
+  return Boolean(binding?.account && binding.cookie);
+}
+
+type Method = 'GET' | 'POST' | 'PATCH' | 'DELETE';
+
+async function send(method: Method, path: string, body?: unknown, auth = true): Promise<{ res: Response; parsed: unknown }> {
   const headers: Record<string, string> = { Accept: 'application/json', 'Accept-Language': language() };
+  if (aiLocalOff()) headers['X-Profyn-AI'] = 'off';
   const init: RequestInit = { method, headers };
   const token = auth ? await bearer() : null;
   if (token) headers.Authorization = `Bearer ${token}`;
@@ -172,12 +220,12 @@ async function send(method: 'GET' | 'POST' | 'PATCH', path: string, body?: unkno
       continue;
     }
     if (!res) throw new ApiError(0, null, UNREACHABLE);
-    if (res.status === 401 && token) endSession();
+    if (res.status === 401 && (token || (auth && cookieSession()))) endSession();
     return { res, parsed };
   }
 }
 
-async function request<T>(method: 'GET' | 'POST' | 'PATCH', path: string, body?: unknown, auth = true): Promise<T> {
+async function request<T>(method: Method, path: string, body?: unknown, auth = true): Promise<T> {
   const { res, parsed } = await send(method, path, body, auth);
   if (!res.ok) {
     if (res.status === 401 && binding?.account) throw sessionEndedError();
@@ -194,6 +242,10 @@ export type DatasetInput = { source: SampleSource; period_end?: string } | Fixtu
 export interface DatasetOptions {
   /** Add the upload to this saved dataset; orders already saved there are skipped, never counted twice. */
   appendTo?: string;
+  /** Confirmed column mapping (schema field → column) for a file whose headers are not the template's. */
+  mapping?: ColumnMapping;
+  /** Import profile, e.g. a marketplace report layout. */
+  profile?: string;
 }
 
 function saveBlob(blob: Blob, filename: string): void {
@@ -212,13 +264,14 @@ export async function downloadFile(url: string, filename: string): Promise<void>
   const token = await bearer();
   const headers: Record<string, string> = { 'Accept-Language': language() };
   if (token) headers.Authorization = `Bearer ${token}`;
+  if (aiLocalOff()) headers['X-Profyn-AI'] = 'off';
   let res: Response;
   try {
     res = await fetch(url, { headers });
   } catch {
     throw new ApiError(0, null, UNREACHABLE);
   }
-  if (res.status === 401 && token) {
+  if (res.status === 401 && (token || cookieSession())) {
     endSession();
     throw sessionEndedError();
   }
@@ -253,10 +306,12 @@ export const api = {
   workedOrder: () => request<WorkedOrderResult>('GET', '/worked-order', undefined, false),
 
   createDataset: (input: DatasetInput, options: DatasetOptions = {}) => {
-    const { appendTo } = options;
+    const { appendTo, mapping, profile } = options;
     if (input instanceof File || Array.isArray(input)) {
       const form = new FormData();
       if (appendTo) form.append('append_to', appendTo);
+      if (mapping) form.append('mapping', JSON.stringify(mapping));
+      if (profile) form.append('profile', profile);
       for (const file of input instanceof File ? [input] : input) form.append('file', file, file.name);
       return request<DatasetResponse>('POST', '/datasets', form);
     }
@@ -309,7 +364,47 @@ export const api = {
 
   exportUrl: (decisionId: string, format: 'md' | 'json') =>
     `${API_BASE}/decisions/${encodeURIComponent(decisionId)}/export?format=${format}`,
+
+  // ---- v2: autopilot, fix advisor, Ask Profyn, digest, AI guard -----------------------------------------------------
+
+  /** Runs every step for a dataset (analysis, leaks, scenarios, margins, pulse, explanations) and ranks three actions. */
+  autopilot: (datasetId: string, body: AutopilotRequest) =>
+    request<Autopilot>('POST', `/datasets/${encodeURIComponent(datasetId)}/autopilot`, body),
+  getAutopilot: (autopilotId: string) => request<Autopilot>('GET', `/autopilot/${encodeURIComponent(autopilotId)}`),
+  /** Server-sent events: stage {stage, status} and done (the full document). */
+  autopilotEventsUrl: (autopilotId: string) => `${API_BASE}/autopilot/${encodeURIComponent(autopilotId)}/events`,
+  acceptAutopilot: (autopilotId: string, body: { rank: number; owner?: string }) =>
+    request<DecisionSaved>('POST', `/autopilot/${encodeURIComponent(autopilotId)}/accept`, body),
+
+  advisor: (analysisId: string, body: { cause: string; lang: string }) =>
+    request<Advisor>('POST', `/analyses/${encodeURIComponent(analysisId)}/advisor`, body),
+  ask: (analysisId: string, body: { question: string; lang: string }) =>
+    request<AskAnswer>('POST', `/analyses/${encodeURIComponent(analysisId)}/ask`, body),
+  digest: (analysisId: string, lang: string) =>
+    request<Digest>('GET', `/analyses/${encodeURIComponent(analysisId)}/digest?lang=${encodeURIComponent(lang)}`),
+  aiStatus: () => request<AiStatus>('GET', '/ai/status'),
+
+  // ---- v2: import mapping ---------------------------------------------------------------------------------------------
+
+  importProfiles: () => request<ImportProfile[]>('GET', '/import/profiles'),
+  importMap: (body: ImportMapRequest) => request<ImportMapResult>('POST', '/import/map', body),
+  saveMapping: (body: { headers: string[]; mapping: ColumnMapping; profile?: string }) => request<unknown>('POST', '/import/mappings', body),
+
+  // ---- v2: accounts (Google / GitHub cookie session) ------------------------------------------------------------------
+
+  authProviders: () => request<AuthProviders>('GET', '/auth/providers', undefined, false),
+  logout: () => request<unknown>('POST', '/auth/logout', {}, false),
+  profile: () => request<MeProfile>('GET', '/me'),
+  setConsent: (body: Consent) => request<unknown>('PATCH', '/me/consent', body),
+  audit: () => request<AuditEntry[] | { entries: AuditEntry[] }>('GET', '/me/audit'),
+  meExportUrl: () => `${API_BASE}/me/export`,
+  deleteMe: () => request<unknown>('DELETE', '/me', { confirm: 'DELETE' }),
 };
+
+/** An endpoint this server does not have yet: callers fall back to the engine's own output. */
+export function isNotFound(err: unknown): boolean {
+  return err instanceof ApiError && (err.status === 404 || err.status === 405 || err.status === 501);
+}
 
 export function toErrorInfo(err: unknown): ErrorInfo {
   if (err instanceof ApiError) return { message: err.message, hint: err.hint, issues: err.issues };

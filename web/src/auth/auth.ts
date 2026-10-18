@@ -238,12 +238,66 @@ export function clearSession(): void {
   writeSession(null);
 }
 
-/** Forgets the session in this browser and returns to the landing page. */
+/** Ends a Google / GitHub session: the API clears its httpOnly cookie. Never throws. */
+export async function logoutCookie(): Promise<void> {
+  try {
+    await fetch('/api/v1/auth/logout', { method: 'POST', credentials: 'same-origin', headers: { Accept: 'application/json' } });
+  } catch {
+    // Offline: the cookie expires on its own.
+  }
+}
+
+/** Forgets the session in this browser (and the sign-in cookie on the API), then returns to the landing page. */
 export function signOut(): void {
   writeSession(null);
   leaveDemoMode();
-  window.location.assign('/');
+  void logoutCookie().finally(() => window.location.assign('/'));
 }
+
+// ---- Google / GitHub sign-in (cookie session) -------------------------------------------------------------------------
+
+export type OAuthProvider = 'google' | 'github';
+
+export interface CookieUser {
+  sub: string;
+  email: string | null;
+  name: string | null;
+  avatarUrl: string | null;
+  provider: string;
+}
+
+/**
+ * GET /me with the httpOnly profyn_session cookie: the signed-in Google / GitHub user, or null for a guest (401), a
+ * server without cookie sign-in, or a network failure.
+ */
+export async function fetchCookieUser(): Promise<CookieUser | null> {
+  try {
+    const res = await fetch('/api/v1/me', { credentials: 'same-origin', headers: { Accept: 'application/json' } });
+    if (!res.ok) return null;
+    const body = (await res.json()) as { user?: Record<string, unknown> | null };
+    const u = body?.user;
+    if (!u || typeof u !== 'object' || typeof u._id !== 'string' || typeof u.provider !== 'string') return null;
+    const str = (v: unknown) => (typeof v === 'string' && v.trim() ? v : null);
+    return { sub: u._id, email: str(u.email), name: str(u.name), avatarUrl: str(u.avatar_url), provider: u.provider };
+  } catch {
+    return null;
+  }
+}
+
+/** Which sign-in buttons to show; anything but a usable answer hides Google and GitHub. */
+export async function fetchProviders(): Promise<{ google: boolean; github: boolean; email: boolean }> {
+  try {
+    const res = await fetch('/api/v1/auth/providers', { headers: { Accept: 'application/json' } });
+    if (!res.ok) return { google: false, github: false, email: false };
+    const b = (await res.json()) as Record<string, unknown>;
+    return { google: b.google === true, github: b.github === true, email: b.email === true };
+  } catch {
+    return { google: false, github: false, email: false };
+  }
+}
+
+/** Full-page navigation to the provider; the API sets the cookie and sends the person back to `next`. */
+export const providerHref = (provider: OAuthProvider, next: string = APP_PATH) => `/api/v1/auth/${provider}?return=${encodeURIComponent(next)}`;
 
 /** Where "Sign in" goes; `next` brings the person back (default: their workspace). */
 export const loginHref = (next: string = APP_PATH) => `${LOGIN_PATH}?next=${encodeURIComponent(next)}`;
