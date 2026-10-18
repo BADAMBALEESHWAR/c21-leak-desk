@@ -29,6 +29,7 @@ import { ScenarioScreen } from './screens/ScenarioScreen';
 import { TrustScreen } from './screens/TrustScreen';
 import { useStore } from './state/store';
 import './styles/v2.css';
+import './styles/mobile.css';
 
 const SCREENS: Record<Route, () => JSX.Element> = {
   overview: OverviewScreen,

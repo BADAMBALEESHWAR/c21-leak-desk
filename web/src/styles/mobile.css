@@ -1,0 +1,119 @@
+/* Phone widths: nothing may push the page sideways. The top bar wraps, wide tables scroll inside their own box,
+   and grids and rows shrink to the screen. Loaded last so it can override the desktop rules. */
+@media (max-width: 720px) {
+  html,
+  body {
+    overflow-x: clip;
+  }
+
+  body .topbar {
+    height: auto;
+    align-items: flex-start;
+    min-height: var(--topbar-h);
+    flex-wrap: wrap;
+    row-gap: 8px;
+    padding: 8px 16px;
+  }
+
+  body .topbar-left {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+
+  body .topbar-disclaimer,
+  body .topbar .chip-extra,
+  body .user-email,
+  body .topbar .worked-btn,
+  body .topbar .status-pill {
+    display: none;
+  }
+
+  body .topbar-actions {
+    flex: 1 1 100%;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  body .topbar .chip {
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  body .topbar-attr {
+    order: 5;
+    flex: 1 1 100%;
+  }
+
+  body .content {
+    padding: 16px;
+    min-width: 0;
+  }
+
+  body .page,
+  body .card,
+  body .callout,
+  body .page-head,
+  body .pulse-tabs,
+  body .tabpanel,
+  body .ue-top,
+  body .ue-grid,
+  body .mb,
+  body .mb-head,
+  body .choice,
+  body .bar-row,
+  body .chart-table {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  body .page-head {
+    flex-wrap: wrap;
+  }
+
+  body .ue-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  body .pulse-tabs {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+  }
+
+  body table.table {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  body .infotip-bubble {
+    max-width: calc(100vw - 32px);
+    white-space: normal;
+  }
+
+  body .choice,
+  body .choice-option {
+    flex-wrap: wrap;
+  }
+
+  /* Margin bridge: label above its bar, so the bar and its value get the full card width. */
+  body .mb-axis,
+  body .mb-row {
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: 2px;
+  }
+
+  body .mb {
+    overflow-x: auto;
+  }
+
+  body .mb-label {
+    justify-content: flex-start;
+    text-align: left;
+  }
+
+  /* Room on the right for the value printed after the longest bar. */
+  body .mb-track {
+    margin-right: 96px;
+  }
+}
