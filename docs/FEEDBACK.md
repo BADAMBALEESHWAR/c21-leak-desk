@@ -2,6 +2,47 @@
 
 Hour 10–12 is the mentor round (all four members, about 20 minutes). We record what mentors say word for word, choose one change, build it, and show the before and after in the demo. This file is the evidence for the "improvement after business feedback" criterion.
 
+## Change log: from the brief to the evidence
+
+The story in three parts: where the ledger started, what scope we negotiated, and the evidence that it now holds. The app's Change log page (`#/changelog`) renders this section and `docs/SCOPE.md` as they are, so the app and the docs cannot drift.
+
+### 1. Starting state
+
+Before refund semantics, a return was read the simple way:
+
+- **A refund was treated as lost revenue.** The order was booked as a sale that went away, and its full product cost stayed in.
+- **Recovery was ignored.** Stock value that came back on a return was never subtracted from product cost, so every return looked worse than it was, and "recover more on returns" could never show up as a fix.
+
+On fixture order O05 (gross 1,000, discount 100, refund 900, product cost 400, recovered 350, shipping 60, fee 20, return cost 50), ignoring recovery gives 0 − 400 − 60 − 20 − 50 = **−₹530**. With recovery subtracted once it is 0 − 50 − 60 − 20 − 50 = **−₹180**.
+
+### 2. Negotiated scope
+
+What we agreed to build so that every number can be checked, and what we cut.
+
+**Included**
+
+- **Net revenue = revenue − refund** (rule R1). A refund reduces revenue; it is not a second loss on top.
+- **Net product cost = product cost − recovered** (rule R2). Recovery is subtracted once, never twice, and never added back as revenue.
+- **Payment fee is deducted separately**, on its own line, not folded into shipping or product cost.
+- **A late refund is a prior-period adjustment** (rule R8). A refund dated after the period end leaves the reported month as it was; the ledger shows the adjustment and the restated total beside it.
+
+**Cut**
+
+- **Causal attribution** of advertising. Ads are allocated per order or deducted per channel, never both: allocation, not causation.
+- **Statutory profit.** Profyn reports operational contribution, not net profit for filing (no P&L, GST or tax).
+- **Connectors** for Shopify, Meta Ads, Google Ads, Shiprocket and Razorpay. Orders arrive as CSV or JSON exports instead.
+
+The full table of what works now and what is planned is in `docs/SCOPE.md`.
+
+### 3. Final evidence
+
+- **[Checks page](#/checks):** every check re-runs the engine on the reference data and shows its working, live. `GET /api/v1/checks` returns the same results as JSON, with no login.
+- **Check 1: ₹230.** The worked order: 1,000 − 200 − 400 − 50 − 100 − 20, six lines with a running total.
+- **Check 2: ₹7,053 in both modes.** On the extended sample Σ orders = Σ channels = Σ products = ₹7,053 with ads allocated per order and with channel spend (₹6,000 on the fixture); difference ₹0. Deducting ads in both modes is refused with AttributionConflict (409).
+- **Check 3: the label changes.** O05's refund is missing, so it stays "Unknown" and the total reads "partial (1 unknown)". Assume a return rate and the result is relabelled "Scenario: assumes X% returns", re-run on that stated assumption: at 0–2% returns the recommendation changes from "Charge return shipping" to "No change"; at other rates only its amount moves. With recovery at 50% instead, it changes from "Charge return shipping" (₹150) to "Raise recovery via inspection" (₹480).
+- **Check 4: margins on the worked order.** Net revenue ₹800, gross margin 50%, CM2 41.25%, contribution margin 28.75%, each with its formula.
+- **Tests:** 247 automated tests in 20 files pass (`npm test`), and the browser smoke test passes 12 of 12 steps (`npm run ui:smoke`).
+
 ## 1. Mentor notes, verbatim
 
 Write the words as they were said. Do not summarise in the "Verbatim" column; put our reading in the next column. One row per point.

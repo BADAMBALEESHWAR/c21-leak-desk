@@ -1,0 +1,223 @@
+{
+  "format": "profyn-decision/1",
+  "decision_id": "6ad414cfdcd1ec230087ae05",
+  "analysis_id": "6ad414cfdcd1ec230087ae03",
+  "owner": "Operations lead",
+  "date": "2026-10-18",
+  "saved_at": "2026-10-18T00:37:35.123Z",
+  "intervention": "raise_recovery_via_inspection",
+  "intervention_label": "Raise recovery via inspection",
+  "confidence": "low",
+  "expected_impact_inr": 1000,
+  "starting_state": {
+    "totals": {
+      "orders": 27,
+      "gross_inr": 28400,
+      "net_sales_inr": 19900,
+      "contribution_inr": 7053,
+      "contribution_pct": 35.4,
+      "negative_count": 6,
+      "unknown_count": 1,
+      "partial": true,
+      "channel_spend_inr": 0,
+      "late_refund_count": 1,
+      "late_refund_pending_inr": -600,
+      "headline_ready": false
+    },
+    "mode": "allocate",
+    "period_end": "2026-09-30",
+    "engine_version": "1.0.0",
+    "dataset_source": "extended",
+    "margins": {
+      "net_revenue_inr": 19900,
+      "net_product_cost_inr": 9750,
+      "shipping_inr": 1660,
+      "payment_fee_inr": 542,
+      "return_cost_inr": 280,
+      "handling_inr": 125,
+      "ads_inr": 490,
+      "contribution_inr": 7053,
+      "cm1_pct": 51.01,
+      "cm2_pct": 37.9,
+      "cm3_pct": 35.44,
+      "orders_counted": 26,
+      "unknown_left_out": 1,
+      "partial": true
+    },
+    "fixed_costs_inr": 3000,
+    "net_margin_pct_estimated": 20.37
+  },
+  "scenario": {
+    "scenario_id": "6ad414cfdcd1ec230087ae04",
+    "changed": "recovery_pct",
+    "override": {
+      "recovery_pct": 50
+    },
+    "assume_unknown_refund": true,
+    "baseline_contribution_inr": 7053,
+    "scenario_contribution_inr": 6197,
+    "delta_inr": -856,
+    "notes": [
+      "Assumption: 1 returned order with missing facts treated as refund = gross − discount, recovered = 0, return cost = observed average ₹ 56.",
+      "Recovered stock set to 50% of product cost on every returned order."
+    ]
+  },
+  "check_in_30_days": {
+    "metric": "recovery_pct",
+    "metric_label": "Average recovered stock value on returns, % of product cost",
+    "unit": "pct",
+    "direction": "at_least",
+    "baseline_value": 71.4,
+    "target_value": 90,
+    "date": "2026-11-17",
+    "baseline_source": "observed",
+    "contribution_target_inr": 7197,
+    "contribution_target_basis": "scenario"
+  },
+  "assumptions": [
+    {
+      "key": "recovery_pct",
+      "value": 50,
+      "source": "scenario_override",
+      "label": "Recovered stock set to 50% of product cost on returned orders (scenario)"
+    },
+    {
+      "key": "assume_unknown_refund",
+      "value": true,
+      "source": "scenario_toggle",
+      "label": "Returned orders with missing facts treated as refund = gross − discount, recovered = 0, return cost = observed average (scenario)"
+    },
+    {
+      "key": "handling_default_inr",
+      "value": 0,
+      "source": "config_default",
+      "label": "Handling ₹ 0 per order on 20 orders whose row has none (estimate)"
+    },
+    {
+      "key": "fixed_costs_inr",
+      "value": 3000,
+      "source": "user_input",
+      "label": "Fixed costs per period (salaries, rent, tools), entered by the owner; used only for the estimated net margin"
+    }
+  ],
+  "test_30d": "For 30 days, inspect every return before restocking and record the recovered stock value per return. Compare average recovery with the current 50%.",
+  "stop_rule": "Stop if average recovery after 10 inspected returns is not above 50%, or inspection costs more per return than the recovery it adds.",
+  "notes": "Start with the marketplace returns; review recovery every Friday.",
+  "labels": [
+    "Operational contribution, not statutory net profit.",
+    "Attribution is allocation, not causation."
+  ],
+  "snapshot": {
+    "dataset_id": "6ad414cedcd1ec230087ae02",
+    "dataset_source": "extended",
+    "attribution": "allocate",
+    "period_end": "2026-09-30",
+    "handling_default_inr": 0,
+    "scenario_id": "6ad414cfdcd1ec230087ae04",
+    "changed": "recovery_pct",
+    "overrides": {
+      "recovery_pct": 50,
+      "assume_unknown_refund": true
+    },
+    "observed_return_rate_pct": 22.2,
+    "observed_recovery_pct": 71.4,
+    "engine_version": "1.0.0",
+    "scenario_notes": [
+      "Assumption: 1 returned order with missing facts treated as refund = gross − discount, recovered = 0, return cost = observed average ₹ 56.",
+      "Recovered stock set to 50% of product cost on every returned order."
+    ],
+    "fixed_costs_inr": 3000
+  },
+  "evidence": {
+    "dataset_source": "extended",
+    "totals": {
+      "orders": 27,
+      "gross_inr": 28400,
+      "net_sales_inr": 19900,
+      "contribution_inr": 7053,
+      "contribution_pct": 35.4,
+      "negative_count": 6,
+      "unknown_count": 1,
+      "partial": true,
+      "channel_spend_inr": 0,
+      "late_refund_count": 1,
+      "late_refund_pending_inr": -600,
+      "headline_ready": false
+    },
+    "reconciliation": {
+      "orders_inr": 7053,
+      "channels_inr": 7053,
+      "products_inr": 7053,
+      "gap_inr": 0,
+      "tolerance_inr": 1,
+      "ok": true,
+      "partial": true,
+      "statement": "Σ orders = Σ channels = Σ products"
+    },
+    "leaks": [
+      {
+        "cause": "full_return_partial_recovery",
+        "label": "Full return, partial recovery",
+        "count": 5,
+        "lost_inr": 1384,
+        "example_ids": [
+          "O05",
+          "O10",
+          "O15"
+        ]
+      },
+      {
+        "cause": "discount_exceeds_margin",
+        "label": "Discount deeper than margin",
+        "count": 1,
+        "lost_inr": 96,
+        "example_ids": [
+          "S02"
+        ]
+      },
+      {
+        "cause": "refund_unknown",
+        "label": "Refund without recovery fact (unknown)",
+        "count": 1,
+        "lost_inr": null,
+        "example_ids": [
+          "S04"
+        ]
+      }
+    ],
+    "observed": {
+      "return_rate_pct": 22.2,
+      "recovery_pct": 71.4,
+      "avg_product_cost_on_returns_inr": 416.67,
+      "avg_return_cost_inr": 56,
+      "avg_shipping_inr": 63.7,
+      "avg_ads_per_order_inr": 20,
+      "returned_orders": 6,
+      "refund_unknown_orders": 1
+    },
+    "scenario": {
+      "changed": "recovery_pct",
+      "baseline_inr": 7053,
+      "scenario_inr": 6197,
+      "delta_inr": -856
+    },
+    "checks": {
+      "check1": {
+        "value": 230,
+        "expected": 230,
+        "pass": true
+      },
+      "check2": {
+        "orders_inr": 7053,
+        "channels_inr": 7053,
+        "products_inr": 7053,
+        "ok": true,
+        "attribution": "allocate"
+      },
+      "check3": {
+        "unknown_orders": 1,
+        "confidence": "low"
+      }
+    }
+  }
+}
