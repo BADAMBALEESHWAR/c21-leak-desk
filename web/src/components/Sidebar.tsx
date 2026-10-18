@@ -19,8 +19,6 @@ export const STEPS: Array<{ route: Route; label: string; icon: IconName; hint: s
 const FOOT_LINKS: Array<{ route: Route; key: string; label: string; icon: IconName; account?: boolean }> = [
   { route: 'checks', key: 'nav.checks', label: 'Checks', icon: 'check-circle' },
   { route: 'report', key: 'nav.report', label: 'Monthly report', icon: 'file' },
-  { route: 'ai', key: 'nav.ai', label: 'Why Profyn AI', icon: 'sparkles' },
-  { route: 'trust', key: 'nav.trust', label: 'Trust and privacy', icon: 'lock' },
   { route: 'profile', key: 'nav.profile', label: 'Your profile', icon: 'user', account: true },
 ];
 
