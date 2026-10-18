@@ -27,6 +27,7 @@ export interface Phrases {
   productOne(product: string, orders: string, net: string, c: string): string;
   channelOne(channel: string, orders: string, net: string, c: string, ads: string, share: number): string;
   channelWorst(channel: string, c: string, orders: string): string;
+  summary(net: string, orders: string, c: string, leak: string, lost: string, fix: string, gain: string): string;
   scenarioOverride(change: string, base: string, scen: string, delta: string): string;
   scenarioCandidate(label: string, delta: string, orders: string): string;
   noData: string;
@@ -71,6 +72,7 @@ const en: Phrases = {
   productOne: (p, o, net, c) => `${p}: ${o}, ${net} net sales, ${c} contribution.`,
   channelOne: (ch, o, net, c, ads, share) => `${ch}: ${o}, ${net} net sales and ${c} contribution after ads; ads were ${ads} (${share}% of net sales).`,
   channelWorst: (ch, c, o) => `Weakest channel: ${ch} with ${c} contribution on ${o}.`,
+  summary: (net, o, c, leak, lost, fix, gain) => `Net sales (sales after discounts and refunds) are ${net} on ${o}; operational contribution is ${c}. Biggest place to improve: ${leak} (${lost} lost). Best fix: ${fix} (${gain}).`,
   scenarioOverride: (change, base, scen, delta) => `${change}: contribution moves from ${base} to ${scen} (${delta}).`,
   scenarioCandidate: (label, delta, orders) => `${label}: contribution changes by ${delta} across ${orders} (engine estimate).`,
   noData: 'No data for that question.',
@@ -129,6 +131,7 @@ const hi: Phrases = {
   productOne: (p, o, net, c) => `${p}: ${o}, ${net} शुद्ध बिक्री, ${c} योगदान।`,
   channelOne: (ch, o, net, c, ads, share) => `${ch}: ${o}, ${net} शुद्ध बिक्री और विज्ञापन के बाद ${c} योगदान; विज्ञापन ${ads} रहा (शुद्ध बिक्री का ${share}%)।`,
   channelWorst: (ch, c, o) => `सबसे कमज़ोर चैनल ${ch} है: ${o} पर ${c} योगदान।`,
+  summary: (net, o, c, leak, lost, fix, gain) => `शुद्ध बिक्री (छूट और रिफ़ंड के बाद की बिक्री) ${o} पर ${net} है; ऑपरेशनल कंट्रिब्यूशन ${c} है। सुधार की सबसे बड़ी जगह: ${leak} (${lost} का नुकसान)। सबसे अच्छा उपाय: ${fix} (${gain})।`,
   scenarioOverride: (change, base, scen, delta) => `${change}: योगदान ${base} से ${scen} हो जाता है (${delta})।`,
   scenarioCandidate: (label, delta, orders) => `${label}: ${orders} पर योगदान ${delta} बदलता है (इंजन का अनुमान)।`,
   noData: 'इस सवाल के लिए डेटा नहीं मिला।',
@@ -187,6 +190,7 @@ const te: Phrases = {
   productOne: (p, o, net, c) => `${p}: ${o}, ${net} నికర అమ్మకాలు, ${c} కాంట్రిబ్యూషన్.`,
   channelOne: (ch, o, net, c, ads, share) => `${ch}: ${o}, ${net} నికర అమ్మకాలు, ప్రకటనల తర్వాత ${c} కాంట్రిబ్యూషన్; ప్రకటనలు ${ads} (నికర అమ్మకాల్లో ${share}%).`,
   channelWorst: (ch, c, o) => `బలహీనమైన ఛానల్ ${ch}: ${c} కాంట్రిబ్యూషన్ (${o}).`,
+  summary: (net, o, c, leak, lost, fix, gain) => `నికర అమ్మకాలు (డిస్కౌంట్లు, రీఫండ్ల తర్వాత అమ్మకాలు) ${o}కి ${net}; ఆపరేషనల్ కంట్రిబ్యూషన్ ${c}. మెరుగుపరచవలసిన అతిపెద్ద చోటు: ${leak} (${lost} నష్టం). ఉత్తమ పరిష్కారం: ${fix} (${gain}).`,
   scenarioOverride: (change, base, scen, delta) => `${change}: కాంట్రిబ్యూషన్ ${base} నుండి ${scen}కి మారుతుంది (${delta}).`,
   scenarioCandidate: (label, delta, orders) => `${label}: కాంట్రిబ్యూషన్ ${delta} మారుతుంది (${orders}; ఇంజిన్ అంచనా).`,
   noData: 'ఈ ప్రశ్నకు డేటా దొరకలేదు.',
