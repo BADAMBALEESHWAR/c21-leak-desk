@@ -111,7 +111,7 @@ export function SeeItInAction() {
   const proof = [
     { value: inr(230), label: t('landing.proofWorked', 'worked order reproduced') },
     { value: inr(7053), label: t('landing.proofReconciled', 'reconciled both ways') },
-    { value: '160+', label: t('landing.proofTests', 'tests') },
+    { value: '360+', label: t('landing.proofTests', 'tests') },
     { value: count(10000), label: t('landing.proofScale', 'orders in under 1 s') },
   ];
 

@@ -6,10 +6,10 @@ import type { IconName } from './icons';
 const demoPage = (route: string) => `${APP_PATH}?mode=demo#/${route}`;
 
 export const HERO = {
-  eyebrow: 'Profitability intelligence',
+  eyebrow: 'AI profit analyst for D2C brands',
   lead: 'Know where your money goes. Know what to do next.',
-  body: `Your sales tell you what came in. ${BRAND.name} works through every order — refunds, returns, shipping, fees and ads — and shows what you kept, where profit leaks, and what to fix first.`,
-  ticks: ['CSV & JSON, no integration', 'Unknowns shown, never zero', 'Every rupee traceable'],
+  body: `Upload your order exports. ${BRAND.name}'s AI works through every order — refunds, returns, shipping, fees and ads — finds where profit leaks, ranks the three fixes worth the most, and saves your decision in one click. Every rupee comes from a tested engine, never guessed.`,
+  ticks: ['AI Autopilot: upload, then accept', 'Every rupee from a tested engine', 'English · हिन्दी · తెలుగు'],
 };
 
 /**
@@ -39,25 +39,25 @@ export const SOURCES: Array<{ label: string; icon: IconName }> = [
 /** Three reasons, each tied to a screen that exists today. */
 export const FEATURES: Array<{ tag: string; title: string; text: string; icon: IconName; href: string }> = [
   {
-    tag: 'Ledger',
-    title: 'See what every order kept',
-    text: 'Refunds, recovery, shipping, fees and ads come off each order. Totals reconcile across channels and products, and a missing value stays unknown, never zero.',
-    icon: 'receipt',
-    href: demoPage('ledger?load=extended'),
-  },
-  {
-    tag: 'Leaks & Pulse',
-    title: 'Find where profit leaks',
-    text: 'Losing orders grouped by cause, months compared, products to push or fix, and COD vs prepaid, with the top 3 actions ranked in rupees.',
-    icon: 'search',
-    href: demoPage('pulse?load=demo_12m'),
-  },
-  {
-    tag: 'Decision',
-    title: 'Act on one change',
-    text: 'Test one lever, such as recovery or shipping, see the rupee effect, and save the decision with a 30-day test and a stop rule.',
+    tag: 'AI Autopilot',
+    title: 'Upload. Profyn does the rest.',
+    text: 'Contribution per order, leaks by cause, and the top 3 fixes ranked in rupees, each explained in plain words and saved as a decision in one click.',
     icon: 'sliders',
-    href: demoPage('scenario?load=extended'),
+    href: demoPage('overview?load=demo_12m'),
+  },
+  {
+    tag: 'Ask Profyn',
+    title: 'Ask your numbers anything',
+    text: 'Type or speak in English, Hindi or Telugu: "Which product lost most in September?" The answer comes from your own orders, with a link to the orders behind it.',
+    icon: 'search',
+    href: demoPage('ai'),
+  },
+  {
+    tag: 'Ledger',
+    title: 'Click a leak, see the orders',
+    text: 'Every cause and chart opens the exact orders behind it. Totals reconcile across channels and products, and a missing value stays unknown, never zero.',
+    icon: 'receipt',
+    href: demoPage('ledger?load=demo_12m'),
   },
 ];
 
@@ -69,14 +69,14 @@ export const STEPS: Array<{ title: string; text: string; icon: IconName; href: s
     href: demoPage('import'),
   },
   {
-    title: 'See contribution and leaks',
-    text: 'Per-order contribution, the biggest rupee leaks, and your best and weakest months on one dashboard.',
+    title: 'AI finds the leaks and the fixes',
+    text: 'Autopilot computes every order, groups the losses by cause and ranks the three fixes worth the most, explained in your language.',
     icon: 'bar-chart',
-    href: demoPage('pulse?load=demo_12m'),
+    href: demoPage('overview?load=demo_12m'),
   },
   {
-    title: 'Decide, then measure',
-    text: 'Pick one fix, test it for 30 days with a stop rule, and keep the numbers it was based on.',
+    title: 'Accept, then measure',
+    text: 'Accept a fix in one click: it is saved with a 30-day test, a stop rule and the numbers it was based on.',
     icon: 'clipboard',
     href: demoPage('decision?load=extended'),
   },
@@ -136,8 +136,12 @@ export const PLANS: Plan[] = [
 
 export const FAQ: Array<{ q: string; a: string }> = [
   {
+    q: 'Why not just ask ChatGPT?',
+    a: 'ChatGPT gives you a story once; Profyn gives you a ledger every month. A chat model guesses figures and cannot reconcile thousands of orders to channel and product totals. In Profyn a tested engine computes every rupee, the AI only explains them, and any AI sentence with a figure the engine did not produce is rejected.',
+  },
+  {
     q: 'Do I need to connect my store?',
-    a: 'No. You start with the exports you already have, as CSV or JSON in our order template. Nothing is installed and nothing changes in your store. Live store connectors are a future direction, not something we offer today.',
+    a: 'No. Upload the reports you already have: Shopify, Amazon, Flipkart, Myntra, Razorpay or Shiprocket exports are mapped automatically, and any other CSV is mapped once with AI help. Live store connectors are on the roadmap, not something we offer today.',
   },
   {
     q: 'What files can I upload?',
@@ -149,7 +153,7 @@ export const FAQ: Array<{ q: string; a: string }> = [
   },
   {
     q: 'Is my data safe?',
-    a: 'When you sign in, your uploads and decisions are saved to your account and other accounts cannot read them. The demo uses sample data. You can export to CSV at any time.',
+    a: 'Your data is stored in India (AWS Mumbai), and other accounts cannot read it. The AI sees only totals by cause, never your order rows, and it is off for your uploads unless you switch it on. You can export or delete everything at any time.',
   },
   {
     q: 'What is free, and how does the trial work?',
