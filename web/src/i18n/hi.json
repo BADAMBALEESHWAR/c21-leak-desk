@@ -1771,7 +1771,10 @@
     "pdfFailed": "PDF नहीं बन सकी। प्रिंट / PDF के रूप में सेव करें का उपयोग करें।",
     "pdfMaking": "PDF बन रही है…",
     "pdfButton": "{{month}} की रिपोर्ट WhatsApp पर भेजें",
-    "openReport": "मासिक रिपोर्ट · PDF में भेजें"
+    "openReport": "मासिक रिपोर्ट · PDF में भेजें",
+    "pdfMessage": "{{month}} की Profyn रिपोर्ट (PDF): {{url}}",
+    "linkCopied": "रिपोर्ट लिंक कॉपी हो गया (7 दिन तक मान्य)",
+    "copyLink": "रिपोर्ट लिंक कॉपी करें"
   },
   "shopify": {
     "never": "कभी नहीं",
