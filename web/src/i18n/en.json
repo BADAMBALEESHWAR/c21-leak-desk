@@ -965,7 +965,20 @@
     "openIn": "Open in {{screen}}",
     "label": "Your question",
     "placeholder": "Ask about orders, products, channels or months",
-    "send": "Ask"
+    "send": "Ask",
+    "readAloud": "Read answer aloud",
+    "stopReading": "Stop reading",
+    "voice": {
+      "start": "Ask by voice",
+      "stop": "Stop listening",
+      "listening": "Listening…",
+      "blocked": "Microphone blocked. Allow it in the browser’s site settings, or type your question.",
+      "noSpeech": "Didn’t catch that. Try again, a little closer to the microphone.",
+      "noMic": "No microphone found.",
+      "network": "Voice input needs an internet connection.",
+      "language": "Voice input is not available in this language in this browser.",
+      "failed": "Voice input stopped. Type your question instead."
+    }
   },
   "aiBadge": {
     "ai": "AI summary · numbers from the engine",
@@ -974,7 +987,8 @@
     "short": "AI",
     "tableShort": "Table",
     "templateShort": "Template",
-    "why": "Why this is safe"
+    "why": "Why this is safe",
+    "summary": "Summary · numbers from the engine"
   },
   "ai": {
     "title": "Why Profyn, not a chat window",
@@ -1113,5 +1127,43 @@
     "github": "Continue with GitHub",
     "orEmail": "or with email",
     "emailSoon": "Email sign-in is being set up."
+  },
+  "askAi": {
+    "about": "Ask Profyn about {{thing}}"
+  },
+  "askq": {
+    "contribution": "Explain operational contribution",
+    "gross": "Explain gross sales",
+    "netSales": "Explain net sales",
+    "orders": "Which orders are losing money?",
+    "channel": "Which channel is losing money?",
+    "product": "Which product is losing money?",
+    "fullReturn": "Why are we losing money on full returns?",
+    "discount": "How do I fix discounts deeper than margin?",
+    "fees": "Why do shipping and fees exceed margin?",
+    "refundUnknown": "Why are some refunds unknown?",
+    "otherNegative": "Why are returned orders losing money?",
+    "leak": "Why are we losing money on “{{label}}”?",
+    "inspect": "How does inspecting returns raise recovery?",
+    "returnShipping": "What if we charge return shipping?",
+    "capDiscount": "What if we cap discounts?",
+    "handling": "What if we add handling to the price?",
+    "action": "Explain this action: {{label}}"
+  },
+  "briefing": {
+    "title": "AI briefing",
+    "loading": "Writing the briefing…"
+  },
+  "share": {
+    "whatsapp": "Share on WhatsApp",
+    "copy": "Copy summary",
+    "copied": "Summary copied",
+    "copyFailed": "This browser blocked copying. Use Share on WhatsApp instead.",
+    "group": "Share this summary",
+    "heading": "Profyn summary",
+    "headingNamed": "Profyn summary · {{name}}",
+    "reportHeading": "Profyn monthly report · {{month}}",
+    "contribution": "Operational contribution: {{inr}}",
+    "actions": "Top actions (expected change):"
   }
 }

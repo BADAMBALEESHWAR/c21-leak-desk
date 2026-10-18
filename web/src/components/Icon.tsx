@@ -162,6 +162,28 @@ const PATHS = {
       <path d="M21 12H9" />
     </>
   ),
+  mic: (
+    <>
+      <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
+      <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+      <path d="M12 19v3" />
+    </>
+  ),
+  stop: <rect x="6" y="6" width="12" height="12" rx="2" />,
+  volume: (
+    <>
+      <path d="M11 4.7a.7.7 0 0 0-1.2-.5L6.4 7.6a1.4 1.4 0 0 1-1 .4H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.4a1.4 1.4 0 0 1 1 .4l3.4 3.4a.7.7 0 0 0 1.2-.5Z" />
+      <path d="M16 9a5 5 0 0 1 0 6" />
+      <path d="M19.4 18.4a9 9 0 0 0 0-12.8" />
+    </>
+  ),
+  copy: (
+    <>
+      <rect x="8" y="8" width="14" height="14" rx="2" />
+      <path d="M4 16a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2" />
+    </>
+  ),
+  message: <path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z" />,
 } satisfies Record<string, ReactElement>;
 
 export type IconName = keyof typeof PATHS;

@@ -8,6 +8,7 @@ import { Pill, Unknown } from '../components/Badge';
 import { ButtonLink, LinkButton } from '../components/Button';
 import { Pagination } from '../components/Pagination';
 import { api, authDownload } from '../api/client';
+import { AskAiButton } from '../components/AskAiButton';
 import { Definitions } from '../components/Definitions';
 import { NeedsAnalysis } from '../components/EmptyState';
 import { Icon } from '../components/Icon';
@@ -85,6 +86,7 @@ const Kpis = memo(function Kpis({ a }: { a: AnalysisResponse }) {
         sub="Before discounts"
         onClick={() => openBridge('gross')}
         actionLabel={`Gross sales ${formatInr(t.gross_inr)} — open period waterfall`}
+        ask={<AskAiButton question={tr('askq.gross', 'Explain gross sales')} about={tr('ledger.gross')} />}
       />
       <StatCard
         label={tr('ledger.netSales')}
@@ -93,6 +95,7 @@ const Kpis = memo(function Kpis({ a }: { a: AnalysisResponse }) {
         sub="After discounts and refunds"
         onClick={() => openBridge('net_sales')}
         actionLabel={`Net sales ${formatInr(t.net_sales_inr)} — open period waterfall`}
+        ask={<AskAiButton question={tr('askq.netSales', 'Explain net sales')} about={tr('ledger.netSales')} />}
       />
       <StatCard
         label={tr('ledger.operationalContribution', 'Operational contribution')}
@@ -101,6 +104,7 @@ const Kpis = memo(function Kpis({ a }: { a: AnalysisResponse }) {
         icon="trending-down"
         value={<Money value={t.contribution_inr} tone="contribution" />}
         onClick={() => openBridge('contribution')}
+        ask={<AskAiButton question={tr('askq.contribution', 'Explain operational contribution')} about={tr('ledger.operationalContribution', 'Operational contribution')} />}
         actionLabel={`Operational contribution ${t.contribution_inr === null ? 'unknown' : formatInr(t.contribution_inr)}${t.partial ? `, partial, ${formatCount(t.unknown_count)} unknown` : ''} — open period waterfall`}
         sub={
           <>
@@ -153,6 +157,7 @@ const Kpis = memo(function Kpis({ a }: { a: AnalysisResponse }) {
         icon="table"
         actionIcon="arrow-right"
         onClick={() => focusLedgerTable('losing')}
+        ask={<AskAiButton question={tr('askq.orders', 'Which orders are losing money?')} about={tr('ledger.orders')} />}
         actionLabel={`Orders ${formatCount(t.orders)}, ${formatCount(t.negative_count)} losing money — filter the table to losing orders`}
         sub={t.negative_count > 0 ? <span className="t-loss">{formatCount(t.negative_count)} losing money</span> : 'None losing money'}
       />
@@ -241,14 +246,20 @@ const ContributionChart = memo(function ContributionChart({ a }: { a: AnalysisRe
       table={table}
       csv={csv}
       actions={
-        <span className="chart-seg" role="group" aria-label={t('chart.groupBy', 'Group by')}>
-          <button type="button" aria-pressed={dim === 'channel'} onClick={() => setDim('channel')}>
-            {t('ledger.byChannel')}
-          </button>
-          <button type="button" aria-pressed={dim === 'product'} onClick={() => setDim('product')}>
-            {t('ledger.byProduct')}
-          </button>
-        </span>
+        <>
+          <AskAiButton
+            question={dim === 'channel' ? t('askq.channel', 'Which channel is losing money?') : t('askq.product', 'Which product is losing money?')}
+            about={title}
+          />
+          <span className="chart-seg" role="group" aria-label={t('chart.groupBy', 'Group by')}>
+            <button type="button" aria-pressed={dim === 'channel'} onClick={() => setDim('channel')}>
+              {t('ledger.byChannel')}
+            </button>
+            <button type="button" aria-pressed={dim === 'product'} onClick={() => setDim('product')}>
+              {t('ledger.byProduct')}
+            </button>
+          </span>
+        </>
       }
     >
       <DivergingBars rows={rows} measure={t('ledger.contribution')} ariaLabel={title} format={formatInr} labelWidth={dim === 'channel' ? 120 : 104} />

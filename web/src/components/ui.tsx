@@ -52,10 +52,24 @@ interface StatProps {
   actionLabel?: string;
   actionIcon?: IconName;
   pressed?: boolean;
+  /** An "Ask Profyn" button shown beside the card (outside its own button). */
+  ask?: ReactNode;
 }
 
 /** KPI tile: label, value, optional sub line. With onClick the whole card is a single button. */
-export function StatCard({ label, value, sub, icon, tone = 'default', large, info, onClick, actionLabel, actionIcon = 'arrow-up-right', pressed }: StatProps) {
+export function StatCard({ ask, ...props }: StatProps) {
+  const card = <StatTile {...props} />;
+  return ask ? (
+    <div className="kpi-slot">
+      {card}
+      {ask}
+    </div>
+  ) : (
+    card
+  );
+}
+
+function StatTile({ label, value, sub, icon, tone = 'default', large, info, onClick, actionLabel, actionIcon = 'arrow-up-right', pressed }: Omit<StatProps, 'ask'>) {
   const cls = `card kpi kpi-${tone}${large ? ' kpi-large' : ''}`;
   const head = (
     <span className="kpi-head">

@@ -1,9 +1,11 @@
-import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useId, useMemo, useRef, useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { api, isNotFound, toErrorInfo } from '../api/client';
 import type { AskAnswer } from '../api/types';
+import { ASK_EVENT, type AskEventDetail } from '../lib/ask';
 import { formatCount, formatInr } from '../lib/format';
 import { hrefFor, ROUTES, type Route } from '../lib/router';
+import { recognitionCtor, speechLang, synthesis, transcriptOf, useVoices, voiceFor, type Recognition } from '../lib/speech';
 import { useStore } from '../state/store';
 import { AiBadge } from './AiBadge';
 import { Button } from './Button';
@@ -13,6 +15,8 @@ import { Icon } from './Icon';
 interface Turn {
   id: number;
   question: string;
+  /** The UI language the question was asked in; the answer comes back in it. */
+  lang: string;
   answer: AskAnswer | null;
   error: string | null;
 }
@@ -111,6 +115,14 @@ export function AskDrawer() {
   const inputId = useId();
   const lang = i18n.resolvedLanguage ?? i18n.language ?? 'en';
 
+  // Voice: the browser's speech recognition for questions, speech synthesis for answers.
+  const SpeechApi = useMemo(() => recognitionCtor(), []);
+  const recRef = useRef<Recognition | null>(null);
+  const [listening, setListening] = useState(false);
+  const [voiceError, setVoiceError] = useState<string | null>(null);
+  const voices = useVoices();
+  const [speaking, setSpeaking] = useState<number | null>(null);
+
   const suggestions = [
     t('ask.q1', 'Which product lost most in September?'),
     t('ask.q2', 'What if return shipping is charged?'),
@@ -127,29 +139,160 @@ export function AskDrawer() {
     setTurns([]);
   }, [analysisId]);
 
-  const ask = async (q: string) => {
+  /** Sends the question; false when it cannot go now (empty, busy, or no data), so the caller can keep it in the input. */
+  const ask = (q: string): boolean => {
     const text = q.trim();
-    if (!text || busy || !analysisId) return;
+    if (!text || busy || !analysisId) return false;
     const id = ++seq.current;
-    setTurns((ts) => [...ts, { id, question: text, answer: null, error: null }]);
+    setTurns((ts) => [...ts, { id, question: text, lang, answer: null, error: null }]);
     setQuestion('');
     setBusy(true);
-    try {
-      const answer = await api.ask(analysisId, { question: text, lang });
-      setTurns((ts) => ts.map((x) => (x.id === id ? { ...x, answer } : x)));
-    } catch (err) {
-      const message = isNotFound(err)
-        ? t('ask.unavailable', 'Ask Profyn is not available on this server yet. Every figure is still on the Ledger, Leaks and Pulse screens.')
-        : toErrorInfo(err).message;
-      setTurns((ts) => ts.map((x) => (x.id === id ? { ...x, error: message } : x)));
-    } finally {
-      setBusy(false);
+    void (async () => {
+      try {
+        const answer = await api.ask(analysisId, { question: text, lang });
+        setTurns((ts) => ts.map((x) => (x.id === id ? { ...x, answer } : x)));
+      } catch (err) {
+        const message = isNotFound(err)
+          ? t('ask.unavailable', 'Ask Profyn is not available on this server yet. Every figure is still on the Ledger, Leaks and Pulse screens.')
+          : toErrorInfo(err).message;
+        setTurns((ts) => ts.map((x) => (x.id === id ? { ...x, error: message } : x)));
+      } finally {
+        setBusy(false);
+      }
+    })();
+    return true;
+  };
+  // Speech and window events call the latest ask (current analysis, busy flag and language).
+  const askRef = useRef(ask);
+  askRef.current = ask;
+
+  // "Ask about this": any screen dispatches profyn:ask; the drawer opens, fills the question and sends it.
+  useEffect(() => {
+    const onAsk = (e: Event) => {
+      const detail = (e as CustomEvent<AskEventDetail>).detail;
+      if (!detail || typeof detail.question !== 'string' || !detail.question.trim()) return;
+      setOpen(true);
+      if (detail.send !== false && askRef.current(detail.question)) return;
+      setQuestion(detail.question);
+    };
+    window.addEventListener(ASK_EVENT, onAsk);
+    return () => window.removeEventListener(ASK_EVENT, onAsk);
+  }, []);
+
+  const voiceMessage = (code: string): string | null => {
+    switch (code) {
+      case 'aborted':
+        return null;
+      case 'not-allowed':
+      case 'service-not-allowed':
+        return t('ask.voice.blocked', 'Microphone blocked. Allow it in the browser’s site settings, or type your question.');
+      case 'no-speech':
+        return t('ask.voice.noSpeech', 'Didn’t catch that. Try again, a little closer to the microphone.');
+      case 'audio-capture':
+        return t('ask.voice.noMic', 'No microphone found.');
+      case 'network':
+        return t('ask.voice.network', 'Voice input needs an internet connection.');
+      case 'language-not-supported':
+        return t('ask.voice.language', 'Voice input is not available in this language in this browser.');
+      default:
+        return t('ask.voice.failed', 'Voice input stopped. Type your question instead.');
     }
   };
 
+  const stopListening = () => {
+    const rec = recRef.current;
+    if (!rec) return;
+    try {
+      rec.stop();
+    } catch {
+      rec.abort();
+    }
+  };
+
+  const startListening = () => {
+    if (!SpeechApi || recRef.current) return;
+    setVoiceError(null);
+    let rec: Recognition;
+    try {
+      rec = new SpeechApi();
+    } catch {
+      setVoiceError(t('ask.voice.failed', 'Voice input stopped. Type your question instead.'));
+      return;
+    }
+    rec.lang = speechLang(lang);
+    rec.interimResults = true;
+    rec.continuous = false;
+    rec.maxAlternatives = 1;
+    let sent = false;
+    rec.onresult = (e) => {
+      const { text, final } = transcriptOf(e);
+      if (sent) return;
+      setQuestion(text);
+      if (final && text) {
+        sent = true;
+        askRef.current(text);
+        stopListening();
+      }
+    };
+    rec.onerror = (e) => setVoiceError(voiceMessage(e.error));
+    rec.onend = () => {
+      if (recRef.current === rec) recRef.current = null;
+      setListening(false);
+    };
+    recRef.current = rec;
+    try {
+      rec.start();
+      setListening(true);
+    } catch {
+      recRef.current = null;
+      setVoiceError(t('ask.voice.failed', 'Voice input stopped. Type your question instead.'));
+    }
+  };
+
+  const speak = (turn: Turn, text: string) => {
+    const s = synthesis();
+    if (!s) return;
+    s.cancel();
+    if (speaking === turn.id) {
+      setSpeaking(null);
+      return;
+    }
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = speechLang(turn.lang);
+    const voice = voiceFor(turn.lang, voices);
+    if (voice) u.voice = voice;
+    const done = () => setSpeaking((id) => (id === turn.id ? null : id));
+    u.onend = done;
+    u.onerror = done;
+    setSpeaking(turn.id);
+    s.speak(u);
+  };
+
+  // Closing the drawer (or leaving the app) stops the microphone and the voice.
+  useEffect(() => {
+    if (open) return undefined;
+    recRef.current?.abort();
+    recRef.current = null;
+    setListening(false);
+    setVoiceError(null);
+    if (speaking !== null) {
+      synthesis()?.cancel();
+      setSpeaking(null);
+    }
+    return undefined;
+  }, [open]);
+  useEffect(
+    () => () => {
+      recRef.current?.abort();
+      synthesis()?.cancel();
+    },
+    [],
+  );
+
   const submit = (e: FormEvent) => {
     e.preventDefault();
-    void ask(question);
+    if (listening) stopListening();
+    ask(question);
   };
 
   return (
@@ -178,7 +321,7 @@ export function AskDrawer() {
             <div className="ask-suggest" role="group" aria-label={t('ask.suggested', 'Suggested questions')}>
               <p className="mini-title">{t('ask.suggested', 'Suggested questions')}</p>
               {suggestions.map((s) => (
-                <button key={s} type="button" className="ask-chip" onClick={() => void ask(s)} disabled={busy}>
+                <button key={s} type="button" className="ask-chip" onClick={() => ask(s)} disabled={busy}>
                   {s}
                 </button>
               ))}
@@ -189,6 +332,7 @@ export function AskDrawer() {
             {turns.map((turn) => {
               const a = turn.answer;
               const link = a ? linkOf(a) : null;
+              const canSpeak = Boolean(a?.answer) && synthesis() !== null && voiceFor(turn.lang, voices) !== null;
               return (
                 <li key={turn.id} className="ask-turn">
                   <p className="ask-q">{turn.question}</p>
@@ -216,6 +360,17 @@ export function AskDrawer() {
                             {t('ask.openIn', 'Open in {{screen}}', { screen: t(`nav.${link.route}`) })} <Icon name="arrow-right" size={14} />
                           </a>
                         ) : null}
+                        {canSpeak ? (
+                          <button
+                            type="button"
+                            className={`ask-speak${speaking === turn.id ? ' is-speaking' : ''}`}
+                            onClick={() => speak(turn, a.answer)}
+                            aria-label={speaking === turn.id ? t('ask.stopReading', 'Stop reading') : t('ask.readAloud', 'Read answer aloud')}
+                            title={speaking === turn.id ? t('ask.stopReading', 'Stop reading') : t('ask.readAloud', 'Read answer aloud')}
+                          >
+                            <Icon name={speaking === turn.id ? 'stop' : 'volume'} size={15} />
+                          </button>
+                        ) : null}
                       </div>
                     </div>
                   )}
@@ -226,6 +381,17 @@ export function AskDrawer() {
           <div ref={endRef} />
 
           <form className="ask-form" onSubmit={submit}>
+            {listening ? (
+              <p className="ask-voice-status" role="status">
+                <span className="ask-voice-dot" aria-hidden="true" />
+                {t('ask.voice.listening', 'Listening…')}
+              </p>
+            ) : voiceError ? (
+              <p className="ask-voice-status is-error" role="alert">
+                <Icon name="alert-triangle" size={14} />
+                {voiceError}
+              </p>
+            ) : null}
             <label className="visually-hidden" htmlFor={inputId}>
               {t('ask.label', 'Your question')}
             </label>
@@ -235,10 +401,22 @@ export function AskDrawer() {
               type="text"
               value={question}
               onChange={(e) => setQuestion(e.target.value)}
-              placeholder={t('ask.placeholder', 'Ask about orders, products, channels or months')}
+              placeholder={listening ? t('ask.voice.listening', 'Listening…') : t('ask.placeholder', 'Ask about orders, products, channels or months')}
               disabled={!analysisId}
               autoComplete="off"
             />
+            {SpeechApi ? (
+              <button
+                type="button"
+                className={`ask-mic${listening ? ' is-listening' : ''}`}
+                onClick={listening ? stopListening : startListening}
+                disabled={!analysisId || (busy && !listening)}
+                aria-label={listening ? t('ask.voice.stop', 'Stop listening') : t('ask.voice.start', 'Ask by voice')}
+                title={listening ? t('ask.voice.stop', 'Stop listening') : t('ask.voice.start', 'Ask by voice')}
+              >
+                <Icon name={listening ? 'stop' : 'mic'} size={18} />
+              </button>
+            ) : null}
             <Button type="submit" variant="primary" iconRight="arrow-right" disabled={!analysisId || busy || !question.trim()}>
               {t('ask.send', 'Ask')}
             </Button>

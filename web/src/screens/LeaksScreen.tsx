@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import type { LeakCause, LeakGroup, OrderResult } from '../api/types';
 import { BarRows, type BarRow } from '../charts/BarRows';
 import { AiBadge } from '../components/AiBadge';
+import { AskAiButton } from '../components/AskAiButton';
 import { Pill } from '../components/Badge';
 import { Button, LinkButton } from '../components/Button';
 import { NeedsAnalysis } from '../components/EmptyState';
@@ -14,6 +15,7 @@ import { NextStep, PageHeader } from '../components/Page';
 import { Table, type Column } from '../components/Table';
 import { EmptyPanel, revealElement } from '../components/ui';
 import { lower } from '../i18n';
+import { leakQuestion } from '../lib/ask';
 import { formatInr, plural } from '../lib/format';
 import { fullReturnPartialRecovery, LEAK_LABELS } from '../lib/labels';
 import { hrefFor, ledgerHref, useHashLocation } from '../lib/router';
@@ -120,7 +122,10 @@ function LeakCard({
         <span className={`icon-chip ${unknown ? 'icon-chip-warning' : 'icon-chip-danger'}`} aria-hidden="true">
           <Icon name={unknown ? 'alert-triangle' : 'trending-down'} size={20} />
         </span>
-        <Pill tone="neutral">{t('leaks.orderCount', { count: g.count })}</Pill>
+        <span className="leak-top-end">
+          <Pill tone="neutral">{t('leaks.orderCount', { count: g.count })}</Pill>
+          <AskAiButton question={leakQuestion(t, g.cause, g.label || LEAK_LABELS[g.cause])} about={g.label || LEAK_LABELS[g.cause]} />
+        </span>
       </div>
       <h2 id={`leak-${g.cause}`} className="leak-title">
         {g.label || LEAK_LABELS[g.cause]}

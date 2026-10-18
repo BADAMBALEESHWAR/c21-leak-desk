@@ -18,6 +18,9 @@ put GITHUB_CLIENT_SECRET "$(val GITHUB_CLIENT_SECRET)" SecureString
 put GOOGLE_CLIENT_ID "$(val GOOGLE_CLIENT_ID)" String
 put GOOGLE_CLIENT_SECRET "$(val GOOGLE_CLIENT_SECRET)" SecureString
 put GEMINI_API_KEY "$(val GEMINI_API_KEY)" SecureString
+# Optional: a Shopify app from the Dev Dashboard, for "Install Profyn from Shopify" (the token method works without it).
+put SHOPIFY_CLIENT_ID "$(val SHOPIFY_CLIENT_ID)" String
+put SHOPIFY_CLIENT_SECRET "$(val SHOPIFY_CLIENT_SECRET)" SecureString
 put GEMINI_MODEL gemini-3.5-flash String
 put PUBLIC_URL https://d2gmrabs4sk8gk.cloudfront.net String
 # AI on: the v2 API still keeps it off for uploaded data unless the signed-in owner consents (demo data only by default).

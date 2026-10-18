@@ -8,10 +8,11 @@ export type AiBadgeSource = 'ai' | 'template' | 'table';
  * Marks every AI surface. "AI" text was worded by the model from engine numbers it cannot change; "Template" is the
  * deterministic wording; "Table" is a lookup straight from the engine. Each links to the page that explains the guard.
  */
-export function AiBadge({ source, compact = false, className }: { source: AiBadgeSource; compact?: boolean; className?: string }) {
+export function AiBadge({ source, compact = false, className, text }: { source: AiBadgeSource; compact?: boolean; className?: string; text?: string }) {
   const { t } = useTranslation();
-  const label =
-    source === 'ai'
+  const label = text
+    ? text
+    : source === 'ai'
       ? t('aiBadge.ai', 'AI summary · numbers from the engine')
       : source === 'table'
         ? t('aiBadge.table', 'Table · straight from the engine')
