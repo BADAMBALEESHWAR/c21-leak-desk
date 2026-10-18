@@ -194,8 +194,9 @@ export function Sidebar({ route }: { route: Route }) {
             {t('actions.about')}
           </button>
         </p>
-        <LanguageSwitch />
       </div>
+      {/* Outside the footer so it can stay pinned to the bottom while the rest of the sidebar scrolls. */}
+      <LanguageSwitch />
     </nav>
   );
 }

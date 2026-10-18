@@ -620,3 +620,21 @@ code {
     padding: var(--sp-5);
   }
 }
+
+/* The sidebar scrolls when the screen is shorter than its content; the language switch stays pinned at the bottom. */
+.sidebar {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+
+.sidebar > .lang-switch {
+  position: sticky;
+  bottom: -16px;
+  z-index: 1;
+  flex: none;
+  margin: 10px -16px -16px;
+  padding: 10px 16px 16px;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+}
