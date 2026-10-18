@@ -41,7 +41,7 @@ The full table of what works now and what is planned is in `docs/SCOPE.md`.
 - **Check 2: ₹7,053 in both modes.** On the extended sample Σ orders = Σ channels = Σ products = ₹7,053 with ads allocated per order and with channel spend (₹6,000 on the fixture); difference ₹0. Deducting ads in both modes is refused with AttributionConflict (409).
 - **Check 3: the label changes.** O05's refund is missing, so it stays "Unknown" and the total reads "partial (1 unknown)". Assume a return rate and the result is relabelled "Scenario: assumes X% returns", re-run on that stated assumption: at 0–2% returns the recommendation changes from "Charge return shipping" to "No change"; at other rates only its amount moves. With recovery at 50% instead, it changes from "Charge return shipping" (₹150) to "Raise recovery via inspection" (₹480).
 - **Check 4: margins on the worked order.** Net revenue ₹800, gross margin 50%, CM2 41.25%, contribution margin 28.75%, each with its formula.
-- **Tests:** 247 automated tests in 20 files pass (`npm test`), and the browser smoke test passes 12 of 12 steps (`npm run ui:smoke`).
+- **Tests:** 247 automated tests in 20 files pass, and the browser smoke test passes 12 of 12 steps.
 
 ## 1. Mentor notes, verbatim
 
