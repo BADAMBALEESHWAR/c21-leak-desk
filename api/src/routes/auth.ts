@@ -91,6 +91,8 @@ export function authRouter(settings: AuthSettings, oauth: OAuthSettings = oauthF
     '/me',
     ah(async (req, res) => {
       if (!req.user) {
+        // ?quiet=1: the app asks on every load; a guest is a normal answer there, not an error in the browser console.
+        if (req.query.quiet === '1') return void res.json({ user: null, auth_enabled: signInEnabled(), workspace: 'demo' });
         const message = t('msg.sign_in_required', messageLang(req));
         return void res.status(401).json({ error: { code: 'unauthorized', message }, user: null, auth_enabled: signInEnabled(), workspace: 'demo' });
       }
