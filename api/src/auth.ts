@@ -3,7 +3,7 @@ import { CognitoJwtVerifier } from 'aws-jwt-verify';
 import { HttpError } from './errors.js';
 
 // Sign-in with Amazon Cognito. The judge path never needs a login: requests without a token are guests.
-// With sign-in configured, a guest's decisions stay in memory ("demo workspace"); a signed-in user's are saved.
+// With sign-in configured, a guest works in the "demo workspace": its records are saved under account "guest".
 
 export interface AuthUser {
   sub: string;

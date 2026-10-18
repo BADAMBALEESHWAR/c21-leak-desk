@@ -14,6 +14,7 @@ import { checksRouter } from './routes/checks.js';
 import { datasetsRouter } from './routes/datasets.js';
 import { decisionsRouter } from './routes/decisions.js';
 import { healthRouter } from './routes/health.js';
+import { i18nRouter } from './routes/i18n.js';
 import { pulseRouter } from './routes/pulse.js';
 import { scenariosRouter } from './routes/scenarios.js';
 
@@ -58,7 +59,7 @@ export function createApp(options: { auth?: AuthSettings } = {}) {
       res.setHeader('Access-Control-Allow-Origin', origin);
       res.setHeader('Vary', 'Origin');
       res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Request-Id, Authorization');
-      res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+      res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PATCH, OPTIONS');
       res.setHeader('Access-Control-Expose-Headers', 'x-request-id, x-engine-version, Content-Disposition');
     }
     if (req.method === 'OPTIONS') return void res.sendStatus(204);
@@ -72,6 +73,7 @@ export function createApp(options: { auth?: AuthSettings } = {}) {
   api.use(healthRouter);
   api.use(authRouter(auth));
   api.use(checksRouter);
+  api.use(i18nRouter);
   api.use(datasetsRouter);
   api.use(analysesRouter);
   api.use(scenariosRouter);

@@ -1,107 +1,175 @@
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import path from 'node:path';
 import Handlebars from 'handlebars';
 import type { Describe } from '../engine/leaks.js';
+import type { Ledger } from '../engine/ledger.js';
 import type { Narrator } from '../engine/scenario.js';
 import { DISCOUNT_CAP_PCT, RECOVERY_TARGET_PCT } from '../engine/scenario.js';
-import type { InterventionKey, LeakCause, OrderRow } from '../engine/types.js';
+import type { InterventionKey, LeakCause, Observed, OrderRow } from '../engine/types.js';
+import { TEMPLATE_FILES } from './templates/bundle.js';
 
-// Deterministic "why" text and 30-day test drafts. AI may reword these (labelled "ai"); numbers always come from here.
+// Deterministic "why" text and 30-day test drafts in English, Hindi and Telugu. The language is chosen first;
+// numbers are template variables filled afterwards, so they are the same in every language.
+// AI may reword these (labelled "ai"); numbers always come from here.
+// Text lives in api/src/ai/templates/{en,hi,te}/*.hbs (same file set in each); bundle.ts is the copy the compiled API reads.
 
 export { formatInr } from '../engine/format.js';
 import { formatInr } from '../engine/format.js';
 
+export const LANGS = ['en', 'hi', 'te'] as const;
+export type Lang = (typeof LANGS)[number];
+export const LANGUAGE_NAMES: Record<Lang, string> = { en: 'English', hi: 'Hindi', te: 'Telugu' };
+export const isLang = (s: unknown): s is Lang => typeof s === 'string' && (LANGS as readonly string[]).includes(s);
+
+const TEMPLATE_DIR = path.join(__dirname, 'templates');
+const isTemplateFile = (name: string) => name.endsWith('.hbs') || name === 'labels.json';
+
+/** One language's template files: from api/src/ai/templates/<lang>/ when present (dev, tests), else the bundled copy (dist). */
+export function templateFiles(lang: Lang): Record<string, string> {
+  const dir = path.join(TEMPLATE_DIR, lang);
+  if (!existsSync(dir)) return TEMPLATE_FILES[lang];
+  const names = readdirSync(dir).filter(isTemplateFile).sort();
+  return Object.fromEntries(names.map((n) => [n, readFileSync(path.join(dir, n), 'utf8').replace(/\r\n/g, '\n')]));
+}
+
 const hb = Handlebars.create();
 hb.registerHelper('inr', (n: number | null) => formatInr(n));
 hb.registerHelper('plural', (n: number, one: string, many: string) => (n === 1 ? one : many));
-const compile = (s: string) => hb.compile(s, { noEscape: true, strict: false });
+const compile = (s: string) => hb.compile(s.replace(/\n+$/, ''), { noEscape: true, strict: false });
 
-const LEAK_TEMPLATES: Record<LeakCause, HandlebarsTemplateDelegate> = {
-  full_return_partial_recovery: compile(
-    '{{count}} {{plural count "order was" "orders were"}} refunded in full and only {{inr recovered}} of {{inr product_cost}} product cost came back as stock. With shipping, fees and return costs, these orders lost {{inr lost}}. Examples: {{examples}}.',
-  ),
-  refund_unknown: compile(
-    '{{count}} returned {{plural count "order is" "orders are"}} missing a refund, recovery or return-cost fact, so contribution is unknown, not zero. Record the facts before trusting a contribution headline. Orders: {{examples}}.',
-  ),
-  fees_exceed_margin: compile(
-    'On {{count}} kept {{plural count "order" "orders"}}, shipping, payment fee, handling and ads cost more than was left after product cost, losing {{inr lost}}. Examples: {{examples}}.',
-  ),
-  discount_exceeds_margin: compile(
-    'On {{count}} kept {{plural count "order" "orders"}}, the discount ({{inr discount}} in total) is at least as large as the shortfall, so the discount turned the sale negative: {{inr lost}} lost. Examples: {{examples}}.',
-  ),
-  other_negative: compile(
-    '{{count}} returned {{plural count "order" "orders"}} recovered the stock but still lost {{inr lost}} on shipping, fees and return costs. Examples: {{examples}}.',
-  ),
+type Tpl = HandlebarsTemplateDelegate;
+const LEAK_CAUSES: LeakCause[] = ['full_return_partial_recovery', 'refund_unknown', 'fees_exceed_margin', 'discount_exceeds_margin', 'other_negative'];
+export const CANDIDATE_KEYS = ['raise_recovery_via_inspection', 'charge_return_shipping', 'cap_discount', 'add_handling_to_price'] as const;
+const INTERVENTION_KEYS: InterventionKey[] = [...CANDIDATE_KEYS, 'none'];
+/** The three volume-based rules share one stop rule. */
+const STOP_FILE: Record<InterventionKey, string> = {
+  raise_recovery_via_inspection: 'stop.raise_recovery_via_inspection',
+  charge_return_shipping: 'stop.same_volume',
+  cap_discount: 'stop.same_volume',
+  add_handling_to_price: 'stop.same_volume',
+  none: 'stop.none',
 };
 
-export const describeLeak: Describe = (g, rows: OrderRow[]) => {
-  const sum = (f: (r: OrderRow) => number | null) => rows.reduce((s, r) => s + (f(r) ?? 0), 0);
-  return LEAK_TEMPLATES[g.cause]({
-    count: g.count,
-    lost: g.lost_inr,
-    examples: g.example_ids.join(', ') + (g.count > g.example_ids.length ? ` and ${g.count - g.example_ids.length} more` : ''),
-    recovered: sum((r) => r.recovered_product_cost_inr),
-    product_cost: sum((r) => r.product_cost_inr),
-    discount: sum((r) => r.discount_inr),
-  });
-};
+interface Pack {
+  leak: Record<LeakCause, Tpl>;
+  why: Record<InterventionKey, Tpl>;
+  test: Record<InterventionKey, Tpl>;
+  stop: Record<InterventionKey, Tpl>;
+  examples: Tpl;
+  recoveryUnknown: Tpl;
+  labels: Record<InterventionKey, { label: Tpl; description: Tpl }>;
+}
 
-const WHY: Record<InterventionKey, HandlebarsTemplateDelegate> = {
-  raise_recovery_via_inspection: compile(
-    'Returns currently recover {{recovery}} of product cost. Inspecting returns before restocking so recovery reaches {{target}}% adds about {{inr delta}} across {{driving}} returned {{plural driving "order" "orders"}}.',
-  ),
-  charge_return_shipping: compile(
-    'Return shipping averages {{inr return_cost}} per returned order and the brand pays it. Charging it to the customer adds about {{inr delta}} across {{driving}} {{plural driving "return" "returns"}}.',
-  ),
-  cap_discount: compile(
-    'Capping discounts at {{cap}}% of gross adds about {{inr delta}} across {{driving}} {{plural driving "order" "orders"}}, assuming the same orders still happen.',
-  ),
-  add_handling_to_price: compile(
-    'Handling is paid on every order but not priced in. Adding it to the price adds about {{inr delta}} across {{driving}} {{plural driving "order" "orders"}}, assuming the same orders still happen.',
-  ),
-  none: compile('Under these assumptions none of the four rules improves contribution. Keep the current policy and re-run when the facts change.'),
-};
+/** Every template file a language must have; the same set in en, hi and te. */
+export const TEMPLATE_NAMES: string[] = [
+  ...LEAK_CAUSES.map((c) => `leak.${c}`),
+  ...INTERVENTION_KEYS.map((k) => `why.${k}`),
+  ...INTERVENTION_KEYS.map((k) => `test.${k}`),
+  ...[...new Set(Object.values(STOP_FILE))],
+  'part.examples',
+  'part.recovery_unknown',
+].sort();
 
-const SAME_VOLUME_STOP = 'Stop if weekly orders fall below the prior four-week average for two weeks in a row.';
-const TEST: Record<InterventionKey, { test: HandlebarsTemplateDelegate; stop: HandlebarsTemplateDelegate }> = {
-  raise_recovery_via_inspection: {
-    test: compile('For 30 days, inspect every return before restocking and record the recovered stock value per return. Compare average recovery with the current {{recovery}}.'),
-    stop: compile('Stop if average recovery after 10 inspected returns is not above {{recovery}}, or inspection costs more per return than the recovery it adds.'),
-  },
-  charge_return_shipping: {
-    test: compile('For 30 days, charge {{inr return_cost}} return shipping on every return and track the return rate and contribution per order against the {{rate}}% baseline.'),
-    stop: compile(SAME_VOLUME_STOP),
-  },
-  cap_discount: {
-    test: compile('For 30 days, cap discounts at {{cap}}% of gross and track orders per week and contribution per order.'),
-    stop: compile(SAME_VOLUME_STOP),
-  },
-  add_handling_to_price: {
-    test: compile('For 30 days, add handling to the listed price and track conversion and contribution per order.'),
-    stop: compile(SAME_VOLUME_STOP),
-  },
-  none: {
-    test: compile('No test needed this month. Re-run the analysis after the next month-end close.'),
-    stop: compile('Not applicable.'),
-  },
-};
-
-function vars(ledger: Parameters<Narrator['why']>[1], delta: number, driving: number) {
-  const o = ledger.observed;
+function loadPack(lang: Lang): Pack {
+  const files = templateFiles(lang);
+  const tpl = (name: string) => {
+    const text = files[`${name}.hbs`];
+    if (text === undefined) throw new Error(`Template ${lang}/${name}.hbs is missing.`);
+    return compile(text);
+  };
+  const by = <K extends string>(keys: readonly K[], name: (k: K) => string) => Object.fromEntries(keys.map((k) => [k, tpl(name(k))])) as Record<K, Tpl>;
+  const rawLabels = JSON.parse(files['labels.json'] ?? '{}') as Record<string, { label: string; description: string }>;
+  const labels = Object.fromEntries(
+    INTERVENTION_KEYS.map((k) => {
+      const l = rawLabels[k];
+      if (!l) throw new Error(`labels.json for ${lang} has no entry for ${k}.`);
+      return [k, { label: compile(l.label), description: compile(l.description) }];
+    }),
+  ) as Pack['labels'];
   return {
-    delta,
-    driving,
-    recovery: o.recovery_pct === null ? 'an unknown share' : `${o.recovery_pct}%`,
-    target: RECOVERY_TARGET_PCT,
-    cap: DISCOUNT_CAP_PCT,
-    rate: o.return_rate_pct,
-    return_cost: o.avg_return_cost_inr,
+    leak: by(LEAK_CAUSES, (c) => `leak.${c}`),
+    why: by(INTERVENTION_KEYS, (k) => `why.${k}`),
+    test: by(INTERVENTION_KEYS, (k) => `test.${k}`),
+    stop: by(INTERVENTION_KEYS, (k) => STOP_FILE[k]),
+    examples: tpl('part.examples'),
+    recoveryUnknown: tpl('part.recovery_unknown'),
+    labels,
   };
 }
 
-export const templateNarrator: Narrator = {
-  // confidence_reason is returned separately and shown beside the badge, so it is not repeated here.
-  why: (rec, ledger) => WHY[rec.intervention](vars(ledger, rec.expected_delta_inr, rec.driving_orders)),
-  test30d(intervention, ledger) {
-    const v = vars(ledger, 0, 0);
-    return { test: TEST[intervention].test(v), stop: TEST[intervention].stop(v) };
-  },
-};
+const packs = new Map<Lang, Pack>();
+function pack(lang: Lang): Pack {
+  let p = packs.get(lang);
+  if (!p) {
+    p = loadPack(lang);
+    packs.set(lang, p);
+  }
+  return p;
+}
+
+/** Leak "why" text in one language. */
+export function describerFor(lang: Lang): Describe {
+  return (g, rows: OrderRow[]) => {
+    const p = pack(lang);
+    const sum = (f: (r: OrderRow) => number | null) => rows.reduce((s, r) => s + (f(r) ?? 0), 0);
+    const more = g.count > g.example_ids.length ? g.count - g.example_ids.length : 0;
+    return p.leak[g.cause]({
+      count: g.count,
+      lost: g.lost_inr,
+      examples: p.examples({ ids: g.example_ids.join(', '), more }),
+      recovered: sum((r) => r.recovered_product_cost_inr),
+      product_cost: sum((r) => r.product_cost_inr),
+      discount: sum((r) => r.discount_inr),
+    });
+  };
+}
+
+function vars(lang: Lang, observed: Observed, delta: number, driving: number) {
+  return {
+    delta,
+    driving,
+    recovery: observed.recovery_pct === null ? pack(lang).recoveryUnknown({}) : `${observed.recovery_pct}%`,
+    target: RECOVERY_TARGET_PCT,
+    cap: DISCOUNT_CAP_PCT,
+    rate: observed.return_rate_pct,
+    return_cost: observed.avg_return_cost_inr,
+  };
+}
+
+/** Recommendation "why" text and the 30-day test and stop drafts in one language. */
+export function narratorFor(lang: Lang): Narrator {
+  return {
+    // confidence_reason is returned separately and shown beside the badge, so it is not repeated here.
+    why: (rec, ledger) => pack(lang).why[rec.intervention](vars(lang, ledger.observed, rec.expected_delta_inr, rec.driving_orders)),
+    test30d(intervention, ledger) {
+      const v = vars(lang, ledger.observed, 0, 0);
+      return { test: pack(lang).test[intervention](v), stop: pack(lang).stop[intervention](v) };
+    },
+  };
+}
+
+/** The English texts the engine stores with every analysis and scenario. */
+export const describeLeak: Describe = describerFor('en');
+export const templateNarrator: Narrator = narratorFor('en');
+
+/**
+ * Re-renders a stored recommendation's template text in another language from the same inputs:
+ * the observed values of the state it was computed on and its driving orders.
+ */
+export function recommendationText(
+  lang: Lang,
+  rec: { intervention: InterventionKey; expected_delta_inr: number },
+  observed: Observed,
+  drivingOrders: number,
+): { why: string; test_30d_draft: string; stop_rule_draft: string } {
+  const state = { observed } as Ledger;
+  const n = narratorFor(lang);
+  const drafts = n.test30d(rec.intervention, state);
+  return { why: n.why({ ...rec, driving_orders: drivingOrders } as Parameters<Narrator['why']>[0], state), test_30d_draft: drafts.test, stop_rule_draft: drafts.stop };
+}
+
+/** Candidate names and one-line descriptions in one language (numbers filled after the language is chosen). */
+export function interventionLabels(lang: Lang): Array<{ intervention: InterventionKey; label: string; description: string }> {
+  const v = { target: RECOVERY_TARGET_PCT, cap: DISCOUNT_CAP_PCT };
+  return INTERVENTION_KEYS.map((k) => ({ intervention: k, label: pack(lang).labels[k].label(v), description: pack(lang).labels[k].description(v) }));
+}
