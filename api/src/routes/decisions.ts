@@ -78,7 +78,7 @@ decisionsRouter.post(
     };
     // With sign-in on, a guest's decision lives in the demo workspace (memory) and is never written to the database.
     const demoWorkspace = (req.app.locals.auth as AuthSettings).enabled && !req.user;
-    const persisted = await decisions.save(record, { memoryOnly: demoWorkspace });
+    const persisted = await decisions.save(record);
     await put(`exports/decision-${record._id}.md`, decisionMarkdown(record), 'text/markdown').catch(() => undefined);
     req.log.info({ analysis_id: analysis._id, decision_id: record._id, persisted }, 'decision saved');
     res.status(201).json({ decision_id: record._id, saved_at: record.saved_at, assumptions, engine_version: ENGINE_VERSION, persisted, workspace: demoWorkspace ? 'demo' : req.user ? 'account' : 'shared' });
