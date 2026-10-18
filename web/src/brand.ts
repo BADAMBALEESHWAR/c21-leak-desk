@@ -2,7 +2,6 @@
 export const BRAND = {
   name: 'Profyn',
   tagline: 'Know More. Earn Better.',
-  domain: 'profyn.in',
   description:
     'Profyn shows a D2C brand the real contribution of every order — after refunds, recovery, shipping, fees and ads — finds where money leaks, and turns one fix into a measurable decision.',
   repoUrl: 'https://github.com/BADAMBALEESHWAR/c21-leak-desk',

@@ -15,7 +15,6 @@ function brandHtml(): Plugin {
     __BRAND_NAME__: BRAND.name,
     __BRAND_TAGLINE__: BRAND.tagline,
     __BRAND_DESCRIPTION__: BRAND.description,
-    __BRAND_DOMAIN__: BRAND.domain,
   };
   return {
     name: 'brand-html',
