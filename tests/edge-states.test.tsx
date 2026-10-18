@@ -394,23 +394,38 @@ describe('header disclaimer', () => {
 });
 
 describe('integrations roadmap', () => {
-  it('shows CSV / JSON as live and the rest as planned, with no links, tokens or connected state', () => {
+  it('shows CSV / JSON and the report importers as available, the API connectors as planned, with no links, tokens or connected state', () => {
     const { container } = render(<Integrations />);
     const live = container.querySelector('.intg-item.is-live') as HTMLElement;
     expect(text(live)).toContain('CSV / JSON upload');
     expect(text(live)).toContain('working');
+    const reports = Array.from(container.querySelectorAll('.intg-item.is-report'));
+    expect(reports.map((p) => text(p.querySelector('.intg-name')))).toEqual([
+      'Amazon settlement report',
+      'Flipkart orders report',
+      'Myntra orders report',
+      'Shopify orders export',
+      'Razorpay payments',
+      'Shiprocket shipments',
+    ]);
+    for (const r of reports) expect(text(r)).toContain('Available now');
     const planned = Array.from(container.querySelectorAll('.intg-item.is-planned'));
-    expect(planned.map((p) => text(p.querySelector('.intg-name')))).toEqual(['Shopify', 'Meta Ads', 'Google Ads', 'Shiprocket / courier', 'Razorpay / payment gateway']);
+    expect(planned.map((p) => text(p.querySelector('.intg-name')))).toEqual(['Shopify API', 'Amazon SP-API', 'Flipkart Seller API', 'Myntra partner API', 'Meta Ads', 'Google Ads']);
     for (const p of planned) {
       expect(p.getAttribute('aria-disabled')).toBe('true');
-      expect(text(p)).toContain('Coming soon');
-      expect(text(p.querySelector('.intg-note'))).toMatch(/Not connected\.$/);
+      expect(text(p)).toContain('Planned');
+      expect(text(p.querySelector('.intg-prereq'))).toMatch(/Not connected\.$/);
     }
+    expect(text(planned[0])).toContain('Build first');
+    expect(text(planned[0].querySelector('.intg-prereq'))).toContain('custom app token');
+    expect(text(planned[1].querySelector('.intg-prereq'))).toContain('SP-API developer registration and your seller authorisation');
+    expect(text(planned[2].querySelector('.intg-prereq'))).toContain('Seller API key');
+    expect(text(planned[3].querySelector('.intg-prereq'))).toContain('partner invitation');
     expect(container.querySelectorAll('a').length).toBe(0);
     expect(container.querySelector('input[type="password"]')).toBeNull();
     // No connected state anywhere: only "Not connected." in the planned notes.
     expect(text(container)).not.toMatch(/\bConnected\b/);
-    expect(text(container.querySelector('.intg-timeline'))).toBe('NowCSV / JSONNext (Phase 1)Shopify + Meta AdsLater (Phase 2)Shiprocket, Razorpay, Google Ads');
+    expect(text(container.querySelector('.intg-timeline'))).toBe('NowCSV / JSON and report filesNextShopify API, then Meta AdsLaterAmazon, Flipkart and Myntra APIs, Google Ads');
   });
 
   it('records "Notify me" in this browser only', () => {
@@ -430,6 +445,7 @@ describe('integrations roadmap', () => {
     const { container } = render(<Integrations compact />);
     expect(container.querySelector('.intg-compact')).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Notify me' })).toBeNull();
-    expect(container.querySelectorAll('.intg-item').length).toBe(6);
+    // CSV / JSON, six report importers and six planned connectors.
+    expect(container.querySelectorAll('.intg-item').length).toBe(13);
   });
 });
