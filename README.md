@@ -29,7 +29,8 @@ Operational contribution, not statutory net profit. All demo data is synthetic (
 | krishna-2-005, Kuchuru Sai Krishna Reddy (M2) | 2: Interface | App screens, landing page, charts, click-to-cause ledger, Fix panel, Ask Profyn drawer, voice and PDF sharing, Hindi/Telugu UI, phone layout |
 | bhavyasree72 (M3) | 3: Narrative, docs, translations | Templates, AI guardrail text, Hindi and Telugu language files, `DEMO`, `RULES`, `SNAPSHOT`, `FEEDBACK`, ADRs, MBA CSVs |
 | musanivivekanand39 (M4) | 4: Data, tests, drills | Extended fixture, negative-test files, `expected.json`, Vitest suites, check harness, scenario and confidence tests |
-| Tilak Pasupureddy (SBM, Team Cops) | Business | Business partner team and submission contact for SBM |
+| Tilak Pasupureddy (MBA, SBM, Team Cops) | Business | MBA business team; submission contact for SBM |
+| Peela Preetham (MBA, SBM, Team Cops) | Business | MBA business team |
 
 Each member's commits are on the `Track1`–`Track4` branches and merged into `main`.
 
