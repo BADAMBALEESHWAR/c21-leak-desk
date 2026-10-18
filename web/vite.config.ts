@@ -31,6 +31,8 @@ export default defineConfig({
     port: 5173,
     strictPort: true,
     proxy: apiProxy,
+    // The Change log page imports ../docs/*.md as raw text; the dev server may read the repo root for that.
+    fs: { allow: ['..'] },
   },
   preview: {
     port: 4173,
