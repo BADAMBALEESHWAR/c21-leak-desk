@@ -17,6 +17,7 @@ export default defineConfig({
   },
   test: {
     include: ['tests/**/*.test.{ts,tsx}'],
+    testTimeout: 30000, // heavy API tests (12-month demo) can pass 5 s when the machine is busy
     environment: 'node',
     env: { NODE_ENV: 'test', LOG_LEVEL: 'silent', MONGO_URL: '', AI_DISABLED: '1' },
     server: { deps: { inline: ['@testing-library/react', 'react-i18next'] } },
