@@ -4,7 +4,7 @@ import { fetchProviders } from '../auth/auth';
 import { ProviderButtons } from '../auth/ProviderButtons';
 import { APP_PATH, BRAND } from '../brand';
 import { LANGS, setLanguage } from '../i18n';
-import { CHANGELOG_URL, DEMO_MEDIA, FAQ, FEATURES, HERO, SOURCES, STEPS } from './content';
+import { CHANGELOG_URL, DEMO_MEDIA, FAQ, FEATURES, HERO, SOURCES, STEPS, TRUST } from './content';
 import { SeeItInAction, WatchModal } from './DemoVideo';
 import { HeroDashboard } from './HeroDashboard';
 import { Icon } from './icons';
@@ -282,6 +282,44 @@ export function Landing() {
           </div>
         </section>
 
+        {/* Why Profyn, and the data promise */}
+        <section id="trust" className="l-section" aria-labelledby="trust-title">
+          <div className="l-wrap">
+            <SectionHead
+              kicker={t('landing.trustKicker', 'Why Profyn')}
+              id="trust-title"
+              title={t('landing.trustTitle', 'AI that explains. An engine that counts. Your data stays yours.')}
+              center
+            />
+            <div className="l-why">
+              <div className="l-why-card">
+                <h3 className="l-why-h">
+                  <Icon name="lightbulb" size={18} /> {t('landing.trustWhyTitle', 'Why not just ask ChatGPT?')}
+                </h3>
+                <p className="l-why-quote">{t('landing.trustQuote', 'ChatGPT gives you a story once; Profyn gives you a ledger every month.')}</p>
+                <ul className="l-why-list">
+                  {TRUST.why.map((w, i) => (
+                    <li key={i}>{t(`landing.trustWhy${i + 1}`, w)}</li>
+                  ))}
+                </ul>
+              </div>
+              <div className="l-why-card">
+                <h3 className="l-why-h">
+                  <Icon name="shield" size={18} /> {t('landing.trustPromiseTitle', 'Your data promise')}
+                </h3>
+                <ul className="l-why-list">
+                  {TRUST.promise.map((p, i) => (
+                    <li key={i}>{t(`landing.trustPromise${i + 1}`, p)}</li>
+                  ))}
+                </ul>
+                <a className="l-why-link" href="/privacy.html">
+                  {t('landing.privacyPolicy', 'Read the privacy policy')}
+                </a>
+              </div>
+            </div>
+          </div>
+        </section>
+
         {/* Pricing */}
         <section id="pricing" className="l-section" aria-labelledby="pricing-title">
           <div className="l-wrap">
@@ -405,7 +443,7 @@ export function Landing() {
             <p className="l-foot-meta">
               <span>© 2026 {BRAND.name}</span>
               <a href={BRAND.repoUrl}>{t('landing.github', 'GitHub')}</a>
-              <a href={`${APP_PATH}#/trust`}>{t('landing.trust', 'Trust and privacy')}</a>
+              <a href="#trust">{t('landing.trust', 'Trust and privacy')}</a>
             </p>
             <p>{t('landing.footNote')}</p>
           </div>
