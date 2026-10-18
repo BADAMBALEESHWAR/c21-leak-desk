@@ -1,10 +1,11 @@
 import { useTranslation } from 'react-i18next';
-import type { AnalysisResponse, OrderResult, WorkedOrderResult } from '../api/types';
+import type { AnalysisResponse, LineKey, OrderResult, WaterfallLine, WorkedOrderResult } from '../api/types';
 import { BridgeChart } from '../charts/BridgeChart';
 import { WaterfallChart, WaterfallNotes } from '../charts/WaterfallChart';
 import { BRAND } from '../brand';
 import { formatCount, formatDate, formatDecimal, formatInr, formatPct, plural } from '../lib/format';
 import { ALLOCATED_EN, ALLOCATED_KEY, fullReturnPartialRecovery, handlingEstimateUsed, LEAK_LABELS } from '../lib/labels';
+import { ledgerHref } from '../lib/router';
 import { useStore, type BridgeFocus } from '../state/store';
 import { Pill } from './Badge';
 import { Button } from './Button';
@@ -15,6 +16,7 @@ import { AboutDetail, ChecksDetail } from './InfoDrawers';
 import { Money } from './Money';
 import { Provenance } from './Provenance';
 import { Callout, Skeleton } from './ui';
+import '../charts/chart.css';
 
 const plainNumber = (n: number) => (Number.isInteger(n) ? formatCount(n) : formatDecimal(n));
 
@@ -121,6 +123,57 @@ function RecoveryLine({ order }: { order: OrderResult }) {
   );
 }
 
+/**
+ * The deduction lines that explain a loss, largest first. Refund and discount only reduce revenue, so they are left
+ * out, except the discount when it is the cause.
+ */
+export function largestDeductions(lines: WaterfallLine[], n = 2, withDiscount = false): WaterfallLine[] {
+  return lines
+    .filter((l) => l.kind === 'deduction' && l.key !== 'refund' && (withDiscount || l.key !== 'discount') && l.amount_inr !== null && l.amount_inr !== 0 && l.source !== 'moved_to_channel' && l.source !== 'not_recognised')
+    .sort((a, b) => Math.abs(b.amount_inr as number) - Math.abs(a.amount_inr as number))
+    .slice(0, n);
+}
+
+/** "Why this order leaks": the cause in words and the two largest deductions, with a link to every order of that cause. */
+function WhyLeaks({ order }: { order: OrderResult }) {
+  const { t } = useTranslation();
+  const { closeDrawer } = useStore();
+  const negative = order.contribution_inr !== null && order.contribution_inr < 0;
+  if (!order.leak_cause && !negative) return null;
+  const lineName: Partial<Record<LineKey, string>> = {
+    discount: t('drawer.lineDiscount', 'Discount'),
+    net_product_cost: t('drawer.netProductCost', 'Net product cost'),
+    shipping: t('ledger.shipping'),
+    payment_fee: t('ledger.fee'),
+    return_cost: t('ledger.returnCost'),
+    handling: t('ledger.handling'),
+    ads: t('ledger.ads'),
+  };
+  const cause = order.leak_cause ? t(`focus.cause.${order.leak_cause}`, LEAK_LABELS[order.leak_cause]) : t('drawer.whyNegative', 'Costs are larger than what the order kept');
+  const top = largestDeductions(order.lines, 2, order.leak_cause === 'discount_exceeds_margin');
+  const name = (l: WaterfallLine) => lineName[l.key] ?? l.label;
+  const amount = (l: WaterfallLine) => formatInr(Math.abs(l.amount_inr as number));
+  const sentence =
+    top.length >= 2
+      ? t('drawer.whyTwo', '{{cause}}. The largest deductions are {{a}} ({{aInr}}) and {{b}} ({{bInr}}).', { cause, a: name(top[0]), aInr: amount(top[0]), b: name(top[1]), bInr: amount(top[1]) })
+      : top.length === 1
+        ? t('drawer.whyOne', '{{cause}}. The largest deduction is {{a}} ({{aInr}}).', { cause, a: name(top[0]), aInr: amount(top[0]) })
+        : `${cause}.`;
+  return (
+    <section className="why-leak" aria-label={t('drawer.whyTitle', 'Why this order leaks')}>
+      <h3 className="why-leak-title">{t('drawer.whyTitle', 'Why this order leaks')}</h3>
+      <p>{sentence}</p>
+      {order.leak_cause ? (
+        <p>
+          <a href={ledgerHref({ cause: order.leak_cause })} onClick={() => closeDrawer()}>
+            {t('drawer.whyAll', 'See every order with this cause')} →
+          </a>
+        </p>
+      ) : null}
+    </section>
+  );
+}
+
 function OrderDetail({ order, periodEnd, attribution }: { order: OrderResult; periodEnd: string | null; attribution: AnalysisResponse['attribution'] | null }) {
   const { t } = useTranslation();
   const flags = order.flags.filter((f) => f !== 'late_refund' || !order.late_refund);
@@ -157,11 +210,13 @@ function OrderDetail({ order, periodEnd, attribution }: { order: OrderResult; pe
         ) : null}
       </dl>
 
+      <WhyLeaks order={order} />
+
       {order.leak_cause ? (
         <div className="drawer-row">
           <span className="drawer-row-label">Leak cause</span>
           <Pill tone={order.leak_cause === 'refund_unknown' ? 'warning' : 'danger'} icon="alert-triangle">
-            {LEAK_LABELS[order.leak_cause]}
+            {t(`focus.cause.${order.leak_cause}`, LEAK_LABELS[order.leak_cause])}
           </Pill>
         </div>
       ) : null}
