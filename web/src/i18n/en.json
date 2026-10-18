@@ -2508,5 +2508,26 @@
     "creating": "Creating link…",
     "create": "Create Razorpay payment link",
     "defaultNote": "Return shipping charge"
+  },
+  "data": {
+    "title": "Where your data lives",
+    "mumbai": "India, AWS Mumbai (ap-south-1)",
+    "local": "This computer (local)",
+    "database": "Database",
+    "mongo": "MongoDB, saved on a server in your region",
+    "memory": "In memory (not saved)",
+    "region": "Region",
+    "files": "Uploaded files",
+    "s3": "Amazon S3, private and encrypted",
+    "disk": "Local disk",
+    "backups": "Backups",
+    "hourly": "Every hour, to S3",
+    "none": "None",
+    "datasets": "Datasets",
+    "analyses": "Analyses",
+    "scenarios": "Scenarios",
+    "decisions": "Decisions",
+    "signIns": "Sign-ins",
+    "audit": "Activity log entries"
   }
 }
