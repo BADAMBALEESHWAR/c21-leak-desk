@@ -1,6 +1,7 @@
 import { describeLeak } from '../ai/templates.js';
 import { computeLedger, type LedgerOptions } from '../engine/ledger.js';
-import { applyCandidate } from '../engine/scenario.js';
+import { applyCandidate, applyOverrides } from '../engine/scenario.js';
+import type { ScenarioOverrides } from '../schema/orders.js';
 import type { OrderRow } from '../engine/types.js';
 
 // Statistical confidence for a fix. The engine gives the exact rupee change on the orders as they are; this asks
@@ -134,4 +135,11 @@ export function evidenceFor(key: string, rows: OrderRow[], opts: LedgerOptions):
   cache.set(key, out);
   if (cache.size > 100) cache.delete(cache.keys().next().value as string);
   return out;
+}
+
+/** Evidence for every fix under a scenario: the same bootstrap, run on the rows after the overrides are applied. */
+export function scenarioEvidence(key: string, rows: OrderRow[], opts: LedgerOptions, overrides: ScenarioOverrides): Record<CandidateKey, Evidence> {
+  const base = computeLedger(rows, opts, describeLeak);
+  const applied = applyOverrides(base.rows, overrides, base);
+  return evidenceFor(`${key}:${JSON.stringify(overrides)}`, applied.rows, { ...opts, period_end: base.period_end });
 }

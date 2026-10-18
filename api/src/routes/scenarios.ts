@@ -2,12 +2,13 @@ import { Router } from 'express';
 import { langOf, localizeScenario } from '../ai/localize.js';
 import type { Lang } from '../ai/templates.js';
 import { scenarioFor } from '../engine/analyze.js';
+import { scenarioEvidence } from '../stats/evidence.js';
 import { marginsFromParts, type Margins } from '../engine/margins.js';
 import type { ScenarioColumn, ScenarioResult } from '../engine/types.js';
 import { ah, notFound } from '../errors.js';
 import { canSee, type AuthUser } from '../auth.js';
 import { analyses, newId, scenarios, type ScenarioRecord } from '../repo.js';
-import { ScenarioRequestSchema } from '../schema/orders.js';
+import { ScenarioRequestSchema, type ScenarioOverrides } from '../schema/orders.js';
 import { ledgerOptionsOf, loadAnalysis } from './analyses.js';
 
 export const scenariosRouter = Router();
@@ -50,6 +51,12 @@ async function localized(s: ScenarioRecord, lang: Lang, viewer?: AuthUser): Prom
   return { ...localizeScenario(s.result, loaded.dataset.rows, ledgerOptionsOf(loaded.analysis), lang), lang };
 }
 
+/** Bootstrap evidence for a saved scenario; undefined when its analysis is no longer available. */
+async function storedEvidence(s: ScenarioRecord, viewer?: AuthUser) {
+  const loaded = await loadAnalysis(s.analysis_id, viewer).catch(() => null);
+  return loaded ? scenarioEvidence(s._id, loaded.dataset.rows, ledgerOptionsOf(loaded.analysis), s.overrides as ScenarioOverrides) : undefined;
+}
+
 scenariosRouter.post(
   '/analyses/:id/scenarios',
   ah(async (req, res) => {
@@ -69,6 +76,7 @@ scenariosRouter.post(
       observed: analysis.result.observed,
       ...result,
       margins: scenarioMargins(result),
+      evidence: scenarioEvidence(id, dataset.rows, opts, body.overrides),
       ...localizeScenario(result, dataset.rows, opts, lang),
       lang,
     });
@@ -80,7 +88,7 @@ scenariosRouter.get(
   ah(async (req, res) => {
     const lang = langOf(req, res);
     const s = await loadScenario(req.params.id, req.user);
-    res.json({ scenario_id: s._id, analysis_id: s.analysis_id, ...s.result, margins: scenarioMargins(s.result), ...(await localized(s, lang, req.user)) });
+    res.json({ scenario_id: s._id, analysis_id: s.analysis_id, ...s.result, margins: scenarioMargins(s.result), evidence: await storedEvidence(s, req.user), ...(await localized(s, lang, req.user)) });
   }),
 );
 

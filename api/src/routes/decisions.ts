@@ -10,7 +10,8 @@ import { decisions, newId, scenarios, type DecisionRecord } from '../repo.js';
 import { DecisionRequestSchema } from '../schema/orders.js';
 import { put } from '../storage.js';
 import { ledgerOptionsOf, loadAnalysis, marginsFor } from './analyses.js';
-import { evidenceFor } from '../stats/evidence.js';
+import { evidenceFor, scenarioEvidence } from '../stats/evidence.js';
+import type { ScenarioOverrides } from '../schema/orders.js';
 
 export const decisionsRouter = Router();
 
@@ -30,7 +31,7 @@ export async function createDecision(req: Request, analysisId: string, rawBody: 
   const rec = scenario?.result.recommendation ?? a.recommendation;
   const known = body.intervention in INTERVENTIONS;
   // At the observed baseline a saved fix carries its statistical confidence (bootstrap over the owner's orders), not the engine's "unknown".
-  const evidence = !scenario && known && body.intervention !== 'none' ? evidenceFor(analysis._id, dataset.rows, ledgerOptionsOf(analysis))[body.intervention as keyof ReturnType<typeof evidenceFor>] : undefined;
+  const evidence = known && body.intervention !== 'none' ? (scenario ? scenarioEvidence(scenario._id, dataset.rows, ledgerOptionsOf(analysis), scenario.overrides as ScenarioOverrides) : evidenceFor(analysis._id, dataset.rows, ledgerOptionsOf(analysis)))[body.intervention as keyof ReturnType<typeof evidenceFor>] : undefined;
 
   // The server owns the snapshot so a decision can be re-run exactly (R13 note, §7).
   const assumptions: Record<string, unknown> = {
