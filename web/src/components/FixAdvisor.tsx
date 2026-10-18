@@ -243,7 +243,11 @@ export function FixAdvisor({ cause, open, onClose }: { cause: string | null; ope
                 <p className="muted">{t('advisor.noFixes', 'No modelled fix pays for this leak yet.')}</p>
               ) : (
                 <div className="fix-options" role="radiogroup" aria-labelledby={`${uid}-fixes`}>
-                  {adv.interventions.slice(0, 3).map((iv, i) => (
+                  {adv.interventions.slice(0, 3).map((iv, i, shown) => {
+                    // Only the fix with the largest rupee gain is recommended; it alone carries the confidence line.
+                    const best = shown.reduce((b, x, j) => ((x.expected_delta_inr ?? -Infinity) > (shown[b].expected_delta_inr ?? -Infinity) ? j : b), 0);
+                    const isBest = i === best && iv.expected_delta_inr !== null && iv.expected_delta_inr > 0;
+                    return (
                     <label key={iv.candidate_id || iv.intervention} className={`fix-option${choice === i ? ' is-picked' : ''}`}>
                       <input
                         type="radio"
@@ -259,11 +263,13 @@ export function FixAdvisor({ cause, open, onClose }: { cause: string | null; ope
                         <span className="fix-option-label">{iv.label}</span>
                         <span className="fix-option-figures">
                           <Money value={iv.expected_delta_inr} tone="contribution" signed />
-                          <EvidenceBadge evidence={iv.evidence} confidence={iv.confidence} />
+                          {isBest ? <Pill tone="success">{t('decision.recommended', 'Recommended')}</Pill> : null}
+                          {isBest ? <EvidenceBadge evidence={iv.evidence} confidence={iv.confidence} /> : null}
                         </span>
                       </span>
                     </label>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </section>
