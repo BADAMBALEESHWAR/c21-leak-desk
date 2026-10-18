@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type RefObject } from 'react';
+import { useTranslation } from 'react-i18next';
 import { loginHref } from '../auth/auth';
 import { BRAND, DEMO_URL } from '../brand';
 import { LogoMark } from '../components/LogoMark';
@@ -10,9 +11,10 @@ export const LINKS = {
   signUp: `${loginHref()}&mode=signup`,
 } as const;
 
-export function Wordmark({ onDark = false, label = `${BRAND.name} home` }: { onDark?: boolean; label?: string }) {
+export function Wordmark({ onDark = false, label }: { onDark?: boolean; label?: string }) {
+  const { t } = useTranslation();
   return (
-    <a className={`l-wordmark${onDark ? ' on-dark' : ''}`} href="/" aria-label={label}>
+    <a className={`l-wordmark${onDark ? ' on-dark' : ''}`} href="/" aria-label={label ?? t('landing.homeLabel', '{{brand}} home', { brand: BRAND.name })}>
       <span className="l-mark" aria-hidden="true">
         <LogoMark size={32} onDark={onDark} />
       </span>

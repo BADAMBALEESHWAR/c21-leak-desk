@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useTranslation } from 'react-i18next';
+import { Trans, useTranslation } from 'react-i18next';
 import { BRAND } from '../brand';
 import { LANGS, setLanguage } from '../i18n';
 import { CHANGELOG_URL, DEMO_MEDIA, FAQ, FEATURES, HERO, SOURCES, STEPS, TRUST } from './content';
@@ -68,7 +68,7 @@ function Header() {
     <header className={`l-nav${open ? ' is-open' : ''}`}>
       <div className="l-wrap l-nav-inner">
         <Wordmark />
-        <nav className="l-nav-links" aria-label="Sections">
+        <nav className="l-nav-links" aria-label={t('landing.navSections', 'Sections')}>
           {NAV.map((n) => (
             <a key={n.href} href={n.href}>
               {t(n.label)}
@@ -88,7 +88,7 @@ function Header() {
             className="l-burger"
             aria-expanded={open}
             aria-controls="mobile-menu"
-            aria-label={open ? 'Close menu' : 'Open menu'}
+            aria-label={open ? t('landing.closeMenu', 'Close menu') : t('landing.openMenu', 'Open menu')}
             onClick={() => setOpen((o) => !o)}
           >
             <Icon name={open ? 'x' : 'menu'} size={22} />
@@ -96,7 +96,7 @@ function Header() {
         </div>
       </div>
       <div id="mobile-menu" className="l-menu" hidden={!open}>
-        <nav className="l-wrap" aria-label="Menu">
+        <nav className="l-wrap" aria-label={t('landing.menu', 'Menu')}>
           <ul className="l-menu-list">
             {NAV.map((n) => (
               <li key={n.href}>
@@ -113,7 +113,7 @@ function Header() {
               {t('actions.signIn')}
             </a>
             <a className="l-btn l-btn-primary l-btn-block" href={LINKS.signUp}>
-              Create account
+              {t('landing.createAccount', 'Create account')}
             </a>
           </div>
         </nav>
@@ -142,7 +142,7 @@ export function Landing() {
   return (
     <>
       <a className="l-skip" href="#main">
-        Skip to content
+        {t('landing.skip', 'Skip to content')}
       </a>
       <Header />
 
@@ -153,15 +153,17 @@ export function Landing() {
             <div className="l-hero-text">
               <p className="l-pill">
                 <span className="l-pill-dot" aria-hidden="true" />
-                {HERO.eyebrow}
+                {t(HERO.eyebrow.key, HERO.eyebrow.text)}
               </p>
               <Tagline />
               <p className="l-hero-lead">
-                {HERO.lead.split(/(?<=\.)\s+/).map((line) => (
-                  <span key={line}>{line} </span>
-                ))}
+                {t(HERO.lead.key, HERO.lead.text)
+                  .split(/(?<=[.।])\s+/)
+                  .map((line) => (
+                    <span key={line}>{line} </span>
+                  ))}
               </p>
-              <p className="l-hero-body">{HERO.body}</p>
+              <p className="l-hero-body">{t(HERO.body.key, HERO.body.text, { brand: BRAND.name })}</p>
               <div className="l-cta">
                 <a className="l-btn l-btn-primary l-btn-lg" href={LINKS.demo}>
                   {t('landing.tryLiveDemo', 'Try the live demo')}
@@ -179,11 +181,11 @@ export function Landing() {
                 <span>{t('landing.demoDisclaimer', 'Demo uses synthetic data. Not a live production system.')}</span>
                 <a href={LINKS.signUp}>{t('landing.startFreeOwn', 'Or start free on your own orders')}</a>
               </p>
-              <ul className="l-ticks" aria-label="At a glance">
-                {HERO.ticks.map((t) => (
-                  <li key={t}>
+              <ul className="l-ticks" aria-label={t('landing.atAGlance', 'At a glance')}>
+                {[...HERO.ticks.map((tick) => t(tick.key, tick.text)), LANGS.map((l) => t(`lang.${l}`)).join(' · ')].map((tick) => (
+                  <li key={tick}>
                     <Icon name="check" size={16} strokeWidth={2.25} />
-                    {t}
+                    {tick}
                   </li>
                 ))}
               </ul>
@@ -196,13 +198,13 @@ export function Landing() {
         <section className="l-sources" aria-labelledby="sources-title">
           <div className="l-wrap">
             <h2 id="sources-title" className="l-sources-title">
-              Works with the exports you already have
+              {t('landing.sourcesTitle', 'Works with the exports you already have')}
             </h2>
             <ul className="l-source-list">
               {SOURCES.map((s) => (
-                <li key={s.label} className="l-source">
+                <li key={s.key} className="l-source">
                   <Icon name={s.icon} size={16} />
-                  {s.label}
+                  {t(s.key, s.label)}
                 </li>
               ))}
             </ul>
@@ -216,24 +218,24 @@ export function Landing() {
         <section id="features" className="l-section" aria-labelledby="features-title">
           <div className="l-wrap">
             <SectionHead
-              kicker="Why brands use it"
+              kicker={t('landing.featuresKicker', 'Why brands use it')}
               id="features-title"
-              title="Sales show what came in. Profyn shows what you kept."
+              title={t('landing.featuresTitle', 'Sales show what came in. Profyn shows what you kept.')}
               center
             />
             <ul className="l-features">
               {FEATURES.map((f) => (
-                <li key={f.title} className="l-feature">
+                <li key={f.titleKey} className="l-feature">
                   <div className="l-feature-top">
                     <span className="l-feature-icon" aria-hidden="true">
                       <Icon name={f.icon} size={20} />
                     </span>
-                    <span className="l-feature-tag">{f.tag}</span>
+                    <span className="l-feature-tag">{t(f.tagKey, f.tag)}</span>
                   </div>
-                  <h3 className="l-card-title">{f.title}</h3>
-                  <p className="l-card-text">{f.text}</p>
+                  <h3 className="l-card-title">{t(f.titleKey, f.title)}</h3>
+                  <p className="l-card-text">{t(f.textKey, f.text)}</p>
                   <a className="l-feature-link" href={f.href}>
-                    See it in the demo
+                    {t('landing.seeInDemo', 'See it in the demo')}
                     <Icon name="arrow-right" size={16} />
                   </a>
                 </li>
@@ -245,19 +247,19 @@ export function Landing() {
         {/* How it works */}
         <section id="how" className="l-section l-section-alt" aria-labelledby="how-title">
           <div className="l-wrap">
-            <SectionHead kicker="How it works" id="how-title" title="From an order file to a decision in three steps." center />
+            <SectionHead kicker={t('landing.how', 'How it works')} id="how-title" title={t('landing.howTitle', 'From an order file to a decision in three steps.')} center />
             <ol className="l-steps l-steps-3">
               {STEPS.map((s, i) => (
-                <li key={s.title} className="l-step">
+                <li key={s.titleKey} className="l-step">
                   <a href={s.href} className="l-step-link">
                     <span className="l-step-top">
                       <span className="l-step-icon" aria-hidden="true">
                         <Icon name={s.icon} size={20} />
                       </span>
-                      <span className="l-step-num">Step {i + 1}</span>
+                      <span className="l-step-num">{t('landing.stepN', 'Step {{n}}', { n: i + 1 })}</span>
                     </span>
-                    <span className="l-step-title">{s.title}</span>
-                    <span className="l-step-text">{s.text}</span>
+                    <span className="l-step-title">{t(s.titleKey, s.title)}</span>
+                    <span className="l-step-text">{t(s.textKey, s.text)}</span>
                   </a>
                 </li>
               ))}
@@ -282,8 +284,8 @@ export function Landing() {
                 </h3>
                 <p className="l-why-quote">{t('landing.trustQuote', 'ChatGPT gives you a story once; Profyn gives you a ledger every month.')}</p>
                 <ul className="l-why-list">
-                  {TRUST.why.map((w, i) => (
-                    <li key={i}>{t(`landing.trustWhy${i + 1}`, w)}</li>
+                  {TRUST.why.map((w) => (
+                    <li key={w.key}>{t(w.key, w.text)}</li>
                   ))}
                 </ul>
               </div>
@@ -292,8 +294,8 @@ export function Landing() {
                   <Icon name="shield" size={18} /> {t('landing.trustPromiseTitle', 'Your data promise')}
                 </h3>
                 <ul className="l-why-list">
-                  {TRUST.promise.map((p, i) => (
-                    <li key={i}>{t(`landing.trustPromise${i + 1}`, p)}</li>
+                  {TRUST.promise.map((p) => (
+                    <li key={p.key}>{t(p.key, p.text)}</li>
                   ))}
                 </ul>
                 <a className="l-why-link" href="/privacy.html">
@@ -308,10 +310,10 @@ export function Landing() {
         <section id="pricing" className="l-section" aria-labelledby="pricing-title">
           <div className="l-wrap">
             <SectionHead
-              kicker="Pricing"
+              kicker={t('landing.pricing', 'Pricing')}
               id="pricing-title"
-              title="Start free. Pay as your orders grow."
-              lead="Free up to 100 orders a month. Paid plans start with a 14-day trial; annual billing saves 20%."
+              title={t('pricing.title', 'Start free. Pay as your orders grow.')}
+              lead={t('pricing.lead', 'Free up to 100 orders a month. Paid plans start with a 14-day trial; annual billing saves 20%.')}
               center
             />
             <Pricing />
@@ -322,12 +324,16 @@ export function Landing() {
         <section id="faq" className="l-section l-section-alt" aria-labelledby="faq-title">
           <div className="l-wrap l-faq-grid">
             <div className="l-head">
-              <p className="l-kicker">FAQ</p>
+              <p className="l-kicker">{t('landing.faq', 'FAQ')}</p>
               <h2 id="faq-title" className="l-h2">
-                Straight answers.
+                {t('landing.faqTitle', 'Straight answers.')}
               </h2>
               <p className="l-lead">
-                Still unsure? <a href={LINKS.demo}>Try the demo</a>; it answers most questions in a few minutes.
+                <Trans
+                  i18nKey="landing.faqLead"
+                  defaults="Still unsure? <1>Try the demo</1>; it answers most questions in a few minutes."
+                  components={{ 1: <a href={LINKS.demo} /> }}
+                />
               </p>
               {DEMO_MEDIA.youtubeUrl ? (
                 <p className="l-faq-yt">
@@ -337,12 +343,12 @@ export function Landing() {
             </div>
             <div className="l-faq">
               {FAQ.map((f) => (
-                <details key={f.q} className="l-faq-item">
+                <details key={f.aKey} className="l-faq-item">
                   <summary>
-                    <span>{f.q}</span>
+                    <span>{t(f.qKey, f.q)}</span>
                     <Icon name="chevron-down" size={18} />
                   </summary>
-                  <p>{f.a}</p>
+                  <p>{t(f.aKey, f.a)}</p>
                 </details>
               ))}
               <details className="l-faq-item">
@@ -368,9 +374,11 @@ export function Landing() {
             <div className="l-cta-panel">
               <div>
                 <h2 id="cta-title" className="l-cta-title">
-                  Stop guessing. <span>See what every order kept.</span>
+                  {t('landing.ctaTitle', 'Stop guessing.')} <span>{t('landing.ctaTitleAccent', 'See what every order kept.')}</span>
                 </h2>
-                <p className="l-cta-text">Open the demo in one click, or start free on your own orders. {BRAND.tagline}</p>
+                <p className="l-cta-text">
+                  {t('landing.ctaText', 'Open the demo in one click, or start free on your own orders.')} {t('tagline')}
+                </p>
               </div>
               <div className="l-cta-actions">
                 <a className="l-btn l-btn-on-dark l-btn-lg" href={LINKS.demo}>
@@ -378,7 +386,7 @@ export function Landing() {
                   <Icon name="arrow-right" size={18} />
                 </a>
                 <a className="l-btn l-btn-outline-dark l-btn-lg" href={LINKS.signUp}>
-                  Start free
+                  {t('landing.startFree', 'Start free')}
                 </a>
               </div>
             </div>
@@ -392,11 +400,11 @@ export function Landing() {
             <div className="l-foot-brand">
               <Wordmark />
               <p className="l-foot-tag">{t('tagline')}</p>
-              <p>Contribution and profit-leak analytics for Indian D2C brands.</p>
+              <p>{t('footer.about', 'Contribution and profit-leak analytics for Indian D2C brands.')}</p>
             </div>
             <nav aria-labelledby="foot-explore">
               <h2 id="foot-explore" className="l-foot-h">
-                Explore
+                {t('footer.explore', 'Explore')}
               </h2>
               <ul className="l-foot-links">
                 {NAV.map((n) => (
@@ -408,14 +416,14 @@ export function Landing() {
             </nav>
             <nav aria-labelledby="foot-start">
               <h2 id="foot-start" className="l-foot-h">
-                Get started
+                {t('footer.getStarted', 'Get started')}
               </h2>
               <ul className="l-foot-links">
                 <li>
                   <a href={LINKS.demo}>{t('actions.tryDemo')}</a>
                 </li>
                 <li>
-                  <a href={LINKS.signUp}>Start free</a>
+                  <a href={LINKS.signUp}>{t('landing.startFree', 'Start free')}</a>
                 </li>
                 <li>
                   <a href={LINKS.signIn}>{t('actions.signIn')}</a>

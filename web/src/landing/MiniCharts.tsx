@@ -1,4 +1,5 @@
 import { useState, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
 import { compactInr, inr, month as monthName } from './format';
 import { useWidth } from './shared';
 
@@ -16,11 +17,14 @@ function niceStep(range: number, target = 3): number {
  * labelled, the rest live in the crosshair tooltip and the table.
  */
 export function ContributionLine({ months, height = 176 }: { months: Array<{ month: string; contribution_inr: number }>; height?: number }) {
+  const { t, i18n } = useTranslation();
   const [ref, width] = useWidth<HTMLDivElement>(520);
   const [active, setActive] = useState<number | null>(null);
   const W = Math.max(260, width);
   const H = height;
-  const pad = { top: 24, right: 48, bottom: 26, left: 44 };
+  // Hindi and Telugu write the units as words (40 हज़ार, 40 వేలు), so the axis and end labels get more room.
+  const wide = i18n.language === 'hi' || i18n.language === 'te';
+  const pad = { top: 24, right: wide ? 76 : 48, bottom: 26, left: wide ? 62 : 44 };
   const vals = months.map((m) => m.contribution_inr);
   const lo = Math.min(0, ...vals);
   const hi = Math.max(0, ...vals);
@@ -33,7 +37,7 @@ export function ContributionLine({ months, height = 176 }: { months: Array<{ mon
   const line = vals.map((v, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
   const area = `${line} L${x(n - 1).toFixed(1)},${y(0).toFixed(1)} L${x(0).toFixed(1)},${y(0).toFixed(1)} Z`;
   const ticks: number[] = [];
-  for (let t = 0; t <= yMax + 1e-6; t += step) ticks.push(t);
+  for (let v = 0; v <= yMax + 1e-6; v += step) ticks.push(v);
   const best = vals.indexOf(hi);
   const worst = vals.indexOf(lo);
   const last = n - 1;
@@ -51,21 +55,31 @@ export function ContributionLine({ months, height = 176 }: { months: Array<{ mon
     setActive((a) => Math.min(n - 1, Math.max(0, (a ?? last) + (e.key === 'ArrowRight' ? 1 : -1))));
   };
 
-  const summary = `Contribution by month, ${monthName(months[0].month)} to ${monthName(months[last].month)}. Best ${monthName(months[best].month)} ${inr(hi)}${
-    lo < 0 ? `; ${monthName(months[worst].month)} lost ${inr(Math.abs(lo))}` : ''
-  }; latest ${inr(vals[last])}.`;
+  const said = {
+    from: monthName(months[0].month),
+    to: monthName(months[last].month),
+    best: monthName(months[best].month),
+    bestInr: inr(hi),
+    worst: monthName(months[worst].month),
+    worstInr: inr(Math.abs(lo)),
+    latestInr: inr(vals[last]),
+  };
+  const summary =
+    lo < 0
+      ? t('hero.lineSummaryLoss', 'Contribution by month, {{from}} to {{to}}. Best {{best}} {{bestInr}}; {{worst}} lost {{worstInr}}; latest {{latestInr}}.', said)
+      : t('hero.lineSummary', 'Contribution by month, {{from}} to {{to}}. Best {{best}} {{bestInr}}; latest {{latestInr}}.', said);
 
   const tip = active === null ? null : months[active];
   const tipLeft = active === null ? 0 : Math.min(Math.max(x(active), 70), W - 70);
 
   return (
-    <div ref={ref} className="l-line" tabIndex={0} role="group" aria-label={`${summary} Use the arrow keys to read each month.`} onKeyDown={onKey} onFocus={() => setActive(last)} onBlur={() => setActive(null)}>
+    <div ref={ref} className="l-line" tabIndex={0} role="group" aria-label={`${summary} ${t('hero.lineKeys', 'Use the arrow keys to read each month.')}`} onKeyDown={onKey} onFocus={() => setActive(last)} onBlur={() => setActive(null)}>
       <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} aria-hidden="true">
-        {ticks.map((t) => (
-          <g key={t}>
-            <line className={t === 0 ? 'l-zero' : 'l-grid'} x1={pad.left} x2={W - pad.right + 8} y1={y(t)} y2={y(t)} />
-            <text className="l-axis" x={pad.left - 8} y={y(t) + 4} textAnchor="end">
-              {t === 0 ? '0' : compactInr(t).replace('₹', '')}
+        {ticks.map((v) => (
+          <g key={v}>
+            <line className={v === 0 ? 'l-zero' : 'l-grid'} x1={pad.left} x2={W - pad.right + 8} y1={y(v)} y2={y(v)} />
+            <text className="l-axis" x={pad.left - 8} y={y(v) + 4} textAnchor="end">
+              {v === 0 ? '0' : compactInr(v).replace('₹', '')}
             </text>
           </g>
         ))}
@@ -129,6 +143,7 @@ export interface WaterfallRow {
  * Once a line is unknown the running total is unknown too, and later bars are not placed.
  */
 export function Waterfall({ rows, label }: { rows: WaterfallRow[]; label: string }) {
+  const { t } = useTranslation();
   let running: number | null = 0;
   const placed = rows.map((r) => {
     if (r.kind === 'start' || r.kind === 'subtotal' || r.kind === 'total') {
@@ -170,7 +185,7 @@ export function Waterfall({ rows, label }: { rows: WaterfallRow[]; label: string
                 />
               ) : null}
             </span>
-            <span className={`l-wf-value${strong ? ' is-strong' : ''}${loss ? ' is-loss' : ''}`}>{unknown ? <span className="l-unknown">unknown</span> : inr(r.amount ?? 0)}</span>
+            <span className={`l-wf-value${strong ? ' is-strong' : ''}${loss ? ' is-loss' : ''}`}>{unknown ? <span className="l-unknown">{t('hero.unknown', 'unknown')}</span> : inr(r.amount ?? 0)}</span>
           </li>
         );
       })}
