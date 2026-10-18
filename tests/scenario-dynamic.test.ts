@@ -62,3 +62,19 @@ describe('scenario recalculation', () => {
     expect(s.assumptions.join(' ')).toMatch(/still unknown/);
   });
 });
+
+describe('confidence under a scenario', () => {
+  it('every fix carries a statistical level under a scenario, and a saved decision records it (never "unknown")', async () => {
+    const s = await run({ return_rate_pct: 11 });
+    for (const e of Object.values(s.evidence) as any[]) {
+      expect(['high', 'medium', 'low']).toContain(e.level);
+      expect(e.ci_low_inr).toBeLessThanOrEqual(e.ci_high_inr);
+    }
+    const d = await request(app).post(`${api}/analyses/${analysisId}/decisions`).send({
+      scenario_id: s.scenario_id, intervention: 'cap_discount', expected_delta_inr: 1000, test_30d: 'Cap discounts for 30 days.', stop_rule: 'Stop if orders fall.', owner: 'Test',
+    });
+    expect(d.status).toBe(201);
+    const saved = (await request(app).get(`${api}/decisions/${d.body.decision_id}`)).body;
+    expect(['high', 'medium', 'low']).toContain(saved.confidence);
+  });
+});
