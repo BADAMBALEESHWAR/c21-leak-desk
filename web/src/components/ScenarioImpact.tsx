@@ -44,6 +44,7 @@ export function ScenarioImpact({ s }: { s: ScenarioResponse }) {
         </p>
       ) : null}
       {moved.length > 0 ? (
+        <div className="table-scroll">
         <table className="table table-compact">
           <caption className="visually-hidden">{t('impact.caption', 'Lines that changed')}</caption>
           <thead>
@@ -65,6 +66,7 @@ export function ScenarioImpact({ s }: { s: ScenarioResponse }) {
             ))}
           </tbody>
         </table>
+        </div>
       ) : (
         <p className="muted">{t('impact.none', 'No cost line moved; only the treatment of existing figures changed.')}</p>
       )}
