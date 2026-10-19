@@ -88,23 +88,26 @@ export function HeroDashboard() {
                   </dd>
                 </div>
               </dl>
-              <table className="l-sr">
-                <caption>{t('hero.tableCaption', 'Contribution by month on the synthetic demo brand')}</caption>
-                <thead>
-                  <tr>
-                    <th scope="col">{t('hero.month', 'Month')}</th>
-                    <th scope="col">{t('hero.contribution', 'Contribution')}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {preview.months.map((m) => (
-                    <tr key={m.month}>
-                      <th scope="row">{month(m.month)}</th>
-                      <td>{inr(m.contribution_inr)}</td>
+              {/* A table ignores the 1px box of .l-sr and keeps its full size, so the wrapper hides it. */}
+              <div className="l-sr">
+                <table>
+                  <caption>{t('hero.tableCaption', 'Contribution by month on the synthetic demo brand')}</caption>
+                  <thead>
+                    <tr>
+                      <th scope="col">{t('hero.month', 'Month')}</th>
+                      <th scope="col">{t('hero.contribution', 'Contribution')}</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {preview.months.map((m) => (
+                      <tr key={m.month}>
+                        <th scope="row">{month(m.month)}</th>
+                        <td>{inr(m.contribution_inr)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </section>
             <section className="l-panel" aria-labelledby="hero-leaks-title">
               <h3 id="hero-leaks-title" className="l-panel-title">

@@ -20,11 +20,13 @@ export function ContributionLine({ months, height = 176 }: { months: Array<{ mon
   const { t, i18n } = useTranslation();
   const [ref, width] = useWidth<HTMLDivElement>(520);
   const [active, setActive] = useState<number | null>(null);
-  const W = Math.max(260, width);
+  const W = Math.max(160, width);
   const H = height;
   // Hindi and Telugu write the units as words (40 हज़ार, 40 వేలు), so the axis and end labels get more room.
   const wide = i18n.language === 'hi' || i18n.language === 'te';
-  const pad = { top: 24, right: wide ? 76 : 48, bottom: 26, left: wide ? 62 : 44 };
+  // On the smallest phones the y labels give way to the line; the labelled points still carry the scale.
+  const narrow = W < 260;
+  const pad = { top: 24, right: wide ? 76 : 48, bottom: 26, left: narrow ? 14 : wide ? 62 : 44 };
   const vals = months.map((m) => m.contribution_inr);
   const lo = Math.min(0, ...vals);
   const hi = Math.max(0, ...vals);
@@ -41,7 +43,11 @@ export function ContributionLine({ months, height = 176 }: { months: Array<{ mon
   const best = vals.indexOf(hi);
   const worst = vals.indexOf(lo);
   const last = n - 1;
-  const xLabels = months.map((_, i) => i).filter((i) => i % 3 === 0 || i === last);
+  // Every third month (every sixth when that is too tight), and none so close to the last that they touch.
+  const perMonth = (W - pad.left - pad.right) / Math.max(1, n - 1);
+  const minGap = wide ? 32 : 26;
+  const every = perMonth * 3 >= minGap ? 3 : 6;
+  const xLabels = months.map((_, i) => i).filter((i) => i === last || (i % every === 0 && (last - i) * perMonth >= minGap));
 
   const pick = (e: PointerEvent<SVGRectElement>) => {
     const box = e.currentTarget.getBoundingClientRect();
@@ -78,9 +84,11 @@ export function ContributionLine({ months, height = 176 }: { months: Array<{ mon
         {ticks.map((v) => (
           <g key={v}>
             <line className={v === 0 ? 'l-zero' : 'l-grid'} x1={pad.left} x2={W - pad.right + 8} y1={y(v)} y2={y(v)} />
-            <text className="l-axis" x={pad.left - 8} y={y(v) + 4} textAnchor="end">
-              {v === 0 ? '0' : compactInr(v).replace('₹', '')}
-            </text>
+            {narrow ? null : (
+              <text className="l-axis" x={pad.left - 8} y={y(v) + 4} textAnchor="end">
+                {v === 0 ? '0' : compactInr(v).replace('₹', '')}
+              </text>
+            )}
           </g>
         ))}
         <path className="l-area" d={area} />

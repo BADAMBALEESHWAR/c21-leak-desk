@@ -3170,3 +3170,139 @@ body {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* ---- Phones and touch: fit every width, comfortable taps ------------------------------------------- */
+
+/* The header is sticky and cannot scroll, so on short landscape screens the open menu scrolls itself. */
+.l-menu {
+  max-height: calc(100vh - 69px);
+  max-height: calc(100dvh - 69px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.l-menu-cta .l-menu-demo {
+  display: none;
+}
+
+.l-save {
+  white-space: nowrap;
+}
+
+/* Fold covers (and Telugu's longer label below 375px): the header keeps logo and menu; the demo button moves into the menu. */
+@media (max-width: 300px) {
+  .l-nav-actions .l-btn-primary {
+    display: none;
+  }
+
+  .l-menu-cta .l-menu-demo {
+    display: inline-flex;
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 374px) {
+  :root[lang='te'] .l-nav-actions .l-btn-primary {
+    display: none;
+  }
+
+  :root[lang='te'] .l-menu-cta .l-menu-demo {
+    display: inline-flex;
+    grid-column: 1 / -1;
+  }
+}
+
+/* Hindi and Telugu section names are longer: their header folds into the menu below 1024px, not 900px. */
+@media (max-width: 1023px) {
+  :root[lang='hi'] .l-nav-links,
+  :root[lang='te'] .l-nav-links,
+  :root[lang='hi'] .l-hide-sm,
+  :root[lang='te'] .l-hide-sm {
+    display: none;
+  }
+
+  :root[lang='hi'] .l-burger,
+  :root[lang='te'] .l-burger {
+    display: grid;
+  }
+}
+
+@media (max-width: 900px), (pointer: coarse) {
+  .l-lang button {
+    min-height: 40px;
+  }
+}
+
+@media (max-width: 900px) {
+  .l-feature-link,
+  .l-why-link,
+  .l-foot-meta a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+
+  .l-hero-meta a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 40px;
+  }
+
+  .l-foot-meta {
+    align-items: center;
+  }
+
+  .l-feature-link {
+    margin-top: 6px;
+  }
+
+  .l-why-link {
+    margin-top: 8px;
+  }
+}
+
+@media (max-width: 640px) {
+  .l-menu {
+    max-height: calc(100vh - 61px);
+    max-height: calc(100dvh - 61px);
+  }
+
+  /* Long Hindi and Telugu labels wrap inside full-width buttons instead of running past them. */
+  .l-cta .l-btn,
+  .l-cta-actions .l-btn,
+  .l-btn-block {
+    padding-top: 8px;
+    padding-bottom: 8px;
+    white-space: normal;
+  }
+
+  .l-step-text,
+  .l-int-lead,
+  .l-plan-blurb,
+  .l-plan-list,
+  .l-soon-text {
+    font-size: 15px;
+  }
+}
+
+@media (max-width: 380px) {
+  .l-btn-lg {
+    padding-right: 18px;
+    padding-left: 18px;
+  }
+
+  .l-billing button {
+    gap: 6px;
+    padding: 0 12px;
+  }
+
+  .l-cta-panel {
+    padding: 28px 18px;
+  }
+}
+
+@media (max-width: 340px) {
+  .l-menu-cta {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
