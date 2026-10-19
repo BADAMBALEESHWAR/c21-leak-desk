@@ -3,7 +3,8 @@
 **Know More. Earn Better.** Profyn is an AI-assisted profit analyst for Indian D2C brands, built for Fynd × NMIMS case **C21, Order Contribution and Profit Leak Desk**.
 
 - **Live app:** https://d2gmrabs4sk8gk.cloudfront.net (landing `/`, app `/app/`, sign-in `/login/`, privacy `/privacy.html`)
-- **Demo video:** https://d2gmrabs4sk8gk.cloudfront.net/media/profyn-demo.mp4 (1 min 49 s, captioned; also "Watch demo" on the landing page; file `web/public/media/profyn-demo.mp4`)
+- **Video walkthrough of the full website:** https://youtu.be/CTJ_7cnr7BA
+- **Short demo video:** https://d2gmrabs4sk8gk.cloudfront.net/media/profyn-demo.mp4 (1 min 49 s, captioned; also "Watch demo" on the landing page; file `web/public/media/profyn-demo.mp4`)
 - **Repository:** https://github.com/BADAMBALEESHWAR/c21-leak-desk
 
 ## 1. Project and case summary
