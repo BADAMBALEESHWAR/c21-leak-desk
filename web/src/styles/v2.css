@@ -1367,6 +1367,12 @@ body .toast-region {
   padding-right: 30px;
 }
 
+/* A long status pill wraps instead of running under the Ask button. */
+.kpi-slot > .kpi .kpi-sub .pill {
+  max-width: 100%;
+  white-space: normal;
+}
+
 .kpi-slot > .ask-ai-btn {
   position: absolute;
   right: 10px;

@@ -1378,7 +1378,8 @@
       "notSupplied": "स्रोत में नहीं",
       "movedToChannel": "चैनल पर ले जाया गया",
       "notRecognised": "पहचाना नहीं गया"
-    }
+    },
+    "whalePeakShort": "शिखर: {{inr}}"
   },
   "focus": {
     "sentence": {

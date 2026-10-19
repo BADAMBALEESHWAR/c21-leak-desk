@@ -36,7 +36,7 @@ export const DEMO_MEDIA = {
   poster: '/media/profyn-demo-poster.jpg',
   captions: '/media/profyn-demo.en.vtt',
   hasCaptions: false as boolean,
-  youtubeUrl: '' as string,
+  youtubeUrl: 'https://youtu.be/CTJ_7cnr7BA' as string,
 };
 
 /** The change log in the app: refund and recovery semantics, before and after. */
