@@ -7,6 +7,11 @@
   margin: 0 auto;
 }
 
+/* A wide child (a long button, a table) must not widen the page column past the screen. */
+.page > * {
+  min-width: 0;
+}
+
 .stack {
   display: grid;
   gap: var(--sp-4);
@@ -3436,7 +3441,7 @@ button.checks-card:focus-visible {
   color: var(--text-3);
 }
 
-@media (max-width: 1199px) {
+@media (min-width: 768px) and (max-width: 1199px) {
   button.brand {
     margin: -6px 0 0;
     width: 100%;
@@ -3815,13 +3820,16 @@ button.checks-card:focus-visible {
   color: var(--series-muted);
 }
 
-@media (max-width: 1199px) {
+@media (min-width: 768px) and (max-width: 1199px) {
   .nav-group-label {
     position: absolute;
     width: 1px;
     height: 1px;
+    margin: -1px;
+    padding: 0;
     overflow: hidden;
     clip: rect(0 0 0 0);
+    white-space: nowrap;
   }
 
   .nav-group {

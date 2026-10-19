@@ -61,7 +61,7 @@
   outline-offset: 1px;
 }
 
-@media (max-width: 1199px) {
+@media (min-width: 768px) and (max-width: 1199px) {
   .foot-link-item {
     justify-content: center;
     padding: 9px 0;
