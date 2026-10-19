@@ -15,7 +15,21 @@ import { AttributionSegmented, InfoTip } from './ui';
 
 const ATTRIBUTION_ROUTES: Route[] = ['ledger', 'leaks', 'scenario', 'pulse'];
 
-export function TopBar({ route, onError }: { route: Route; onError: (e: ErrorInfo | null) => void }) {
+/**
+ * The bar above every screen. On phones it keeps one pinned row (menu, page, account) and moves the data chip,
+ * attribution switch and worked-order button into a second row that scrolls away with the page.
+ */
+export function TopBar({
+  route,
+  onError,
+  menuOpen = false,
+  onMenu,
+}: {
+  route: Route;
+  onError: (e: ErrorInfo | null) => void;
+  menuOpen?: boolean;
+  onMenu?: () => void;
+}) {
   const { dataset, analysis, samples, analysing, runAnalysis, openWorked, dbStatus } = useStore();
   const auth = useAuth();
   const account = auth.mode === 'account';
@@ -55,8 +69,61 @@ export function TopBar({ route, onError }: { route: Route; onError: (e: ErrorInf
       ? t('topbar.demoDisclaimer', 'Demo uses synthetic data. Not a live production system.')
       : null;
 
+  const disclaimerLine = disclaimer ? (
+    <p className={`topbar-disclaimer${ownData ? ' is-own' : ''}`} title={disclaimer}>
+      {disclaimer}
+    </p>
+  ) : null;
+
+  const chip =
+    orders !== null ? (
+      <span className="chip" title={t('topbar.loadedData', 'Loaded data: {{name}}', { name })}>
+        <span className="chip-dot" aria-hidden="true" />
+        <span className="chip-main">{name}</span>
+        <span className="chip-extra">
+          {' '}
+          · {formatCount(orders)} {lower(t('ledger.orders'))}
+          {synthetic > 0 ? ` · ${formatCount(synthetic)} ${lower(t('status.syntheticTag'))}` : ''}
+        </span>
+      </span>
+    ) : null;
+
+  const attribution =
+    analysis && ATTRIBUTION_ROUTES.includes(route) ? (
+      <span className="topbar-attr">
+        <AttributionSegmented value={analysis.attribution} onChange={(m) => void onAttribution(m)} disabled={analysing || switching} compact />
+        <InfoTip text={t(ATTRIBUTION_TIP_KEY, ATTRIBUTION_TIP_EN)} label={t('topbar.aboutAttribution', 'About attribution')} />
+      </span>
+    ) : null;
+
+  const worked = (
+    <Button
+      variant="secondary"
+      size="sm"
+      icon="file"
+      onClick={openWorked}
+      className={account ? 'worked-btn is-compact' : 'worked-btn'}
+      title={t('topbar.workedTip', 'Worked order: one order explained line by line')}
+    >
+      {t('actions.workedOrder')}
+    </Button>
+  );
+
   return (
+    <>
     <header className="topbar">
+      {onMenu ? (
+        <button
+          type="button"
+          className="menu-btn"
+          onClick={onMenu}
+          aria-expanded={menuOpen}
+          aria-controls="app-nav"
+          aria-label={menuOpen ? t('nav.closeMenu', 'Close menu') : t('nav.openMenu', 'Open menu')}
+        >
+          <Icon name="menu" size={22} />
+        </button>
+      ) : null}
       <div className="topbar-left">
         <nav className="crumbs" aria-label={t('topbar.breadcrumb', 'Breadcrumb')}>
           <ol>
@@ -66,43 +133,13 @@ export function TopBar({ route, onError }: { route: Route; onError: (e: ErrorInf
             <li aria-current="page">{t(`nav.${route}`)}</li>
           </ol>
         </nav>
-        {disclaimer ? (
-          <p className={`topbar-disclaimer${ownData ? ' is-own' : ''}`} title={disclaimer}>
-            {disclaimer}
-          </p>
-        ) : null}
+        {disclaimerLine}
       </div>
 
       <div className="topbar-actions">
-        {orders !== null ? (
-          <span className="chip" title={t('topbar.loadedData', 'Loaded data: {{name}}', { name })}>
-            <span className="chip-dot" aria-hidden="true" />
-            <span className="chip-main">{name}</span>
-            <span className="chip-extra">
-              {' '}
-              · {formatCount(orders)} {lower(t('ledger.orders'))}
-              {synthetic > 0 ? ` · ${formatCount(synthetic)} ${lower(t('status.syntheticTag'))}` : ''}
-            </span>
-          </span>
-        ) : null}
-
-        {analysis && ATTRIBUTION_ROUTES.includes(route) ? (
-          <span className="topbar-attr">
-            <AttributionSegmented value={analysis.attribution} onChange={(m) => void onAttribution(m)} disabled={analysing || switching} compact />
-            <InfoTip text={t(ATTRIBUTION_TIP_KEY, ATTRIBUTION_TIP_EN)} label={t('topbar.aboutAttribution', 'About attribution')} />
-          </span>
-        ) : null}
-
-        <Button
-          variant="secondary"
-          size="sm"
-          icon="file"
-          onClick={openWorked}
-          className={account ? 'worked-btn is-compact' : 'worked-btn'}
-          title={t('topbar.workedTip', 'Worked order: one order explained line by line')}
-        >
-          {t('actions.workedOrder')}
-        </Button>
+        {chip}
+        {attribution}
+        {worked}
 
         {!auth.ready ? null : account ? (
           orders !== null ? (
@@ -150,5 +187,15 @@ export function TopBar({ route, onError }: { route: Route; onError: (e: ErrorInf
         )}
       </div>
     </header>
+    {/* Phones only (hidden by CSS elsewhere): the same controls, unpinned, below the bar. */}
+    <div className="topbar-sub">
+      <div className="topbar-sub-row">
+        {chip}
+        {worked}
+        {attribution}
+      </div>
+      {disclaimerLine}
+    </div>
+    </>
   );
 }
