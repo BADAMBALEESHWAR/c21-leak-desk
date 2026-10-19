@@ -46,23 +46,26 @@ function LanguageSwitch({ className }: { className: string }) {
 
 function Header() {
   const [open, setOpen] = useState(false);
-  const { t } = useTranslation();
+  const burger = useRef<HTMLButtonElement>(null);
+  const { t, i18n } = useTranslation();
 
   useEffect(() => {
     if (!open) return undefined;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') setOpen(false);
     };
+    // The menu closes once the burger is gone; where that happens depends on the language (landing.css).
     const onResize = () => {
-      if (window.innerWidth > 900) setOpen(false);
+      if (burger.current && getComputedStyle(burger.current).display === 'none') setOpen(false);
     };
+    onResize();
     window.addEventListener('keydown', onKey);
     window.addEventListener('resize', onResize);
     return () => {
       window.removeEventListener('keydown', onKey);
       window.removeEventListener('resize', onResize);
     };
-  }, [open]);
+  }, [open, i18n.language]);
 
   return (
     <header className={`l-nav${open ? ' is-open' : ''}`}>
@@ -84,6 +87,7 @@ function Header() {
             {t('actions.tryDemo')}
           </a>
           <button
+            ref={burger}
             type="button"
             className="l-burger"
             aria-expanded={open}
@@ -109,6 +113,11 @@ function Header() {
           </ul>
           <LanguageSwitch className="l-lang-menu" />
           <div className="l-menu-cta">
+            {/* Shown only where the header has no room for its demo button. */}
+            <a className="l-btn l-btn-primary l-btn-block l-menu-demo" href={LINKS.demo}>
+              {t('actions.tryDemo')}
+              <Icon name="arrow-right" size={16} />
+            </a>
             <a className="l-btn l-btn-secondary l-btn-block" href={LINKS.signIn}>
               {t('actions.signIn')}
             </a>
