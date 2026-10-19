@@ -1,4 +1,4 @@
-import { useId, type ReactNode } from 'react';
+import { useId, useRef, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ErrorInfo } from '../api/client';
 import type { AttributionMode } from '../api/types';
@@ -8,8 +8,20 @@ import { Icon, type IconName } from './Icon';
 export function InfoTip({ text, label }: { text: ReactNode; label?: string }) {
   const id = useId();
   const { t } = useTranslation();
+  const ref = useRef<HTMLSpanElement>(null);
+  // The bubble is centred on the icon, then nudged so it stays 16px inside the screen.
+  const place = () => {
+    const el = ref.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const vw = document.documentElement.clientWidth;
+    const half = Math.min(280, vw - 32) / 2;
+    const mid = r.left + r.width / 2;
+    const shift = mid - half < 16 ? 16 - (mid - half) : mid + half > vw - 16 ? vw - 16 - (mid + half) : 0;
+    el.style.setProperty('--tip-shift', `${Math.round(shift)}px`);
+  };
   return (
-    <span className="infotip">
+    <span className="infotip" ref={ref} onPointerEnter={place} onFocus={place}>
       <button type="button" className="infotip-btn" aria-label={label ?? t('ui.moreInfo', 'More information')} aria-describedby={id}>
         <Icon name="info" size={15} />
       </button>
