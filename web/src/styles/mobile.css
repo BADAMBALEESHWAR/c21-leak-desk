@@ -55,6 +55,47 @@
     min-width: 0;
     white-space: normal;
   }
+
+  /* The provenance tag sits under the switch instead of on top of its label. */
+  body .switch-prov {
+    position: static;
+    display: flex;
+    margin-top: 10px;
+  }
+}
+
+/* Short screens (landscape phones): the language switch ends the menu instead of being pinned over its last items. */
+@media (max-height: 520px) {
+  body .sidebar > .lang-switch {
+    position: static;
+  }
+}
+
+/* Bar charts follow their own width, so a narrow column on a tablet gets the same treatment as a phone:
+   the label sits above its bar, and the bar leaves room for the value printed after its end. */
+.bars,
+.dv {
+  container-type: inline-size;
+}
+
+@container (max-width: 560px) {
+  body .bar-row,
+  body .dv-row {
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: 6px;
+  }
+
+  body .dv-label {
+    text-align: left;
+  }
+
+  body .bar-track {
+    margin-right: 40px;
+  }
+
+  body .dv-track {
+    margin: 0 72px;
+  }
 }
 
 @media (max-width: 767px) {
@@ -397,27 +438,6 @@
     text-align: left;
   }
 
-  /* ---- Bar charts: the label sits above its bar, so the bar gets the full width ---- */
-
-  body .bar-row,
-  body .dv-row {
-    grid-template-columns: minmax(0, 1fr);
-    row-gap: 6px;
-  }
-
-  body .dv-label {
-    text-align: left;
-  }
-
-  /* The value is printed after the end of the longest bar. */
-  body .bar-track {
-    margin-right: 40px;
-  }
-
-  body .dv-track {
-    margin: 0 72px;
-  }
-
   /* ---- Card headers with controls: controls drop under the title ---- */
 
   body .chart-head,
@@ -457,12 +477,6 @@
     flex: 1 1 160px;
   }
 
-  /* The provenance tag sits under the switch instead of on top of its label. */
-  body .switch-prov {
-    position: static;
-    display: flex;
-    margin-top: 10px;
-  }
 
   body .crumbs,
   body .crumbs ol,
