@@ -1,3 +1,4 @@
+import { useEffect, useRef, type MouseEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useOptionalAuth } from '../auth/AuthContext';
 import { BRAND } from '../brand';
@@ -51,8 +52,21 @@ function LanguageSwitch() {
   );
 }
 
-export function Sidebar({ route }: { route: Route }) {
+/** On phones the sidebar is a slide-in menu: `open` shows it, and any link inside closes it again. */
+export function Sidebar({ route, open = false, onClose }: { route: Route; open?: boolean; onClose?: () => void }) {
   const { t } = useTranslation();
+  const closeRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const frame = window.requestAnimationFrame(() => closeRef.current?.focus({ preventScroll: true }));
+    return () => window.cancelAnimationFrame(frame);
+  }, [open]);
+
+  // A tap on a link closes the menu even when it points at the page already open (no hash change then).
+  const onNavClick = (e: MouseEvent<HTMLElement>) => {
+    if (open && (e.target as HTMLElement).closest('a[href], .checks-card, .brand, .foot-link')) onClose?.();
+  };
   const { datasetId, analysis, scenario, decisionSavedFor, engineVersion, checks, openAbout } = useStore();
   const auth = useOptionalAuth();
   const account = Boolean(auth?.ready && auth.mode === 'account');
@@ -79,7 +93,7 @@ export function Sidebar({ route }: { route: Route }) {
   const aboutBrand = t('nav.aboutBrand', 'About {{brand}}', { brand: BRAND.name });
 
   return (
-    <nav className="sidebar" aria-label={t('nav.stepsAria', 'Steps')}>
+    <nav id="app-nav" className={`sidebar${open ? ' is-open' : ''}`} aria-label={t('nav.stepsAria', 'Steps')} onClick={onNavClick}>
       <button type="button" className="brand" onClick={openAbout} aria-label={aboutBrand} data-tip={aboutBrand}>
         <span className="brand-mark" aria-hidden="true">
           <LogoMark size={34} />
@@ -88,6 +102,9 @@ export function Sidebar({ route }: { route: Route }) {
           <span className="brand-name">{BRAND.name}</span>
           <span className="brand-sub">{t('tagline')}</span>
         </span>
+      </button>
+      <button ref={closeRef} type="button" className="nav-close" onClick={onClose} aria-label={t('nav.closeMenu', 'Close menu')}>
+        <Icon name="x" size={20} />
       </button>
 
       <a

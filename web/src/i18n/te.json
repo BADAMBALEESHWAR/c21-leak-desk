@@ -34,7 +34,9 @@
     "checksAria": "{{total}}లో {{passed}} ఇంజిన్ తనిఖీలు పాస్ — పబ్లిక్ తనిఖీలను తెరవండి",
     "publicChecks": "పబ్లిక్ తనిఖీలు",
     "checksAll": "మొత్తం {{total}} తనిఖీలు పాస్",
-    "engineDetails": "ఇంజిన్ {{version}} · వివరాలు చూడండి"
+    "engineDetails": "ఇంజిన్ {{version}} · వివరాలు చూడండి",
+    "openMenu": "మెనూ తెరవండి",
+    "closeMenu": "మెనూ మూసివేయండి"
   },
   "lang": {
     "label": "భాష",

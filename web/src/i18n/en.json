@@ -34,7 +34,9 @@
     "checksAria": "{{passed}} of {{total}} engine checks pass — open the public checks",
     "publicChecks": "Public checks",
     "checksAll": "All {{total}} checks pass",
-    "engineDetails": "Engine {{version}} · view details"
+    "engineDetails": "Engine {{version}} · view details",
+    "openMenu": "Open menu",
+    "closeMenu": "Close menu"
   },
   "lang": {
     "label": "Language",

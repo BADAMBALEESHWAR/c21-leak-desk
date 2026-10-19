@@ -34,7 +34,9 @@
     "checksAria": "{{total}} में से {{passed}} इंजन जाँच पास — सार्वजनिक जाँच खोलें",
     "publicChecks": "सार्वजनिक जाँच",
     "checksAll": "सभी {{total}} जाँच पास",
-    "engineDetails": "इंजन {{version}} · विवरण देखें"
+    "engineDetails": "इंजन {{version}} · विवरण देखें",
+    "openMenu": "मेन्यू खोलें",
+    "closeMenu": "मेन्यू बंद करें"
   },
   "lang": {
     "label": "भाषा",
