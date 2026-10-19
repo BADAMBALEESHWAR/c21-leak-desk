@@ -926,18 +926,23 @@
   text-align: left;
   white-space: normal;
   box-shadow: var(--shadow-m);
-  transform: translateX(-50%);
-  opacity: 0;
-  visibility: hidden;
+  /* --tip-shift (set on hover/focus) keeps the bubble inside the screen near either edge. */
+  transform: translateX(calc(-50% + var(--tip-shift, 0px)));
+  /* Not rendered while hidden, so a bubble beside an icon near the edge cannot widen the page. */
+  display: none;
   pointer-events: none;
-  transition: opacity var(--t-fast), visibility 0s linear var(--t-fast);
 }
 
 .infotip:hover .infotip-bubble,
 .infotip:focus-within .infotip-bubble {
-  opacity: 1;
-  visibility: visible;
-  transition: opacity var(--t-fast), visibility 0s;
+  display: block;
+  animation: infotip-in var(--t-fast) ease-out;
+}
+
+@keyframes infotip-in {
+  from {
+    opacity: 0;
+  }
 }
 
 /* ---- Skeleton, empty -------------------------------------------------------------------- */
@@ -4629,14 +4634,17 @@ button.checks-card:focus-visible {
 .topbar-left {
   display: grid;
   gap: 1px;
-  flex: none;
+  flex: 0 1 auto;
   min-width: 0;
 }
 
+/* Shortens with an ellipsis (full text in the title) before it can push the bar's buttons off screen. */
 .topbar-disclaimer {
+  overflow: hidden;
   font-size: 11.5px;
   line-height: 1.3;
   color: var(--text-3);
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
