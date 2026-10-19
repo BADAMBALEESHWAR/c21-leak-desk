@@ -1,52 +1,256 @@
-/* Phone widths: nothing may push the page sideways. The top bar wraps, wide tables scroll inside their own box,
-   and grids and rows shrink to the screen. Loaded last so it can override the desktop rules. */
-@media (max-width: 720px) {
+/* Phones and folded/unfolded fold phones (under 768px). Loaded last so it can override the desktop rules.
+   Shell: the sidebar becomes a slide-in menu, the top bar keeps one pinned row, and the data chip, attribution switch
+   and worked-order button move to a second row that scrolls away. Pages: nothing may push the page sideways, wide
+   tables scroll inside their own box, and grids and rows shrink to the screen. */
+
+/* Phone-only pieces of the shell; shown by the query below. */
+.menu-btn,
+.nav-close,
+.nav-scrim,
+.topbar-sub {
+  display: none;
+}
+
+@media (max-width: 767px) {
   html,
   body {
     overflow-x: clip;
   }
 
+  /* ---- Slide-in menu ---- */
+
+  body .sidebar {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 45;
+    width: min(300px, 86vw);
+    height: 100vh;
+    height: 100dvh;
+    padding: 20px 16px 16px;
+    transform: translateX(-100%);
+    visibility: hidden;
+    transition: transform var(--t-med) cubic-bezier(0.2, 0.8, 0.2, 1), visibility 0s linear var(--t-med);
+  }
+
+  body .sidebar.is-open {
+    transform: none;
+    visibility: visible;
+    box-shadow: var(--shadow-m);
+    transition: transform var(--t-med) cubic-bezier(0.2, 0.8, 0.2, 1), visibility 0s linear 0s;
+  }
+
+  /* The logo row scrolls with the menu here, so the close button beside it stays reachable. */
+  body .sidebar > .brand {
+    position: relative;
+    padding-right: 56px;
+  }
+
+  .nav-close {
+    display: grid;
+    place-items: center;
+    position: absolute;
+    top: 14px;
+    right: 8px;
+    z-index: 3;
+    width: 44px;
+    height: 44px;
+    border: 0;
+    border-radius: 10px;
+    background: transparent;
+    color: var(--text-2);
+    cursor: pointer;
+  }
+
+  .nav-close:hover {
+    background: var(--surface-2);
+    color: var(--text);
+  }
+
+  body .nav-item {
+    min-height: 48px;
+  }
+
+  body .foot-link-item {
+    min-height: 44px;
+  }
+
+  body .lang-btn {
+    min-height: 40px;
+  }
+
+  .nav-scrim {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 44;
+    background: var(--scrim);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity var(--t-med);
+  }
+
+  .nav-scrim.is-open {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  body.nav-open {
+    overflow: hidden;
+  }
+
+  /* ---- Top bar: one pinned row ---- */
+
   body .topbar {
-    height: auto;
-    align-items: flex-start;
-    min-height: var(--topbar-h);
-    flex-wrap: wrap;
-    row-gap: 8px;
-    padding: 8px 16px;
+    gap: 4px;
+    height: 56px;
+    padding: 0 12px 0 4px;
+  }
+
+  .menu-btn {
+    display: grid;
+    place-items: center;
+    flex: none;
+    width: 44px;
+    height: 44px;
+    border: 0;
+    border-radius: 10px;
+    background: transparent;
+    color: var(--text);
+    cursor: pointer;
+  }
+
+  .menu-btn:hover {
+    background: var(--surface-2);
   }
 
   body .topbar-left {
-    flex: 1 1 100%;
+    flex: 1 1 auto;
     min-width: 0;
   }
 
-  body .topbar-disclaimer,
-  body .topbar .chip-extra,
-  body .user-email,
-  body .topbar .worked-btn,
-  body .topbar .status-pill {
+  /* The brand lives in the menu; the bar names the page. */
+  body .crumbs li:first-child {
     display: none;
   }
 
-  body .topbar-actions {
-    flex: 1 1 100%;
-    flex-wrap: wrap;
-    gap: 6px;
+  body .crumbs li + li::before {
+    content: none;
   }
 
-  body .topbar .chip {
-    max-width: 100%;
+  body .crumbs [aria-current='page'] {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: var(--fs-md);
+  }
+
+  body .topbar-actions {
+    flex: none;
+    gap: 4px;
+  }
+
+  body .topbar .topbar-disclaimer,
+  body .topbar-actions > .chip,
+  body .topbar-actions > .topbar-attr,
+  body .topbar-actions > .worked-btn,
+  body .topbar .status-pill,
+  body .user-email {
+    display: none;
+  }
+
+  body .topbar .btn-sm {
+    min-height: 40px;
+  }
+
+  /* Signed in: the avatar opens the profile; sign out keeps its icon and its name for screen readers. */
+  body .signout-btn {
+    width: 40px;
+    padding: 0;
+    justify-content: center;
+  }
+
+  body .signout-btn > span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
+  /* ---- Second row, unpinned ---- */
+
+  .topbar-sub {
+    display: grid;
+    gap: 8px;
+    padding: 12px 16px 0;
+  }
+
+  .topbar-sub-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
     min-width: 0;
   }
 
-  body .topbar-attr {
-    order: 5;
-    flex: 1 1 100%;
+  .topbar-sub .chip {
+    max-width: 100%;
+    height: 36px;
   }
+
+  .topbar-sub .chip-main {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .topbar-sub .topbar-attr {
+    max-width: 100%;
+  }
+
+  /* The demo/own-data note, hidden in the pinned row, is kept here as one small line. */
+  body .topbar-sub .topbar-disclaimer {
+    display: block;
+    min-width: 0;
+    white-space: normal;
+  }
+
+  .topbar-sub .worked-btn {
+    min-height: 40px;
+  }
+
+  body .mode-banner {
+    flex-wrap: wrap;
+  }
+
+  /* ---- Page area ---- */
 
   body .content {
     padding: 16px;
+    padding-bottom: 96px;
     min-width: 0;
+  }
+
+  /* Ask Profyn: a round button that covers less of the page. */
+  body .ask-fab {
+    right: 16px;
+    bottom: 16px;
+    width: 52px;
+    height: 52px;
+    padding: 0;
+    justify-content: center;
+  }
+
+  body .ask-fab > span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
   }
 
   body .page,
@@ -115,5 +319,83 @@
   /* Room on the right for the value printed after the longest bar. */
   body .mb-track {
     margin-right: 96px;
+  }
+
+  /* ---- KPI tiles: two per row ---- */
+
+  body .kpi-grid-6,
+  body .kpi-grid-4 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  body .kpi {
+    padding: 14px;
+  }
+
+  body .kpi-label {
+    min-width: 0;
+    white-space: normal;
+    overflow-wrap: break-word;
+  }
+
+  body .kpi-sub .pill {
+    max-width: 100%;
+    white-space: normal;
+  }
+
+  /* ---- Bar charts: the label sits above its bar, so the bar gets the full width ---- */
+
+  body .bar-row,
+  body .dv-row {
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: 6px;
+  }
+
+  body .dv-label {
+    text-align: left;
+  }
+
+  /* The value is printed after the end of the longest bar. */
+  body .bar-track {
+    margin-right: 40px;
+  }
+
+  body .dv-track {
+    margin: 0 72px;
+  }
+
+  /* ---- Card headers with controls: controls drop under the title ---- */
+
+  body .chart-head,
+  body .card-head {
+    flex-wrap: wrap;
+    row-gap: 10px;
+  }
+
+  body .chart-actions {
+    flex-wrap: wrap;
+  }
+
+  /* ---- Monthly report ---- */
+
+  body .report-toolbar,
+  body .report-toolbar-actions {
+    flex-wrap: wrap;
+  }
+
+  body .report-toolbar-actions .btn {
+    max-width: 100%;
+    white-space: normal;
+    text-align: left;
+  }
+}
+
+/* The narrowest phones (fold covers, 320px): one KPI tile per row. */
+@media (max-width: 359px) {
+  body .kpi-grid-6,
+  body .kpi-grid-4,
+  body .kpi-grid-2 {
+    grid-template-columns: minmax(0, 1fr);
   }
 }

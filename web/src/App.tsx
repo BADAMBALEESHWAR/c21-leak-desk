@@ -176,8 +176,31 @@ export function App() {
   const firstRoute = useRef(true);
   const startRouted = useRef(false);
   const [topError, setTopError] = useState<ErrorInfo | null>(null);
+  // Phones: the sidebar is a menu that slides in from the left.
+  const [navOpen, setNavOpen] = useState(false);
   const account = auth.ready && auth.mode === 'account';
   const opening = account && starting;
+
+  const closeNav = (returnFocus: boolean) => {
+    setNavOpen(false);
+    if (returnFocus) document.querySelector<HTMLButtonElement>('.menu-btn')?.focus({ preventScroll: true });
+  };
+
+  // Any navigation closes the menu.
+  useEffect(() => setNavOpen(false), [loc]);
+
+  useEffect(() => {
+    if (!navOpen) return undefined;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') closeNav(true);
+    };
+    document.addEventListener('keydown', onKey);
+    document.body.classList.add('nav-open');
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.body.classList.remove('nav-open');
+    };
+  }, [navOpen]);
 
   useEffect(() => {
     if (firstRoute.current) {
@@ -205,7 +228,8 @@ export function App() {
         {t('app.skipToContent', 'Skip to content')}
       </button>
       <div className="shell">
-        <Sidebar route={loc.route} />
+        <Sidebar route={loc.route} open={navOpen} onClose={() => closeNav(true)} />
+        <div className={`nav-scrim${navOpen ? ' is-open' : ''}`} onClick={() => closeNav(true)} aria-hidden="true" />
         <div className="shell-main">
           {auth.mode === 'demo' && auth.hasSession ? (
             <div className="mode-banner">
@@ -222,7 +246,7 @@ export function App() {
               </a>
             </div>
           ) : null}
-          <TopBar route={loc.route} onError={setTopError} />
+          <TopBar route={loc.route} onError={setTopError} menuOpen={navOpen} onMenu={() => setNavOpen((o) => !o)} />
           <main id="main" ref={mainRef} className="content" tabIndex={-1}>
             <div className="notices">
               {auth.sessionEnded ? (

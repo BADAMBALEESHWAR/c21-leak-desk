@@ -525,7 +525,8 @@ code {
   }
 }
 
-@media (max-width: 1199px) {
+/* Tablets: the sidebar is a 72px icon rail. Phones (under 768px) get a slide-in menu instead, see mobile.css. */
+@media (min-width: 768px) and (max-width: 1199px) {
   .sidebar {
     width: var(--sidebar-w-collapsed);
     padding: 20px 12px 16px;
