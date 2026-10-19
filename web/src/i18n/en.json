@@ -1378,7 +1378,8 @@
       "notSupplied": "not in source",
       "movedToChannel": "moved to channel",
       "notRecognised": "not recognised"
-    }
+    },
+    "whalePeakShort": "Peak: {{inr}}"
   },
   "focus": {
     "sentence": {

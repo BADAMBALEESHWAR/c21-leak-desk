@@ -1378,7 +1378,8 @@
       "notSupplied": "మూలంలో లేదు",
       "movedToChannel": "ఛానెల్‌కు తరలించారు",
       "notRecognised": "గుర్తించలేదు"
-    }
+    },
+    "whalePeakShort": "శిఖరం: {{inr}}"
   },
   "focus": {
     "sentence": {

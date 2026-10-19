@@ -76,6 +76,17 @@ export const WhaleCurve = memo(function WhaleCurve({ points, unknownCount, chann
       : null;
 
   const peakX = x(peakIdx);
+  // The peak note goes where it fits: right of the peak, left of it, or shifted inside the chart. Width is estimated at
+  // about 6.6px a character (12px label); a chart too narrow for the sentence gets the short wording.
+  const peakLong = t('chart.whalePeak', 'Contribution peaks here: {{inr}} after the top {{n}} orders', { inr: formatInr(peak.cumulative_inr), n: formatCount(peak.rank) });
+  const peakText = peakLong.length * 6.6 <= W - 8 ? peakLong : t('chart.whalePeakShort', 'Peak: {{inr}}', { inr: formatInr(peak.cumulative_inr) });
+  const peakTextW = peakText.length * 6.6;
+  const peakLabel =
+    peakX + 8 + peakTextW <= W - 4
+      ? { x: peakX + 8, anchor: 'start' as const }
+      : peakX - 8 - peakTextW >= 4
+        ? { x: peakX - 8, anchor: 'end' as const }
+        : { x: Math.max(4, W - 4 - peakTextW), anchor: 'start' as const };
   const lastY = y(last.cumulative_inr);
   const lastLabelY = lastY + 18 > H - PAD.bottom + 10 ? lastY - 10 : lastY + 18;
 
@@ -218,8 +229,8 @@ export const WhaleCurve = memo(function WhaleCurve({ points, unknownCount, chann
             <line className="crosshair" x1={x(active)} x2={x(active)} y1={PAD.top - 6} y2={H - PAD.bottom} />
           ) : null}
           <circle className="whale-dot" cx={peakX} cy={y(peak.cumulative_inr)} r={4.5} />
-          <text className="whale-label" x={peakX > 360 ? peakX - 8 : peakX + 8} y={PAD.top - 10} textAnchor={peakX > 360 ? 'end' : 'start'}>
-            {t('chart.whalePeak', 'Contribution peaks here: {{inr}} after the top {{n}} orders', { inr: formatInr(peak.cumulative_inr), n: formatCount(peak.rank) })}
+          <text className="whale-label" x={peakLabel.x} y={PAD.top - 10} textAnchor={peakLabel.anchor}>
+            {peakText}
           </text>
           {peakIdx !== n - 1 ? (
             <>
